@@ -42,6 +42,8 @@ lietuvišką (`SOLID WHITE (326)` → `BALTA`, žr. `app/colors.py`).
 
 ## Svetainė (naršyklėje, be serverio)
 
+**Adresas: https://rjotko-dotcom.github.io/coc-to-aiksteles/**
+
 `web/` kataloge yra ta pati programa, veikianti **vien naršyklėje**: PDF
 skaitymas, skenuotų liudijimų atpažinimas ir Word failo pildymas vyksta Jūsų
 įrenginyje. Serverio nėra – liudijimai niekur nesiunčiami.
@@ -59,11 +61,17 @@ skaitymas, skenuotų liudijimų atpažinimas ir Word failo pildymas vyksta Jūs�
 Svetainė yra paprasti failai – jokio serverio jai nereikia, tad tinka bet kuris
 statinių puslapių talpintojas.
 
-**GitHub Pages.** Kartu su kodu yra `.github/workflows/pages.yml` – kiekvienas
-pakeitimas paskelbiamas automatiškai. Vieną kartą reikia įjungti:
-**Settings → Pages → Source: GitHub Actions**. Svarbu: privačiose
-repozitorijose Pages veikia tik su mokamu planu (Pro/Team), todėl arba
-repozitorija padaroma vieša, arba renkamasi kitą būdą.
+**GitHub Pages** (naudojama dabar). `.github/workflows/pages.yml` paskelbia
+`web/` katalogą po kiekvieno pakeitimo šakoje `main` – prieš tai paleisdamas
+testus. Jei testai lūžta, svetainė lieka ankstesnės versijos.
+
+Redaguoti galima tiesiai GitHub'e: atidarote failą, spaudžiate pieštuką,
+*Commit changes* – po minutės svetainė atsinaujina. Dizainas yra `web/app.css`
+ir `web/index.html`.
+
+Įsidėmėtina: Pages veikia tik viešose repozitorijose (nemokamu planu), o
+skelbiama iš `main` – `github-pages` aplinka kitų šakų pagal nutylėjimą
+neįsileidžia.
 
 **Nusitempti ir paleisti.** `web/` katalogą (arba jo ZIP) galima tiesiog
 nuvilkti į [Netlify Drop](https://app.netlify.com/drop) ar Cloudflare Pages –
