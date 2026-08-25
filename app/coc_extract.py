@@ -33,7 +33,7 @@ APPROVAL_RE = re.compile(
     r"\b[eE]\d{1,2}\s*\*\s*[A-Za-z0-9]{0,4}\d{2,4}\s*/\s*\d{1,3}\s*\*\s*\d{3,6}\s*\*\s*\d{1,3}\b"
 )
 
-DATE_RE = re.compile(r"\b(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})\b")
+DATE_RE = re.compile(r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})(?!\d)")
 ISO_DATE_RE = re.compile(r"\b(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})\b")
 
 # Eilutės pradžioje esantis skirsnio numeris, pvz. "0.2.1", "40.", "16.1."
@@ -55,6 +55,30 @@ def normalise_date(value: str | None) -> str:
     return value.strip()
 
 
+#: VIN kontrolinio skaitmens skaičiavimas (ISO 3779) – padeda pastebėti,
+#: jei OCR supainiojo skaitmenį skenuotame liudijime.
+_VIN_VALUES = {**{str(d): d for d in range(10)}, **{
+    "A": 1, "B": 2, "C": 3, "D": 4, "E": 5, "F": 6, "G": 7, "H": 8,
+    "J": 1, "K": 2, "L": 3, "M": 4, "N": 5, "P": 7, "R": 9,
+    "S": 2, "T": 3, "U": 4, "V": 5, "W": 6, "X": 7, "Y": 8, "Z": 9,
+}}
+_VIN_WEIGHTS = (8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2)
+
+
+def vin_check_digit_valid(vin: str) -> bool:
+    """Ar VIN kontrolinis skaitmuo (9-as ženklas) teisingas.
+
+    Europoje jis neprivalomas, todėl klaidingas rezultatas dar nereiškia
+    blogo VIN – bet po OCR tai geras įspėjimas patikrinti.
+    """
+    vin = (vin or "").upper()
+    if len(vin) != 17 or any(ch not in _VIN_VALUES for ch in vin):
+        return False
+    total = sum(_VIN_VALUES[ch] * weight for ch, weight in zip(vin, _VIN_WEIGHTS))
+    remainder = total % 11
+    return vin[8] == ("X" if remainder == 10 else str(remainder))
+
+
 def _clean(value: str) -> str:
     value = value.replace("\xa0", " ")
     value = re.sub(r"\s+", " ", value).strip()
@@ -74,6 +98,7 @@ class CoCData:
     """Iš CoC ištraukti duomenys (`*_lt` laukai jau paruošti pažymai)."""
 
     source_file: str = ""
+    ocr_used: bool = False
 
     make: str = ""                    # 0.1
     type: str = ""                    # 0.2
@@ -134,24 +159,11 @@ def pdf_to_text(source: str | Path | bytes) -> str:
 
 
 def _ocr_to_text(source: str | Path | bytes) -> str:
-    """Atsarginis variantas skenuotiems (be teksto sluoksnio) CoC.
+    """Skenuoto CoC atpažinimas (žr. `app/ocr.py`)."""
+    from . import ocr
 
-    Veikia tik jei įdiegti `pytesseract` + `pdf2image` + Tesseract.
-    """
-    try:
-        import pytesseract  # type: ignore
-        from pdf2image import convert_from_bytes, convert_from_path  # type: ignore
-    except Exception as exc:  # pragma: no cover - priklauso nuo aplinkos
-        raise RuntimeError(
-            "PDF neturi teksto sluoksnio (tikriausiai skenuotas). "
-            "OCR reikalauja pytesseract, pdf2image ir Tesseract."
-        ) from exc
-
-    if isinstance(source, (bytes, bytearray)):
-        pages = convert_from_bytes(bytes(source), dpi=300)
-    else:
-        pages = convert_from_path(str(source), dpi=300)
-    return "\n".join(pytesseract.image_to_string(p, lang="eng") for p in pages)
+    content = bytes(source) if isinstance(source, (bytes, bytearray)) else Path(source).read_bytes()
+    return ocr.pdf_to_text(content)
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +179,12 @@ def _split_label_value(line: str) -> tuple[str, str] | None:
     return label.strip(), value.strip()
 
 
-def parse_coc_text(text: str, source_file: str = "") -> CoCData:
+def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> CoCData:
     """Iš CoC teksto sudaro `CoCData`."""
-    data = CoCData(source_file=source_file)
+    from .ocr import normalise_ocr_text
+
+    text = normalise_ocr_text(text)
+    data = CoCData(source_file=source_file, ocr_used=ocr_used)
     flat = re.sub(r"\s+", " ", text)
 
     colour_by_code = ""
@@ -213,7 +228,7 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
             data.vin = data.vin or (m.group(0) if m else value)
         elif code == "0.11" or text_label.startswith("date of manufacture"):
             data.manufacture_date = data.manufacture_date or normalise_date(value)
-        elif "colour of the vehicle" in text_label or "color of the vehicle" in text_label:
+        elif "colour of" in text_label or "color of" in text_label:
             data.colour_raw = data.colour_raw or value
         elif code == "40":
             colour_by_code = colour_by_code or value
@@ -224,7 +239,7 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
 
     # -- tipo patvirtinimas ------------------------------------------------
     m = re.search(
-        r"approval\s+(" + APPROVAL_RE.pattern + r")\s+granted\s+on\s+"
+        r"approval\s*(" + APPROVAL_RE.pattern + r")\s*granted\s*on\s*"
         r"(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
         flat,
         re.IGNORECASE,
@@ -237,7 +252,7 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
         if m_num:
             data.approval_number = re.sub(r"\s+", "", m_num.group(0))
         m_date = re.search(
-            r"granted\s+on\s+(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})", flat, re.IGNORECASE
+            r"granted\s*on\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})", flat, re.IGNORECASE
         )
         if m_date:
             data.approval_date = normalise_date(m_date.group(1))
@@ -266,6 +281,16 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
     for attr, human in required.items():
         if not getattr(data, attr):
             data.warnings.append(f"Nerasta: {human}")
+    if data.vin and ocr_used and not vin_check_digit_valid(data.vin):
+        data.warnings.append(
+            f"VIN „{data.vin}“ kontrolinis skaitmuo nesutampa – po OCR būtinai "
+            "sulyginkite su liudijimu."
+        )
+    if ocr_used:
+        data.warnings.append(
+            "CoC skenuotas – duomenys atpažinti automatiškai (OCR). "
+            "Prieš spausdindami sulyginkite VIN ir spalvą su liudijimu."
+        )
     if data.colour_raw and not data.colour:
         data.warnings.append(
             f"Spalva „{data.colour_raw}“ neatpažinta – įrašykite lietuvišką pavadinimą."
@@ -279,10 +304,11 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
 def extract_from_bytes(content: bytes, source_file: str = "") -> CoCData:
     """CoC PDF baitai -> `CoCData`. Į diską nieko nerašoma."""
     text = pdf_to_text(content)
-    if len(re.sub(r"\s", "", text)) < 200:
-        # PDF greičiausiai skenuotas – bandome OCR
+    ocr_used = len(re.sub(r"\s", "", text)) < 200
+    if ocr_used:
+        # Teksto sluoksnio nėra (Nissan B2B portalo CoC yra paveikslėliai)
         text = _ocr_to_text(content)
-    return parse_coc_text(text, source_file=source_file)
+    return parse_coc_text(text, source_file=source_file, ocr_used=ocr_used)
 
 
 def extract_from_pdf(pdf_path: str | Path) -> CoCData:

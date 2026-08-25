@@ -27,6 +27,9 @@ Galima naudoti dviem būdais:
 Papildomai parodoma (į pažymą nerašoma, bet padeda pasitikrinti): kategorija
 (0.4), pagaminimo data (0.11), gamintojas (0.5) ir originalus spalvos užrašas.
 
+Liudijimai iš B2B portalo yra skenuoti, todėl tekstas atpažįstamas
+automatiškai – žr. [Skenuoti CoC (OCR)](#skenuoti-coc-ocr).
+
 Datos suvienodinamos į `DD.MM.YYYY`, tipas/variantas/versija sujungiami per
 pasvirąjį brūkšnį (`F16/A/A45`), spalva iš angliško CoC užrašo išverčiama į
 lietuvišką (`SOLID WHITE (326)` → `BALTA`, žr. `app/colors.py`).
@@ -159,8 +162,10 @@ atnaujinus puslapį, laukai iš naršyklės dingsta (galima ir mygtuku
 išjungtas naršyklės automatinis pildymas.
 
 **Nesikreipia į internetą:** sąsajoje nėra išorinių šriftų, skriptų ar
-paveikslėlių, nėra jokios analitikos ar telemetrijos. Programa veikia ir
-visiškai atjungus tinklą.
+paveikslėlių, nėra jokios analitikos ar telemetrijos. Ir teksto atpažinimas
+(OCR) vyksta Jūsų kompiuteryje – modeliai atsisiunčiami vieną kartą kartu su
+biblioteka diegimo metu, o vėliau programa veikia ir visiškai atjungus tinklą.
+Puslapių vaizdai OCR'ui piešiami atmintyje ir į diską nepatenka.
 
 **Tik vietiniai prisijungimai:** serveris klauso `127.0.0.1`, o papildomai
 kiekvienas ne loopback adreso užklausas atmeta su klaida 403 – net jei kas
@@ -191,12 +196,26 @@ kompiuteryje):
   nepriklausomai nuo šios programos;
 * nenaudokite bendrame ar viešame kompiuteryje.
 
-## Skenuoti PDF
+## Skenuoti CoC (OCR)
 
-Jei CoC yra nuskenuotas paveikslėlis (be teksto sluoksnio), tekstas
-automatiškai bandomas atpažinti OCR būdu, bet tam papildomai reikia įdiegti
-`pytesseract`, `pdf2image` ir Tesseract. Iš B2B portalo atsisiųsti CoC paprastai
-turi teksto sluoksnį, todėl OCR neprireikia.
+Nissan B2B portalo atitikties liudijimai yra **paveikslėliai PDF viduje** –
+teksto sluoksnio juose nėra, todėl duomenys atpažįstami automatiškai (OCR).
+Viskas įdiegiama kartu su kitomis bibliotekomis (`pymupdf` ir
+`rapidocr-onnxruntime`) – tai įprasti Python paketai, todėl **nereikia nei
+administratoriaus teisių, nei atskirai diegiamos programos**, o įdiegus OCR
+veikia be interneto. Jei kompiuteryje jau yra Tesseract, naudojamas jis.
+
+Vieno liudijimo atpažinimas trunka apie 15 sekundžių (du puslapiai). Rezultate
+toks įrašas pažymimas „nuskaityta OCR“ ir prie jo rodomas priminimas sulyginti
+duomenis su liudijimu.
+
+Patikrinta su tikru Nissan Qashqai liudijimu: visi aštuoni pažymos laukai
+nuskaityti teisingai, įskaitant spalvą (`Black` → `JUODA`) ir tipo
+patvirtinimo numerį `e9*2018/858*11042*16`.
+
+Papildoma apsauga nuo OCR klaidų: tikrinamas **VIN kontrolinis skaitmuo**
+(9-as ženklas pagal ISO 3779). Jei jis nesutampa, prie įrašo atsiranda
+įspėjimas – tada VIN verta sulyginti raidė po raidės.
 
 ## Testai
 
@@ -213,6 +232,7 @@ liudijimą), `samples/sample_coc.pdf` – iš jo sugeneruotas PDF bandymams
 
 ```
 app/coc_extract.py    CoC PDF skaitymas ir laukų atpažinimas
+app/ocr.py            skenuotų CoC atpažinimas (OCR)
 app/colors.py         spalvų vertimas EN -> LT
 app/aikstele_docx.py  pažymos kūrimas / šablono pildymas
 app/main.py           FastAPI serveris (API)

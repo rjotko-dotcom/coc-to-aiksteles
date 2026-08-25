@@ -3,3 +3,9 @@ uvicorn[standard]>=0.27
 python-multipart>=0.0.9
 pdfplumber>=0.11
 python-docx>=1.1
+
+# Skenuotiems CoC (Nissan B2B portalo liudijimai yra paveikslėliai):
+# puslapių piešimas ir OCR. Abu – įprasti Python paketai, be atskirai
+# diegiamų programų ir be administratoriaus teisių.
+pymupdf>=1.24
+rapidocr-onnxruntime>=1.3

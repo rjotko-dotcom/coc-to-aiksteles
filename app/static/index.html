@@ -149,6 +149,7 @@ function render() {
       item.category ? `kategorija ${esc(item.category)}` : "",
       item.manufacture_date ? `pagaminta ${esc(item.manufacture_date)}` : "",
       item.colour_raw ? `spalva CoC: ${esc(item.colour_raw)}` : "",
+      item.ocr_used ? "nuskaityta OCR" : "",
     ].filter(Boolean).join(" · ");
     card.innerHTML = `
       <div class="fileline">
@@ -181,7 +182,9 @@ async function upload(fileList) {
   if (!files.length) { $("status").textContent = "Pasirinkite PDF failus."; return; }
   const body = new FormData();
   files.forEach((f) => body.append("files", f));
-  $("status").textContent = `Skaitoma ${files.length} failas(-ai)…`;
+  $("status").className = "status";
+  $("status").textContent = `Skaitoma ${files.length} failas(-ai)… ` +
+    "Skenuotus CoC reikia atpažinti (OCR) – tai trunka apie 15 s failui.";
   try {
     const response = await fetch("/api/extract", { method: "POST", body });
     if (!response.ok) throw new Error(await response.text());
