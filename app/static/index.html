@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoC → aikštelė</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #fff; --line: #dcdfe4; --ink: #1f2328;
+    --muted: #616a75; --accent: #c3002f; --ok: #1a7f37; --warn: #9a6700;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+         background: var(--bg); color: var(--ink); }
+  header { background: #fff; border-bottom: 1px solid var(--line); padding: 16px 24px; }
+  header h1 { margin: 0; font-size: 19px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 1020px; margin: 0 auto; padding: 20px 24px 60px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+          padding: 16px 18px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 15px; }
+  #drop { border: 2px dashed var(--line); border-radius: 8px; background: #fff;
+          padding: 32px; text-align: center; color: var(--muted); cursor: pointer; }
+  #drop.over { border-color: var(--accent); background: #fff5f6; color: var(--ink); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+          gap: 10px 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  input[type=text] { width: 100%; padding: 7px 9px; border: 1px solid var(--line);
+          border-radius: 5px; font: inherit; background: #fff; }
+  input[type=text]:focus { outline: 2px solid #b9d4ff; border-color: #7aa7e0; }
+  button { font: inherit; padding: 9px 16px; border-radius: 6px; border: 1px solid var(--line);
+           background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff;
+           font-weight: 600; }
+  button:disabled { opacity: .55; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .warn { background: #fff8e5; border: 1px solid #f0dfae; color: var(--warn);
+          padding: 8px 10px; border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+  .err { background: #ffeceb; border: 1px solid #f3c2be; color: #b3261e;
+         padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+  .fileline { display: flex; justify-content: space-between; align-items: center;
+              border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 12px; }
+  .fileline strong { font-size: 14px; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .status { font-size: 13px; color: var(--muted); }
+  .status.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <h1>CoC → aikštelė</h1>
+  <p>Įkelkite atitikties liudijimo (CoC) PDF – duomenys bus surinkti ir sudėti į pažymą apie transporto priemonės tapatumo duomenis.</p>
+</header>
+
+<main>
+  <div class="card">
+    <div id="drop">
+      <strong>Vilkite CoC PDF failus čia</strong><br>
+      arba spustelėkite ir pasirinkite (galima kelis iš karto)
+      <input id="files" type="file" accept="application/pdf" multiple hidden>
+    </div>
+    <p id="status" class="status" style="margin:10px 0 0"></p>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="card" id="actions" hidden>
+    <div class="row">
+      <button class="primary" id="generate">Generuoti pažymą (.docx)</button>
+      <span class="meta" id="genstatus"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>Nustatymai: pažymos šablonas ir įmonės eilutė</summary>
+      <div style="margin-top:12px">
+        <p class="meta">
+          Įkėlus Jūsų <strong>Word šabloną</strong>, pažymos bus formuojamos jo pagrindu –
+          išliks visas Jūsų tekstas, antraštė ir formatavimas. Eilutės randamos pagal
+          pavadinimus lentelės pirmame stulpelyje („Gamybinė markė…“, „Tipas/Variantas/Versija“
+          ir t. t.), todėl šablone nieko keisti nereikia.
+        </p>
+        <div class="row">
+          <input id="tplfile" type="file" accept=".docx,.dotx">
+          <button id="tplupload">Įkelti šabloną</button>
+          <button id="tpldelete">Pašalinti</button>
+          <span class="meta" id="tplstatus"></span>
+        </div>
+        <div style="margin-top:12px; max-width:420px">
+          <label for="company">Įmonės pavadinimas, kodas, adresas (naudojama tik be šablono)</label>
+          <input id="company" type="text" placeholder="UAB „Pavyzdys“, 123456789, Vilnius">
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="savesettings">Išsaugoti</button>
+          <span class="meta" id="setstatus"></span>
+        </div>
+      </div>
+    </details>
+  </div>
+</main>
+
+<script>
+const FIELDS = [
+  ["make", "Gamybinė markė (0.1 → D.1)"],
+  ["type_variant_version", "Tipas/Variantas/Versija (0.2 → D.2)"],
+  ["commercial_name", "Komercinis pavadinimas (0.2.1 → D.3)"],
+  ["vin", "Identifikavimo numeris – VIN (0.10 → E)"],
+  ["approval_number", "Tipo patvirtinimo Nr. (→ K)"],
+  ["approval_date", "Tipo patvirtinimo suteikimo data"],
+  ["national_approval_number", "Nacionalinis patvirtinimo numeris (→ K1)"],
+  ["colour", "Transporto priemonės spalva (40 → R)"],
+  ["doc_number", "Pažymos Nr."],
+  ["doc_date", "Pažymos data (MMMM-MM-DD)"],
+];
+
+let items = [];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function render() {
+  const box = $("results");
+  box.innerHTML = "";
+  items.forEach((item, index) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    if (item.error) {
+      card.innerHTML = `<div class="fileline"><strong>${esc(item.source_file)}</strong></div>
+        <div class="err">Nepavyko perskaityti: ${esc(item.error)}</div>`;
+      box.appendChild(card);
+      return;
+    }
+    const warnings = (item.warnings || []).length
+      ? `<div class="warn">${item.warnings.map(esc).join("<br>")}</div>` : "";
+    const meta = [
+      item.category ? `kategorija ${esc(item.category)}` : "",
+      item.manufacture_date ? `pagaminta ${esc(item.manufacture_date)}` : "",
+      item.colour_raw ? `spalva CoC: ${esc(item.colour_raw)}` : "",
+    ].filter(Boolean).join(" · ");
+    card.innerHTML = `
+      <div class="fileline">
+        <strong>${esc(item.source_file)}</strong>
+        <span class="meta">${meta}</span>
+      </div>
+      ${warnings}
+      <div class="grid">
+        ${FIELDS.map(([key, label]) => `
+          <div>
+            <label for="f-${index}-${key}">${esc(label)}</label>
+            <input type="text" id="f-${index}-${key}" data-index="${index}"
+                   data-key="${key}" value="${esc(item[key] || "")}">
+          </div>`).join("")}
+      </div>`;
+    box.appendChild(card);
+  });
+  box.querySelectorAll("input[data-key]").forEach((input) => {
+    input.addEventListener("input", (event) => {
+      const el = event.target;
+      items[Number(el.dataset.index)][el.dataset.key] = el.value;
+    });
+  });
+  $("actions").hidden = !items.some((i) => !i.error);
+}
+
+async function upload(fileList) {
+  const files = [...fileList].filter((f) => f.name.toLowerCase().endsWith(".pdf"));
+  if (!files.length) { $("status").textContent = "Pasirinkite PDF failus."; return; }
+  const body = new FormData();
+  files.forEach((f) => body.append("files", f));
+  $("status").textContent = `Skaitoma ${files.length} failas(-ai)…`;
+  try {
+    const response = await fetch("/api/extract", { method: "POST", body });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    items = data.results.map((item) => ({ ...item, doc_number: "", doc_date: today() }));
+    const ok = items.filter((i) => !i.error).length;
+    $("status").className = "status ok";
+    $("status").textContent = `Perskaityta: ${ok} iš ${items.length}. Patikrinkite laukus ir spauskite „Generuoti“.`;
+    render();
+  } catch (error) {
+    $("status").className = "status";
+    $("status").textContent = "Klaida: " + error.message;
+  }
+}
+
+$("drop").addEventListener("click", () => $("files").click());
+$("files").addEventListener("change", (e) => upload(e.target.files));
+["dragenter", "dragover"].forEach((type) =>
+  $("drop").addEventListener(type, (e) => { e.preventDefault(); $("drop").classList.add("over"); }));
+["dragleave", "drop"].forEach((type) =>
+  $("drop").addEventListener(type, (e) => { e.preventDefault(); $("drop").classList.remove("over"); }));
+$("drop").addEventListener("drop", (e) => upload(e.dataTransfer.files));
+
+$("generate").addEventListener("click", async () => {
+  const payload = items.filter((i) => !i.error);
+  if (!payload.length) return;
+  $("genstatus").textContent = "Formuojama…";
+  try {
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: payload, use_template: true }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const warn = response.headers.get("X-Aikstele-Warnings");
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = match ? match[1] : "aikstele.docx";
+    link.click();
+    URL.revokeObjectURL(url);
+    $("genstatus").textContent = warn ? "Parsiųsta. Dėmesio: " + warn : "Parsiųsta.";
+  } catch (error) {
+    $("genstatus").textContent = "Klaida: " + error.message;
+  }
+});
+
+$("tplupload").addEventListener("click", async () => {
+  const file = $("tplfile").files[0];
+  if (!file) { $("tplstatus").textContent = "Pasirinkite failą."; return; }
+  const body = new FormData();
+  body.append("file", file);
+  const response = await fetch("/api/template", { method: "POST", body });
+  $("tplstatus").textContent = response.ok ? "Šablonas įkeltas." : "Nepavyko įkelti.";
+  loadSettings();
+});
+
+$("tpldelete").addEventListener("click", async () => {
+  await fetch("/api/template", { method: "DELETE" });
+  $("tplstatus").textContent = "Šablonas pašalintas.";
+  loadSettings();
+});
+
+$("savesettings").addEventListener("click", async () => {
+  await fetch("/api/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ company_line: $("company").value }),
+  });
+  $("setstatus").textContent = "Išsaugota.";
+});
+
+async function loadSettings() {
+  const response = await fetch("/api/settings");
+  const data = await response.json();
+  $("company").value = data.company_line || "";
+  $("tplstatus").textContent = data.template_exists
+    ? "Šablonas įkeltas – pažymos formuojamos jo pagrindu."
+    : "Šablonas neįkeltas – dokumentas bus sukurtas nuo nulio.";
+}
+loadSettings();
+</script>
+</body>
+</html>

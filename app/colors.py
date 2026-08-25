@@ -1,0 +1,80 @@
+"""Transporto priemonės spalvos vertimas iš CoC (EN) į lietuvių kalbą.
+
+CoC 40 skirsnyje spalva rašoma angliškai ir dažnai su gamintojo kodu,
+pvz. "SOLID WHITE (326)", "BLACK / QAB", "GREY-BLUE". Čia bandome iš
+tokio teksto ištraukti pagrindinę spalvą ir pateikti lietuvišką pavadinimą,
+kokį įprasta rašyti pažymoje.
+"""
+
+from __future__ import annotations
+
+import re
+
+# Raktas – angliškas žodis (didžiosiomis), reikšmė – lietuviškas pavadinimas.
+# Tvarka svarbi: ilgesni / sudėtiniai variantai tikrinami pirmiau.
+COLOUR_MAP: list[tuple[str, str]] = [
+    ("DARK GREY", "PILKA"),
+    ("LIGHT GREY", "PILKA"),
+    ("DARK BLUE", "MĖLYNA"),
+    ("LIGHT BLUE", "MĖLYNA"),
+    ("DARK GREEN", "ŽALIA"),
+    ("LIGHT GREEN", "ŽALIA"),
+    ("DARK RED", "RAUDONA"),
+    ("MULTICOLOUR", "ĮVAIRIASPALVĖ"),
+    ("MULTICOLOR", "ĮVAIRIASPALVĖ"),
+    ("MULTI-COLOUR", "ĮVAIRIASPALVĖ"),
+    ("SILVER", "SIDABRINĖ"),
+    ("YELLOW", "GELTONA"),
+    ("ORANGE", "ORANŽINĖ"),
+    ("PURPLE", "VIOLETINĖ"),
+    ("VIOLET", "VIOLETINĖ"),
+    ("MAGENTA", "VIOLETINĖ"),
+    ("TURQUOISE", "MĖLYNA"),
+    ("BURGUNDY", "RAUDONA"),
+    ("MAROON", "RAUDONA"),
+    ("BRONZE", "RUDA"),
+    ("COPPER", "RUDA"),
+    ("BEIGE", "SMĖLIO"),
+    ("CREAM", "SMĖLIO"),
+    ("IVORY", "SMĖLIO"),
+    ("SAND", "SMĖLIO"),
+    ("KHAKI", "ŽALIA"),
+    ("GOLD", "AUKSINĖ"),
+    ("PINK", "ROŽINĖ"),
+    ("BROWN", "RUDA"),
+    ("GREEN", "ŽALIA"),
+    ("WHITE", "BALTA"),
+    ("BLACK", "JUODA"),
+    ("GREY", "PILKA"),
+    ("GRAY", "PILKA"),
+    ("BLUE", "MĖLYNA"),
+    ("RED", "RAUDONA"),
+]
+
+# Jei CoC iškart parašyta lietuviškai – paliekame kaip yra.
+LT_COLOURS = {
+    "BALTA", "JUODA", "PILKA", "MĖLYNA", "RAUDONA", "ŽALIA", "GELTONA",
+    "RUDA", "ORANŽINĖ", "VIOLETINĖ", "ROŽINĖ", "SIDABRINĖ", "AUKSINĖ",
+    "SMĖLIO", "ĮVAIRIASPALVĖ",
+}
+
+
+def to_lithuanian(raw: str | None) -> str:
+    """Grąžina lietuvišką spalvos pavadinimą arba "" jei atpažinti nepavyko."""
+    if not raw:
+        return ""
+    text = raw.upper()
+    # nuimame gamintojo kodus skliaustuose ir po pasvirojo brūkšnio
+    text = re.sub(r"\([^)]*\)", " ", text)
+    text = text.replace("_", " ").replace("-", " ")
+    text = re.sub(r"[^A-ZĄČĘĖĮŠŲŪŽ ]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    for word in text.split():
+        if word in LT_COLOURS:
+            return word
+
+    for en, lt in COLOUR_MAP:
+        if en in text:
+            return lt
+    return ""
