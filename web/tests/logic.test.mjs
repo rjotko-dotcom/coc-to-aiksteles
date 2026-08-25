@@ -215,3 +215,18 @@ test("eilutei be dvitaškio reikia žinomo skirsnio", () => {
   assert.equal(data.make, "");
   assert.equal(data.colour, "");
 });
+
+test("patvirtinimo numeris su „x“ vietoj žvaigždutės", () => {
+  const data = parseCocText(
+    "type described in approval e9x2018/858x11042x16 granted on 03/03/2026\n", { ocrUsed: true },
+  );
+  assert.equal(data.approval_number, "e9*2018/858*11042*16");
+  assert.equal(data.approval_date, "03.03.2026");
+});
+
+test("kategorija sutvarkoma", async () => {
+  const { tidyCategory } = await import("../js/coc.js");
+  assert.equal(tidyCategory("PML"), "M1");
+  assert.equal(tidyCategory("'MI"), "M1");
+  assert.equal(tidyCategory("N1"), "N1");
+});

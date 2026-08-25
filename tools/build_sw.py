@@ -82,15 +82,21 @@ def main() -> None:
         digest.update(path.relative_to(WEB).as_posix().encode())
         digest.update(str(path.stat().st_size).encode())
 
-    entries = ['  "./",'] + [
+    entries = ['  "./",', '  "./version.js",'] + [
         f'  "./{path.relative_to(WEB).as_posix()}",' for path in files
     ]
     (WEB / "sw.js").write_text(
         TEMPLATE.format(version=f"aikstele-{digest.hexdigest()[:12]}", assets="\n".join(entries)),
         encoding="utf-8",
     )
+    version = f"aikstele-{digest.hexdigest()[:12]}"
+    (WEB / "version.js").write_text(
+        "// Sugeneruota `tools/build_sw.py` – ranka nekeisti.\n"
+        f'export const VERSION = "{version}";\n',
+        encoding="utf-8",
+    )
     total = sum(path.stat().st_size for path in files)
-    print(f"sw.js: {len(files)} failai, {total / 1024 / 1024:.1f} MB")
+    print(f"sw.js: {len(files)} failai, {total / 1024 / 1024:.1f} MB, versija {version}")
 
 
 if __name__ == "__main__":

@@ -36,9 +36,12 @@ APPROVAL_RE = re.compile(
 
 #: Po OCR žvaigždutė virsta „%“, „x“ ar „¥“, brūkšnys – „l“. Todėl skaičius
 #: papildomai ieškomas laisvesniu būdu ir tik tada sudėliojamas taisyklingai.
+#: Ženklas, į kurį virsta žvaigždutė: „%“, „x“, „×“, „+“ ir pan.
+_STAR = r"\s*(?:[^A-Za-z0-9\s]{1,2}|[xX])\s*"
+
 APPROVAL_LOOSE_RE = re.compile(
-    r"\b([eE]\d{1,2})\s*[^A-Za-z0-9\s]{1,2}\s*([A-Za-z]{0,4}\d{2,4})\s*[/|l]\s*(\d{1,3})"
-    r"\s*[^A-Za-z0-9\s]{1,2}\s*(\d{3,6})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{1,3})\b"
+    r"\b([eE]\s*\d{1,2})" + _STAR + r"([A-Za-z]{0,4}\d{2,4})\s*[/|l1]\s*(\d{1,3})"
+    + _STAR + r"(\d{3,6})" + _STAR + r"(\d{1,3})\b"
 )
 
 DATE_RE = re.compile(r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})(?!\d)")
@@ -98,6 +101,25 @@ def vin_from_filename(name: str) -> str:
         if vin_check_digit_valid(candidate):
             return candidate
     return ""
+
+
+#: Galimos transporto priemonių kategorijos.
+_CATEGORIES = {f"{letter}{number}" for letter in "MNO" for number in "1234"} | {
+    f"L{number}" for number in "1234567"
+}
+
+
+def tidy_category(value: str) -> str:
+    """Iš „PML“ ar „\'MI“ padaro „M1“ – atpažinimas painioja 1 su I ir L."""
+    if not value:
+        return value
+    text = re.sub(r"[^A-Za-z0-9]", "", value).upper()
+    for index in range(len(text) - 1):
+        letter, digit = text[index], text[index + 1]
+        digit = {"I": "1", "L": "1", "O": "0"}.get(digit, digit)
+        if f"{letter}{digit}" in _CATEGORIES:
+            return f"{letter}{digit}"
+    return value
 
 
 def _clean(value: str) -> str:
@@ -436,7 +458,7 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
             data.approval_number = re.sub(r"\s+", "", m_num.group(0))
             end = m_num.end()
         else:
-            parts = loose.groups()
+            parts = [group.replace(" ", "") for group in loose.groups()]
             data.approval_number = f"{parts[0]}*{parts[1]}/{parts[2]}*{parts[3]}*{parts[4]}"
             end = loose.end()
             data.warnings.append(
@@ -485,6 +507,8 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
     for attr, human in required.items():
         if not getattr(data, attr):
             data.warnings.append(f"Nerasta: {human}")
+    data.category = tidy_category(data.category)
+
     corrected = _make_from_commercial_name(data.make, data.commercial_name)
     if corrected and corrected != data.make:
         data.warnings.append(

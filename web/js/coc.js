@@ -12,7 +12,12 @@ const APPROVAL_RE = /\b[eE]\d{1,2}\s*\*\s*[A-Za-z0-9]{0,4}\d{2,4}\s*\/\s*\d{1,3}
 
 // Po atpažinimo žvaigždutė virsta „%“, „x“ ar „¥“, brūkšnys – „l“. Todėl
 // numeris papildomai ieškomas laisviau ir tik tada sudėliojamas taisyklingai.
-const APPROVAL_LOOSE_RE = /\b([eE]\d{1,2})\s*[^A-Za-z0-9\s]{1,2}\s*([A-Za-z]{0,4}\d{2,4})\s*[/|l]\s*(\d{1,3})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{3,6})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{1,3})\b/;
+// Žvaigždutė virsta „%“, „x“, „×“ ar „+“, brūkšnys – „l“ arba „1“.
+const STAR = "\\s*(?:[^A-Za-z0-9\\s]{1,2}|[xX])\\s*";
+const APPROVAL_LOOSE_RE = new RegExp(
+  "\\b([eE]\\s*\\d{1,2})" + STAR + "([A-Za-z]{0,4}\\d{2,4})\\s*[/|l1]\\s*(\\d{1,3})"
+  + STAR + "(\\d{3,6})" + STAR + "(\\d{1,3})\\b",
+);
 
 const DATE_RE = /(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/;
 const ISO_DATE_RE = /\b(\d{4})[./-](\d{1,2})[./-](\d{1,2})\b/;
@@ -217,6 +222,24 @@ function makeFromCommercialName(make, commercialName) {
   return distance(make.toUpperCase(), first.toUpperCase()) === 1 ? first : make;
 }
 
+/** Galimos transporto priemonių kategorijos. */
+const CATEGORIES = new Set([
+  ...["M", "N", "O"].flatMap((letter) => ["1", "2", "3", "4"].map((n) => letter + n)),
+  ...["1", "2", "3", "4", "5", "6", "7"].map((n) => "L" + n),
+]);
+
+/** Iš „PML“ ar „'MI“ padaro „M1“ – atpažinimas painioja 1 su I ir L. */
+export function tidyCategory(value) {
+  if (!value) return value;
+  const text = value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  for (let index = 0; index < text.length - 1; index += 1) {
+    const letter = text[index];
+    const digit = { I: "1", L: "1", O: "0" }[text[index + 1]] || text[index + 1];
+    if (CATEGORIES.has(letter + digit)) return letter + digit;
+  }
+  return value;
+}
+
 function clean(value) {
   const text = value.replace(/\s+/g, " ").trim();
   return ["-", "--", "---", "N/A", "n/a"].includes(text) ? "" : text;
@@ -357,7 +380,8 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
       data.approval_number = approval[0].replace(/\s+/g, "");
       end = approval.index + approval[0].length;
     } else {
-      data.approval_number = `${loose[1]}*${loose[2]}/${loose[3]}*${loose[4]}*${loose[5]}`;
+      const parts = loose.slice(1, 6).map((group) => group.replace(/\s/g, ""));
+      data.approval_number = `${parts[0]}*${parts[1]}/${parts[2]}*${parts[3]}*${parts[4]}`;
       end = loose.index + loose[0].length;
       data.warnings.push(
         `Tipo patvirtinimo Nr. „${data.approval_number}“ sudėliotas iš neaiškiai atpažinto teksto – sulyginkite su liudijimu.`,
@@ -400,6 +424,8 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
   for (const [field, human] of required) {
     if (!data[field]) data.warnings.push(`Nerasta: ${human}`);
   }
+  data.category = tidyCategory(data.category);
+
   const corrected = makeFromCommercialName(data.make, data.commercial_name);
   if (corrected !== data.make) {
     data.warnings.push(`Markė pataisyta iš „${data.make}“ į „${corrected}“ pagal komercinį pavadinimą.`);

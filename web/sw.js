@@ -3,9 +3,10 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-594708ca37a1";
+const VERSION = "aikstele-93294cdbae6e";
 const ASSETS = [
   "./",
+  "./version.js",
   "./app.css",
   "./blank-template.docx",
   "./icons/icon-192.png",
@@ -30,6 +31,7 @@ const ASSETS = [
   "./vendor/ppocr/ort/ort-wasm-simd-threaded.mjs",
   "./vendor/ppocr/ort/ort-wasm-simd-threaded.wasm",
   "./vendor/ppocr/ppocr.js",
+  "./version.js",
 ];
 
 self.addEventListener("install", (event) => {

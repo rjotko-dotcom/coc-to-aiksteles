@@ -183,3 +183,21 @@ def test_line_without_a_colon_needs_a_known_section():
     data = parse_coc_text("35. Fitted tyre wheel combination 215/55R18 92V\n")
     assert data.make == ""
     assert data.colour == ""
+
+
+def test_approval_number_with_x_instead_of_star():
+    """Atpažinimas žvaigždutę kartais perskaito kaip „x“."""
+    data = parse_coc_text(
+        "type described in approval e9x2018/858x11042x16 granted on 03/03/2026\n", ocr_used=True
+    )
+    assert data.approval_number == "e9*2018/858*11042*16"
+    assert data.approval_date == "03.03.2026"
+
+
+def test_category_is_tidied():
+    from app.coc_extract import tidy_category
+
+    assert tidy_category("PML") == "M1"
+    assert tidy_category("'MI") == "M1"
+    assert tidy_category("N1") == "N1"
+    assert tidy_category("visai kitkas") == "visai kitkas"

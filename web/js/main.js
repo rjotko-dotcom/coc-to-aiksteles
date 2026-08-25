@@ -8,6 +8,7 @@ import {
 import {
   clearItems, clearTemplate, getTemplate, loadItems, saveItems, saveTemplate,
 } from "./store.js";
+import { VERSION } from "../version.js";
 
 const FIELDS = [
   ["make", "Gamybinė markė", false],
@@ -298,6 +299,36 @@ async function restore() {
 restore();
 showTemplateState();
 warmUp();
+
+/**
+ * Parodo, kuri versija veikia, ir ar serveryje jau yra naujesnė.
+ *
+ * Programa įrašoma į įrenginį, kad veiktų be interneto, todėl po atnaujinimo
+ * naršyklė kurį laiką dar rodo senąją. Be šito nesimato, kuri versija kalta.
+ */
+async function checkVersion() {
+  $("version").textContent = `versija ${VERSION.replace("aikstele-", "")}`;
+  try {
+    const response = await fetch("./version.js", { cache: "no-store" });
+    const text = await response.text();
+    const latest = (text.match(/VERSION = "([^"]+)"/) || [])[1];
+    if (latest && latest !== VERSION) {
+      $("update").hidden = false;
+    }
+  } catch {
+    // neprisijungus naujesnės versijos tiesiog nepatikrinsime
+  }
+}
+
+$("update-now").addEventListener("click", async () => {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((registration) => registration.unregister()));
+  const keys = await caches.keys();
+  await Promise.all(keys.map((key) => caches.delete(key)));
+  window.location.reload();
+});
+
+checkVersion();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
