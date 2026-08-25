@@ -14,20 +14,56 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from .aikstele_docx import build_document, build_values, fill_template, suggested_filename
+from .aikstele_docx import (
+    analyse_template,
+    build_document,
+    build_values,
+    fill_template,
+    suggested_filename,
+)
 from .coc_extract import extract_from_pdf
+
+
+def _check_template(path: str) -> int:
+    """Parodo, ką programa atpažįsta pažymos šablone."""
+    report = analyse_template(Path(path).read_bytes())
+    print(f"Šablonas: {path}")
+    print(f"Lentelių: {report['tables']}, reikšmių stulpelis: {report['value_column']}")
+    print(f"Atpažintos eilutės ({len(report['recognised'])} iš 8):")
+    for name, label in report["recognised"].items():
+        print(f"  + {name}  <-  „{label}“")
+    if report["placeholders"]:
+        print("Žymekliai:", ", ".join(report["placeholders"]))
+    if report["missing"]:
+        print("Neatpažinta (teks pildyti ranka arba įdėti žymeklį):")
+        for name in report["missing"]:
+            print(f"  - {name}")
+    print("Datos langeliai:", "rasta" if report["date_boxes"] else "nerasta")
+    print("Eilutė „Nr.“:", "rasta" if report["number_paragraph"] else "nerasta")
+    return 0 if not report["missing"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="CoC PDF -> aikštelės .docx")
-    parser.add_argument("pdfs", nargs="+", help="CoC PDF failai")
+    parser.add_argument("pdfs", nargs="*", help="CoC PDF failai")
     parser.add_argument("-o", "--out", default=".", help="katalogas rezultatams")
     parser.add_argument("-t", "--template", help="pažymos .docx šablonas")
     parser.add_argument("-n", "--number", default="", help="pažymos Nr.")
     parser.add_argument("-d", "--date", default=date.today().isoformat(), help="pažymos data")
     parser.add_argument("--company", default="", help="įmonės eilutė (be šablono)")
     parser.add_argument("--json", action="store_true", help="tik parodyti duomenis (JSON)")
+    parser.add_argument(
+        "--check-template",
+        metavar="DOCX",
+        help="patikrinti pažymos šabloną (ką programa jame atpažįsta)",
+    )
     args = parser.parse_args(argv)
+
+    if args.check_template:
+        return _check_template(args.check_template)
+
+    if not args.pdfs:
+        parser.error("nurodykite bent vieną CoC PDF failą")
 
     template_bytes = Path(args.template).read_bytes() if args.template else None
     out_dir = Path(args.out)

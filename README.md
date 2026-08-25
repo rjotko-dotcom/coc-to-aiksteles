@@ -83,6 +83,17 @@ lentelės pirmame stulpelyje („Gamybinė markė…“, „Tipas/Variantas/Vers
 stulpelį; „Skiltis RL“ stulpelis neliečiamas. Datos langeliai (po vieną
 simbolį) ir eilutė „Nr.“ užpildomi automatiškai.
 
+**Šablono patikra.** Vos įkėlus šabloną (arba paspaudus **Patikrinti**)
+parodoma, ką programa jame atpažino: kurios eilutės bus užpildytos, į kurį
+stulpelį bus rašoma, ar rasti datos langeliai ir eilutė „Nr.“. Jei kurios nors
+eilutės pavadinimas skiriasi ir neatpažįstamas, jis bus išvardytas – tada
+pakanka į tą langelį įrašyti žymeklį (pvz. `{{colour}}`). Tą patį galima
+padaryti ir be naršyklės:
+
+```bash
+.venv/bin/python -m app.cli --check-template data/template.docx
+```
+
 Jei norite tikslesnės kontrolės, šablone galite naudoti ir žymeklius:
 `{{make}}`, `{{type_variant_version}}`, `{{commercial_name}}`, `{{vin}}`,
 `{{approval_number}}`, `{{approval_date}}`, `{{national_approval_number}}`,

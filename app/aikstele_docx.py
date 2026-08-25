@@ -14,6 +14,7 @@ Du režimai:
 from __future__ import annotations
 
 import io
+import re
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -169,24 +170,30 @@ def _find_value_column(table, matched_rows: list[tuple[int, str]]) -> int | None
     return best
 
 
+def _match_rows(table) -> list[tuple[int, str]]:
+    """Suranda, kurioje eilutėje koks pažymos laukas. Grąžina [(eilutė, raktas)]."""
+    matched: list[tuple[int, str]] = []
+    for idx, row in enumerate(table.rows):
+        cells = _row_cells(row)
+        if len(cells) < 2:
+            continue
+        label = _fold(_cell_text(cells[0]))
+        if not label:
+            continue
+        for key, needles in ROW_MATCHERS:
+            if any(key == found for _, found in matched):
+                continue
+            if any(_fold(n) in label for n in needles):
+                matched.append((idx, key))
+                break
+    return matched
+
+
 def _fill_tables(document, values: dict) -> list[str]:
     """Užpildo lenteles pagal eilučių pavadinimus. Grąžina užpildytus raktus."""
     filled: list[str] = []
     for table in document.tables:
-        matched: list[tuple[int, str]] = []
-        for idx, row in enumerate(table.rows):
-            cells = _row_cells(row)
-            if len(cells) < 2:
-                continue
-            label = _fold(_cell_text(cells[0]))
-            if not label:
-                continue
-            for key, needles in ROW_MATCHERS:
-                if key in (k for _, k in matched):
-                    continue
-                if any(_fold(n) in label for n in needles):
-                    matched.append((idx, key))
-                    break
+        matched = _match_rows(table)
         if len(matched) < 2:
             continue
 
@@ -279,6 +286,87 @@ def fill_template(template: str | Path | bytes, values: dict) -> tuple[bytes, li
     buffer = io.BytesIO()
     document.save(buffer)
     return buffer.getvalue(), warnings
+
+
+PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-z_]+)\s*\}\}")
+
+
+def analyse_template(template: str | Path | bytes) -> dict:
+    """Patikrina šabloną: ką programa jame atpažįsta ir ko trūksta.
+
+    Naudinga įkėlus savo pažymos blanką – iškart matyti, ar visos eilutės bus
+    užpildytos, ar reikia patikslinti pavadinimus.
+    """
+    source = io.BytesIO(template) if isinstance(template, (bytes, bytearray)) else str(template)
+    document = Document(source)
+    names = {key: label.rstrip(":") for key, label, *_ in PAZYMA_ROWS}
+
+    recognised: dict[str, str] = {}
+    unrecognised: list[str] = []
+    value_column: int | None = None
+
+    for table in document.tables:
+        matched = _match_rows(table)
+        if len(matched) < 2:
+            continue
+        column = _find_value_column(table, matched)
+        if column is None:
+            continue
+        value_column = column if value_column is None else value_column
+        matched_indexes = {idx for idx, _ in matched}
+        for idx, key in matched:
+            cells = _row_cells(table.rows[idx])
+            if column < len(cells):
+                recognised.setdefault(key, _cell_text(cells[0]))
+        for idx, row in enumerate(table.rows):
+            if idx in matched_indexes:
+                continue
+            cells = _row_cells(row)
+            if not cells:
+                continue
+            # antraštės eilutė ("… | Skirsnis … | Skiltis RL") nėra duomenų eilutė
+            if any(w in _fold(_cell_text(c)) for c in cells for w in ("skirsnis", "skiltis")):
+                continue
+            label = _cell_text(cells[0])
+            if label and len(label) < 120:
+                unrecognised.append(label)
+
+    text_parts = [p.text for p in document.paragraphs]
+    for table in document.tables:
+        for row in table.rows:
+            text_parts.extend(_cell_text(cell) for cell in row.cells)
+    placeholders = sorted(set(PLACEHOLDER_RE.findall("\n".join(text_parts))))
+
+    covered = set(recognised) | set(placeholders)
+    missing = [names[key] for key in names if key not in covered]
+
+    return {
+        "tables": len(document.tables),
+        "value_column": value_column,
+        "recognised": {names[key]: label for key, label in recognised.items()},
+        "unrecognised_rows": unrecognised,
+        "placeholders": placeholders,
+        "missing": missing,
+        "date_boxes": _has_date_boxes(document),
+        "number_paragraph": _has_number_paragraph(document),
+    }
+
+
+def _has_date_boxes(document) -> bool:
+    for table in document.tables:
+        if len(table.rows) != 1:
+            continue
+        cells = _row_cells(table.rows[0])
+        if 8 <= len(cells) <= 12 and all(len(_cell_text(c)) <= 1 for c in cells):
+            return True
+    return False
+
+
+def _has_number_paragraph(document) -> bool:
+    return any(
+        p.text.strip().lower().startswith("nr.") and len(p.text.strip()) <= 40
+        for p in document.paragraphs
+    )
 
 
 # ---------------------------------------------------------------------------

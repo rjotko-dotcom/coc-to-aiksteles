@@ -111,3 +111,47 @@ def test_fill_template_three_column_table():
 
 def test_suggested_filename_uses_vin():
     assert suggested_filename(DATA) == "aikstele_SJNF16FA7U2000002.docx"
+
+
+def test_analyse_template_recognises_all_rows():
+    from app.aikstele_docx import analyse_template
+
+    template = build_document(build_values({key: "" for key in DATA}, doc_date=""))
+    report = analyse_template(template)
+    assert len(report["recognised"]) == 8
+    assert report["missing"] == []
+    assert report["value_column"] == 2
+    assert report["date_boxes"] is True
+    assert report["number_paragraph"] is True
+    assert report["unrecognised_rows"] == []
+
+
+def test_analyse_template_reports_missing_rows():
+    from app.aikstele_docx import analyse_template
+
+    document = Document()
+    table = document.add_table(rows=2, cols=3)
+    table.rows[0].cells[0].text = "Gamybinė markė:"
+    table.rows[1].cells[0].text = "Komercinis pavadinimas:"
+    buffer = io.BytesIO()
+    document.save(buffer)
+
+    report = analyse_template(buffer.getvalue())
+    assert "Transporto priemonės spalva" in report["missing"]
+    assert "Gamybinė markė (gamintojo prekės pavadinimas)" not in report["missing"]
+
+
+def test_analyse_template_counts_placeholders_as_covered():
+    from app.aikstele_docx import analyse_template
+
+    document = Document()
+    document.add_paragraph("Spalva: {{colour}}")
+    table = document.add_table(rows=2, cols=3)
+    table.rows[0].cells[0].text = "Gamybinė markė:"
+    table.rows[1].cells[0].text = "Komercinis pavadinimas:"
+    buffer = io.BytesIO()
+    document.save(buffer)
+
+    report = analyse_template(buffer.getvalue())
+    assert report["placeholders"] == ["colour"]
+    assert "Transporto priemonės spalva" not in report["missing"]

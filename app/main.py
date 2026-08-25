@@ -22,7 +22,13 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
-from .aikstele_docx import build_document, build_values, fill_template, suggested_filename
+from .aikstele_docx import (
+    analyse_template,
+    build_document,
+    build_values,
+    fill_template,
+    suggested_filename,
+)
 from .coc_extract import extract_from_bytes
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -124,9 +130,23 @@ def set_settings(payload: SettingsRequest) -> dict:
 async def upload_template(file: UploadFile = File(...)) -> dict:
     if not file.filename or not file.filename.lower().endswith((".docx", ".dotx")):
         raise HTTPException(400, "Šablonas turi būti .docx arba .dotx failas.")
+    content = await file.read()
+    try:
+        analysis = analyse_template(content)
+    except Exception as exc:
+        raise HTTPException(400, f"Nepavyko perskaityti šablono: {exc}") from exc
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    TEMPLATE_PATH.write_bytes(await file.read())
-    return {"ok": True, "name": file.filename}
+    TEMPLATE_PATH.write_bytes(content)
+    return {"ok": True, "name": file.filename, "analysis": analysis}
+
+
+@app.get("/api/template/check")
+def check_template() -> dict:
+    """Parodo, ką programa atpažįsta įkeltame šablone."""
+    if not TEMPLATE_PATH.exists():
+        raise HTTPException(404, "Šablonas neįkeltas.")
+    return analyse_template(TEMPLATE_PATH.read_bytes())
 
 
 @app.delete("/api/template")

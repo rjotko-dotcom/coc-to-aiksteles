@@ -88,9 +88,11 @@
         <div class="row">
           <input id="tplfile" type="file" accept=".docx,.dotx">
           <button id="tplupload">Įkelti šabloną</button>
+          <button id="tplcheck">Patikrinti</button>
           <button id="tpldelete">Pašalinti</button>
           <span class="meta" id="tplstatus"></span>
         </div>
+        <div id="tplreport" style="margin-top:10px"></div>
         <div style="margin-top:12px; max-width:420px">
           <label for="company">Įmonės pavadinimas, kodas, adresas (naudojama tik be šablono)</label>
           <input id="company" type="text" placeholder="UAB „Pavyzdys“, 123456789, Vilnius">
@@ -239,19 +241,63 @@ $("clear").addEventListener("click", () => {
   render();
 });
 
+function renderTemplateReport(analysis) {
+  const box = $("tplreport");
+  if (!analysis) { box.innerHTML = ""; return; }
+  const total = 8;
+  const found = Object.keys(analysis.recognised || {}).length;
+  const missing = analysis.missing || [];
+  const extras = [
+    analysis.date_boxes ? "datos langeliai" : null,
+    analysis.number_paragraph ? "eilutė „Nr.“" : null,
+    (analysis.placeholders || []).length ? "žymekliai: " + analysis.placeholders.join(", ") : null,
+  ].filter(Boolean);
+
+  let html = "";
+  if (!missing.length) {
+    html += `<div class="warn" style="background:#eaf6ec;border-color:#bfe0c6;color:#1a7f37">
+      Šablonas suprastas: atpažintos visos ${found} iš ${total} eilučių.</div>`;
+  } else {
+    html += `<div class="warn">Atpažinta ${found} iš ${total} eilučių.
+      Neatpažinta: <strong>${missing.map(esc).join(", ")}</strong>.<br>
+      Šias reikšmes teks įrašyti ranka arba įdėti žymeklį (pvz. <code>{{colour}}</code>)
+      į reikiamą lentelės langelį.</div>`;
+  }
+  if (extras.length) html += `<p class="meta">Papildomai rasta: ${esc(extras.join("; "))}.</p>`;
+  if ((analysis.unrecognised_rows || []).length) {
+    html += `<details><summary>Šablono eilutės, kurios nepildomos (${analysis.unrecognised_rows.length})</summary>
+      <p class="meta">${analysis.unrecognised_rows.map(esc).join("<br>")}</p></details>`;
+  }
+  box.innerHTML = html;
+}
+
 $("tplupload").addEventListener("click", async () => {
   const file = $("tplfile").files[0];
   if (!file) { $("tplstatus").textContent = "Pasirinkite failą."; return; }
   const body = new FormData();
   body.append("file", file);
   const response = await fetch("/api/template", { method: "POST", body });
-  $("tplstatus").textContent = response.ok ? "Šablonas įkeltas." : "Nepavyko įkelti.";
+  const data = await response.json().catch(() => ({}));
+  if (response.ok) {
+    $("tplstatus").textContent = "Šablonas įkeltas.";
+    renderTemplateReport(data.analysis);
+  } else {
+    $("tplstatus").textContent = data.detail || "Nepavyko įkelti.";
+    renderTemplateReport(null);
+  }
   loadSettings();
+});
+
+$("tplcheck").addEventListener("click", async () => {
+  const response = await fetch("/api/template/check");
+  if (!response.ok) { $("tplstatus").textContent = "Šablonas neįkeltas."; return; }
+  renderTemplateReport(await response.json());
 });
 
 $("tpldelete").addEventListener("click", async () => {
   await fetch("/api/template", { method: "DELETE" });
   $("tplstatus").textContent = "Šablonas pašalintas.";
+  renderTemplateReport(null);
   loadSettings();
 });
 
