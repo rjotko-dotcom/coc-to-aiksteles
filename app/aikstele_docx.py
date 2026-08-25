@@ -149,24 +149,65 @@ def _replace_placeholders(paragraph, values: dict) -> bool:
     return True
 
 
+#: Skirsnių ir RL kodų atpažinimui: {raktas: (skirsnis, RL)}
+_ROW_CODES = {key: (section, rl) for key, _, section, rl in PAZYMA_ROWS}
+
+
+def _code(text: str) -> str:
+    """Kodų palyginimui: "K.1" ir "K1" arba "0.2.1 " laikomi tuo pačiu."""
+    return "".join(ch for ch in (text or "").lower() if ch.isalnum())
+
+
 def _find_value_column(table, matched_rows: list[tuple[int, str]]) -> int | None:
     """Nustato, kuriame stulpelyje rašomos reikšmės.
 
-    Reikšmių stulpelis yra tas, kuris atpažintose eilutėse dažniausiai tuščias
-    (neskaitant paskutinio "Skiltis RL" stulpelio ir pirmojo – pavadinimų).
+    Vien pagal tuščius langelius spręsti negalima – blankas dažnai būna
+    ankstesnės pažymos kopija su likusiais duomenimis. Todėl atmetami
+    stulpeliai, kuriuose surašyti CoC skirsnių numeriai (0.1, 0.2, 40…) arba
+    RL skilčių kodai (D.1, E, K, R…), o iš likusių renkamasi tas, kurio
+    antraštė tuščia.
     """
     if not matched_rows:
         return None
-    rows = [_row_cells(table.rows[i]) for i, _ in matched_rows]
-    width = min(len(r) for r in rows)
+    rows = {index: _row_cells(table.rows[index]) for index, _ in matched_rows}
+    width = min(len(cells) for cells in rows.values())
     if width < 2:
         return None
-    candidates = range(1, width - 1) if width > 2 else range(1, width)
-    best, best_score = None, -1
-    for col in candidates:
-        empty = sum(1 for r in rows if not _cell_text(r[col]))
-        if empty >= best_score:  # lygiosiomis renkamės dešiniausią
-            best, best_score = col, empty
+
+    matched_indexes = {index for index, _ in matched_rows}
+    header = None
+    if 0 not in matched_indexes and table.rows:
+        header_cells = _row_cells(table.rows[0])
+        if len(header_cells) >= width:
+            header = header_cells
+
+    best, best_score = None, None
+    for col in range(1, width):
+        sections = rl_codes = 0
+        empty = 0
+        for index, key in matched_rows:
+            cell = _code(_cell_text(rows[index][col]))
+            section, rl = _ROW_CODES.get(key, ("", ""))
+            if not cell:
+                empty += 1
+                continue
+            if section and cell == _code(section):
+                sections += 1
+            if rl and cell == _code(rl):
+                rl_codes += 1
+        if sections >= 2 or rl_codes >= 2:
+            continue  # tai "Skirsnis" arba "Skiltis RL" stulpelis
+
+        score = 0
+        if header is not None:
+            header_text = _fold(_cell_text(header[col]))
+            if any(word in header_text for word in ("skirsnis", "skiltis", "rl")):
+                continue
+            if not header_text:
+                score += 10
+        score += empty
+        if best_score is None or score > best_score:
+            best, best_score = col, score
     return best
 
 
@@ -204,51 +245,75 @@ def _fill_tables(document, values: dict) -> list[str]:
             cells = _row_cells(table.rows[idx])
             if col >= len(cells):
                 continue
-            value = str(values.get(key, "") or "")
-            if not value:
-                continue
-            _set_cell_text(cells[col], value)
+            # Rašome ir tuščią reikšmę: blankas gali būti ankstesnės pažymos
+            # kopija, o senos mašinos duomenys jokiu būdu negali likti.
+            _set_cell_text(cells[col], str(values.get(key, "") or ""))
             filled.append(key)
     return filled
 
 
-def _fill_date_boxes(document, doc_date: str) -> bool:
-    """Užpildo datos langelius (po vieną simbolį), jei tokia lentelė yra."""
-    digits = [ch for ch in doc_date]
+def _find_date_boxes(document):
+    """Suranda datos langelių lentelę (vienos eilutės, po vieną simbolį)."""
     for table in document.tables:
         if len(table.rows) != 1:
             continue
         cells = _row_cells(table.rows[0])
-        if not (8 <= len(cells) <= 12):
-            continue
-        if any(len(_cell_text(c)) > 1 for c in cells):
-            continue
-        if len(digits) != len(cells):
-            continue
-        for cell, ch in zip(cells, digits):
+        if 8 <= len(cells) <= 12 and all(len(_cell_text(c)) <= 1 for c in cells):
+            return cells
+    return None
+
+
+def _fill_date_boxes(document, doc_date: str) -> bool:
+    """Įrašo datą į langelius, išsaugant šablone esančius skirtukus.
+
+    Data pažymoje keičiasi kiekvieną kartą, todėl visada perrašoma – net jei
+    blanke likusi ankstesnės pažymos data.
+    """
+    digits = [ch for ch in doc_date if ch.isdigit()]
+    if len(digits) != 8:
+        return False
+    cells = _find_date_boxes(document)
+    if cells is None:
+        return False
+
+    existing = [_cell_text(cell) for cell in cells]
+    separators = {i for i, text in enumerate(existing) if text and not text.isdigit()}
+    free = [i for i in range(len(cells)) if i not in separators]
+
+    if len(free) == 8:
+        for index, digit in zip(free, digits):
+            _set_cell_text(cells[index], digit)
+        return True
+    if not separators and len(cells) == 10:
+        stamped = f"{''.join(digits[:4])}-{''.join(digits[4:6])}-{''.join(digits[6:])}"
+        for cell, ch in zip(cells, stamped):
             _set_cell_text(cell, ch)
         return True
     return False
 
 
-def _fill_number(document, doc_number: str) -> bool:
-    """Įrašo pažymos numerį į pastraipą, prasidedančią "Nr."."""
-    if not doc_number:
-        return False
+def _find_number_paragraph(document):
+    """Suranda pastraipą su pažymos numeriu ("Nr. …")."""
     for para in document.paragraphs:
         text = para.text.strip()
         if len(text) <= 40 and text.lower().startswith("nr."):
-            rest = text[3:].strip(" _. ")
-            if rest:
-                return False  # numeris jau įrašytas – neliečiame
-            if para.runs:
-                para.runs[0].text = f"Nr. {doc_number}"
-                for run in para.runs[1:]:
-                    run.text = ""
-            else:
-                para.add_run(f"Nr. {doc_number}")
-            return True
-    return False
+            return para
+    return None
+
+
+def _fill_number(document, doc_number: str) -> bool:
+    """Įrašo pažymos numerį – ir perrašo blanke likusį ankstesnį numerį."""
+    para = _find_number_paragraph(document)
+    if para is None:
+        return False
+    value = f"Nr. {doc_number}".strip()
+    if para.runs:
+        para.runs[0].text = value
+        for run in para.runs[1:]:
+            run.text = ""
+    else:
+        para.add_run(value)
+    return True
 
 
 def fill_template(template: str | Path | bytes, values: dict) -> tuple[bytes, list[str]]:
@@ -353,20 +418,11 @@ def analyse_template(template: str | Path | bytes) -> dict:
 
 
 def _has_date_boxes(document) -> bool:
-    for table in document.tables:
-        if len(table.rows) != 1:
-            continue
-        cells = _row_cells(table.rows[0])
-        if 8 <= len(cells) <= 12 and all(len(_cell_text(c)) <= 1 for c in cells):
-            return True
-    return False
+    return _find_date_boxes(document) is not None
 
 
 def _has_number_paragraph(document) -> bool:
-    return any(
-        p.text.strip().lower().startswith("nr.") and len(p.text.strip()) <= 40
-        for p in document.paragraphs
-    )
+    return _find_number_paragraph(document) is not None
 
 
 # ---------------------------------------------------------------------------

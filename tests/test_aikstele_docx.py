@@ -155,3 +155,83 @@ def test_analyse_template_counts_placeholders_as_covered():
     report = analyse_template(buffer.getvalue())
     assert report["placeholders"] == ["colour"]
     assert "Transporto priemonės spalva" not in report["missing"]
+
+
+def _previous_pazyma() -> bytes:
+    """Blankas, kuris yra ankstesnės pažymos kopija (su senos mašinos duomenimis).
+
+    Būtent taip atrodo realus darbinis blankas: reikšmių stulpelis nėra
+    tuščias, o datos langeliuose jau įrašyta ankstesnė data.
+    """
+    document = Document()
+
+    boxes = document.add_table(rows=1, cols=10)
+    for cell, ch in zip(boxes.rows[0].cells, "2025-10-16"):
+        cell.text = ch
+    document.add_paragraph("Nr. 41")
+
+    table = document.add_table(rows=1, cols=4)
+    for cell, text in zip(
+        table.rows[0].cells,
+        ("Transporto priemonės duomenys:", "Skirsnis atitikties liudijime", "", "Skiltis RL"),
+    ):
+        cell.text = text
+    previous = [
+        ("Gamybinė markė (gamintojo prekės pavadinimas):", "0.1", "NISSAN", "D.1"),
+        ("Tipas/Variantas/Versija:", "0.2", "J12/D/D07", "D.2"),
+        ("Komercinis pavadinimas:", "0.2.1", "NISSAN QASHQAI", "D.3"),
+        ("Transporto priemonės identifikavimo numeris", "0.10", "SJNJ12TD4U2321187", "E"),
+        ("Tipo patvirtinimo Nr.", "", "e9*2018/858*11042*15", "K"),
+        ("Tipo patvirtinimo numerio suteikimo data", "", "05.05.2024", ""),
+        ("Nacionalinis patvirtinimo numeris", "", "12345", "K.1"),
+        ("Transporto priemonės spalva", "40", "PILKA/JUODA", "R"),
+    ]
+    for label, section, value, rl in previous:
+        cells = table.add_row().cells
+        for cell, text in zip(cells, (label, section, value, rl)):
+            cell.text = text
+
+    buffer = io.BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_value_column_found_when_template_is_a_previous_pazyma():
+    from app.aikstele_docx import analyse_template
+
+    report = analyse_template(_previous_pazyma())
+    # 1 stulpelyje – CoC skirsniai, 3 – RL kodai; reikšmės rašomos į 2
+    assert report["value_column"] == 2
+    assert report["missing"] == []
+
+
+def test_previous_vehicle_data_is_replaced_not_kept():
+    filled, warnings = fill_template(
+        _previous_pazyma(), build_values(DATA, doc_number="42", doc_date="2026-09-01")
+    )
+    assert warnings == []
+    text = all_text(filled)
+
+    for stale in ("SJNJ12TD4U2321187", "J12/D/D07", "e9*2018/858*11042*15", "05.05.2024"):
+        assert stale not in text, f"liko ankstesnės pažymos duomuo: {stale}"
+    assert "SJNF16FA7U2000002" in text
+    assert "NISSAN JUKE" in text
+
+    document = Document(io.BytesIO(filled))
+    rows = {row.cells[0].text: [c.text for c in row.cells] for row in document.tables[1].rows}
+    # tuščias laukas išvalomas, o ne paliekamas iš ankstesnės pažymos
+    assert rows["Nacionalinis patvirtinimo numeris"][2] == ""
+    # skirsnių ir RL stulpeliai nepaliesti
+    assert rows["Transporto priemonės spalva"][1] == "40"
+    assert rows["Transporto priemonės spalva"][3] == "R"
+
+
+def test_date_and_number_are_refreshed_every_time():
+    filled, _ = fill_template(
+        _previous_pazyma(), build_values(DATA, doc_number="42", doc_date="2026-09-01")
+    )
+    document = Document(io.BytesIO(filled))
+    boxes = [cell.text for cell in document.tables[0].rows[0].cells]
+    assert "".join(boxes) == "2026-09-01"
+    assert boxes[4] == "-" and boxes[7] == "-"  # skirtukai išsaugoti
+    assert any(p.text.strip() == "Nr. 42" for p in document.paragraphs)

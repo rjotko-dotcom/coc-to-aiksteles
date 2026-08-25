@@ -83,6 +83,18 @@ lentelės pirmame stulpelyje („Gamybinė markė…“, „Tipas/Variantas/Vers
 stulpelį; „Skiltis RL“ stulpelis neliečiamas. Datos langeliai (po vieną
 simbolį) ir eilutė „Nr.“ užpildomi automatiškai.
 
+**Blankas gali būti ankstesnės pažymos kopija.** Taip dažniausiai ir būna –
+darbinis failas su praeitos mašinos duomenimis. Programa tai palaiko: visos
+atpažintos eilutės **perrašomos**, o tuščias laukas (pvz. nacionalinis
+patvirtinimo numeris) – **išvalomas**, kad ankstesnės transporto priemonės
+duomenys jokiu būdu neliktų naujoje pažymoje. Reikšmių stulpelis atpažįstamas
+ne pagal tuščius langelius, o pagal tai, kuriame stulpelyje surašyti CoC
+skirsniai (0.1, 0.2, 40…) ir RL kodai (D.1, E, K, R…) – jie neliečiami.
+
+**Data ir Nr. atnaujinami kiekvieną kartą.** Datos langeliuose įrašoma pažymos
+data (pagal nutylėjimą – šiandienos, sąsajoje redaguojama), išsaugant blanke
+esančius brūkšnelius; eilutė „Nr.“ perrašoma jūsų įvestu numeriu.
+
 **Šablono patikra.** Vos įkėlus šabloną (arba paspaudus **Patikrinti**)
 parodoma, ką programa jame atpažino: kurios eilutės bus užpildytos, į kurį
 stulpelį bus rašoma, ar rasti datos langeliai ir eilutė „Nr.“. Jei kurios nors
@@ -120,7 +132,8 @@ naudojama**.
 
 ## Ką verta pasitikrinti kiekvieną kartą
 
-* **Spalva** – CoC 40 skirsnyje ji dažnai būna 2 puslapyje ir su gamintojo kodu;
+* **Spalva** – CoC 40 skirsnyje ji dažnai būna 2 puslapyje ir su gamintojo kodu.
+  Dvispalvės mašinos užrašomos abiem spalvomis (`GREY/BLACK` → `PILKA/JUODA`);
   neatpažintą pavadinimą įrašykite ranka.
 * **Nacionalinis patvirtinimo numeris** – CoC jo nėra, pildomas ranka.
 * **Tipo patvirtinimo Nr.** – imamas iš sakinio „…described in approval …

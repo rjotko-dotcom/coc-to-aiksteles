@@ -60,21 +60,36 @@ LT_COLOURS = {
 
 
 def to_lithuanian(raw: str | None) -> str:
-    """Grąžina lietuvišką spalvos pavadinimą arba "" jei atpažinti nepavyko."""
+    """Grąžina lietuvišką spalvos pavadinimą arba "" jei atpažinti nepavyko.
+
+    Dvispalvės (two-tone) transporto priemonės CoC užrašomos kaip
+    "GREY / BLACK", "TWO TONE BLACK-RED" ir pan. – tokiu atveju grąžinamos
+    abi spalvos ta pačia tvarka: "PILKA/JUODA".
+    """
     if not raw:
         return ""
     text = raw.upper()
-    # nuimame gamintojo kodus skliaustuose ir po pasvirojo brūkšnio
+    # nuimame gamintojo kodus skliaustuose
     text = re.sub(r"\([^)]*\)", " ", text)
-    text = text.replace("_", " ").replace("-", " ")
+    text = text.replace("_", " ").replace("-", " ").replace("/", " ")
     text = re.sub(r"[^A-ZĄČĘĖĮŠŲŪŽ ]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
 
-    for word in text.split():
-        if word in LT_COLOURS:
-            return word
+    # ilgesni pavadinimai ("DARK GREY") tikrinami pirmiau nei trumpi ("GREY")
+    names = sorted(
+        [(en, lt) for en, lt in COLOUR_MAP] + [(lt, lt) for lt in LT_COLOURS],
+        key=lambda pair: -len(pair[0]),
+    )
+    pattern = re.compile(r"(?<![A-ZĄČĘĖĮŠŲŪŽ])(" + "|".join(
+        re.escape(en) for en, _ in names
+    ) + r")(?![A-ZĄČĘĖĮŠŲŪŽ])")
+    lookup = dict(names)
 
-    for en, lt in COLOUR_MAP:
-        if en in text:
-            return lt
-    return ""
+    found: list[str] = []
+    for match in pattern.finditer(text):
+        lithuanian = lookup[match.group(1)]
+        if lithuanian not in found:
+            found.append(lithuanian)
+    return "/".join(found)

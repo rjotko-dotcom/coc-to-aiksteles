@@ -94,3 +94,17 @@ def test_extract_from_pdf_end_to_end():
     assert data.make == "NISSAN"
     assert data.vin == "SJNJ12TD3U2000001"
     assert data.colour == "BALTA"
+
+
+def test_two_tone_colour_keeps_both_names():
+    assert to_lithuanian("GREY/BLACK") == "PILKA/JUODA"
+    assert to_lithuanian("TWO TONE WHITE-BLACK (QNC)") == "BALTA/JUODA"
+    assert to_lithuanian("BLACK") == "JUODA"
+
+
+def test_two_tone_colour_from_certificate():
+    data = parse_coc_text(
+        "0.1. Make : NISSAN\n40. Colour of the vehicle : GREY / BLACK ROOF\n"
+    )
+    assert data.colour_raw == "GREY / BLACK ROOF"
+    assert data.colour == "PILKA/JUODA"
