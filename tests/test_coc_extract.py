@@ -201,3 +201,19 @@ def test_category_is_tidied():
     assert tidy_category("'MI") == "M1"
     assert tidy_category("N1") == "N1"
     assert tidy_category("visai kitkas") == "visai kitkas"
+
+
+def test_model_name_typo_is_corrected():
+    """Atpažinimas pridėjo raidę: QASHQATI -> QASHQAI."""
+    data = parse_coc_text(
+        "0.1. Make : NISSAN\n0.2.1 Commercial Name : NISSAN QASHQATI\n", ocr_used=True
+    )
+    assert data.commercial_name == "NISSAN QASHQAI"
+    assert any("Komercinis pavadinimas pataisytas" in w for w in data.warnings)
+
+
+def test_unknown_model_is_left_alone():
+    data = parse_coc_text(
+        "0.1. Make : NISSAN\n0.2.1 Commercial Name : NISSAN TEKNA SPORT\n", ocr_used=True
+    )
+    assert data.commercial_name == "NISSAN TEKNA SPORT"

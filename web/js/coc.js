@@ -82,6 +82,23 @@ const LABEL_WORDS = new Set([
   "colore", "veicolo", "fecha", "vehiculo",
 ]);
 
+/**
+ * Modelių pavadinimai, pagal kuriuos taisoma vieno ženklo atpažinimo klaida
+ * („QASHQATI“ -> „QASHQAI“). Sąrašas sąmoningai trumpas: taisoma tik tada, kai
+ * skiriasi lygiai vienas ženklas, todėl svetimo pavadinimo jis nesugadins.
+ */
+const KNOWN_MODELS = new Set([
+  // Nissan
+  "QASHQAI", "JUKE", "X-TRAIL", "XTRAIL", "MICRA", "LEAF", "ARIYA", "NOTE",
+  "TOWNSTAR", "INTERSTAR", "PRIMASTAR", "NAVARA", "PULSAR", "PATHFINDER",
+  // Hyundai
+  "KONA", "KAUAI", "TUCSON", "IONIQ", "BAYON", "STAREX", "ELANTRA", "SANTAFE",
+  // Citroën / Stellantis
+  "BERLINGO", "JUMPER", "JUMPY", "RELAY", "DISPATCH", "SPACETOURER",
+  // markės
+  "NISSAN", "HYUNDAI", "CITROEN", "TOYOTA", "RENAULT", "DACIA", "PEUGEOT",
+]);
+
 /** Etiketės apie žymens *vietą*, o ne apie patį numerį. */
 const PLACE_WORDS = ["location", "emplacement", "anbringung", "posizione", "lugar"];
 
@@ -206,6 +223,22 @@ function distance(first, second) {
     previous = current;
   }
   return previous[second.length];
+}
+
+/** Pataiso vieno ženklo klaidas žinomuose modelių pavadinimuose. */
+export function tidyModelNames(text) {
+  if (!text) return text;
+  return text.split(/\s+/).map((word) => {
+    const stripped = word.replace(/^[,.;:()]+|[,.;:()]+$/g, "");
+    if (stripped.length < 4 || KNOWN_MODELS.has(stripped.toUpperCase())) return word;
+    for (const model of KNOWN_MODELS) {
+      if (Math.abs(model.length - stripped.length) <= 1
+          && distance(model, stripped.toUpperCase()) === 1) {
+        return word.replace(stripped, model);
+      }
+    }
+    return word;
+  }).join(" ");
 }
 
 /**
@@ -425,6 +458,11 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
     if (!data[field]) data.warnings.push(`Nerasta: ${human}`);
   }
   data.category = tidyCategory(data.category);
+  const fixedName = tidyModelNames(data.commercial_name);
+  if (fixedName !== data.commercial_name) {
+    data.warnings.push(`Komercinis pavadinimas pataisytas iš „${data.commercial_name}“ į „${fixedName}“.`);
+    data.commercial_name = fixedName;
+  }
 
   const corrected = makeFromCommercialName(data.make, data.commercial_name);
   if (corrected !== data.make) {

@@ -292,6 +292,21 @@ LABEL_WORDS = {
     "colore", "veicolo", "numero", "fecha", "vehiculo",
 }
 
+#: Modelių pavadinimai, pagal kuriuos taisoma vieno ženklo atpažinimo klaida
+#: („QASHQATI“ -> „QASHQAI“). Sąrašas sąmoningai trumpas: taisoma tik tada, kai
+#: skiriasi lygiai vienas ženklas, todėl svetimo pavadinimo jis nesugadins.
+KNOWN_MODELS = {
+    # Nissan
+    "QASHQAI", "JUKE", "X-TRAIL", "XTRAIL", "MICRA", "LEAF", "ARIYA", "NOTE",
+    "TOWNSTAR", "INTERSTAR", "PRIMASTAR", "NAVARA", "PULSAR", "PATHFINDER",
+    # Hyundai
+    "KONA", "KAUAI", "TUCSON", "IONIQ", "BAYON", "STAREX", "ELANTRA", "SANTAFE",
+    # Citroën / Stellantis
+    "BERLINGO", "JUMPER", "JUMPY", "RELAY", "DISPATCH", "SPACETOURER",
+    # markės
+    "NISSAN", "HYUNDAI", "CITROEN", "TOYOTA", "RENAULT", "DACIA", "PEUGEOT",
+}
+
 #: Etiketės, kurios kalba apie žymens *vietą*, o ne apie patį numerį
 #: („Location of the vehicle identification number“).
 _PLACE_WORDS = ("location", "emplacement", "anbringung", "posizione", "lugar")
@@ -366,6 +381,26 @@ def _distance(first: str, second: str) -> int:
             current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a != b)))
         previous = current
     return previous[-1]
+
+
+def tidy_model_names(text: str) -> str:
+    """Pataiso vieno ženklo klaidas žinomuose modelių pavadinimuose."""
+    if not text:
+        return text
+    words = []
+    for word in text.split():
+        stripped = word.strip(",.;:()")
+        if len(stripped) >= 4 and stripped.upper() not in KNOWN_MODELS:
+            match = next(
+                (model for model in KNOWN_MODELS
+                 if abs(len(model) - len(stripped)) <= 1
+                 and _distance(model, stripped.upper()) == 1),
+                None,
+            )
+            if match:
+                word = word.replace(stripped, match)
+        words.append(word)
+    return " ".join(words)
 
 
 def _make_from_commercial_name(make: str, commercial_name: str) -> str:
@@ -508,6 +543,12 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
         if not getattr(data, attr):
             data.warnings.append(f"Nerasta: {human}")
     data.category = tidy_category(data.category)
+    fixed_name = tidy_model_names(data.commercial_name)
+    if fixed_name != data.commercial_name:
+        data.warnings.append(
+            f"Komercinis pavadinimas pataisytas iš „{data.commercial_name}“ į „{fixed_name}“."
+        )
+        data.commercial_name = fixed_name
 
     corrected = _make_from_commercial_name(data.make, data.commercial_name)
     if corrected and corrected != data.make:

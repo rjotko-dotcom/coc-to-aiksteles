@@ -230,3 +230,15 @@ test("kategorija sutvarkoma", async () => {
   assert.equal(tidyCategory("'MI"), "M1");
   assert.equal(tidyCategory("N1"), "N1");
 });
+
+test("modelio pavadinimo klaida pataisoma", () => {
+  const data = parseCocText("0.1. Make : NISSAN\n0.2.1 Commercial Name : NISSAN QASHQATI\n",
+    { ocrUsed: true });
+  assert.equal(data.commercial_name, "NISSAN QASHQAI");
+});
+
+test("nežinomas pavadinimas neliečiamas", () => {
+  const data = parseCocText("0.1. Make : NISSAN\n0.2.1 Commercial Name : NISSAN TEKNA SPORT\n",
+    { ocrUsed: true });
+  assert.equal(data.commercial_name, "NISSAN TEKNA SPORT");
+});
