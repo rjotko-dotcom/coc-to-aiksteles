@@ -68,7 +68,14 @@ repozitorija padaroma vieša, arba renkamasi kitą būdą.
 **Nusitempti ir paleisti.** `web/` katalogą (arba jo ZIP) galima tiesiog
 nuvilkti į [Netlify Drop](https://app.netlify.com/drop) ar Cloudflare Pages –
 per kelias sekundes gaunamas adresas. Kadangi programa neturi serverio dalies,
-talpintojas jokių liudijimų nemato: viskas lieka naršyklėje.
+talpintojas jokių liudijimų nemato: viskas lieka naršyklėje. Nuvilktas puslapis
+lieka laikinas, kol paspaudžiama **Claim this site** – tada adresas tampa
+nuolatinis (pavadinimą galima pakeisti: *Site configuration → Change site name*).
+
+**Prijungus prie repozitorijos** (Netlify → *Add new site → Import an existing
+project*) kiekvienas pakeitimas paskelbiamas automatiškai; veikia ir su
+privačia repozitorija. Nustatymus paima `netlify.toml` (publikuojamas katalogas
+– `web`), tereikia pasirinkti šaką.
 
 Norint patikrinti vietoje:
 
