@@ -108,3 +108,52 @@ def test_two_tone_colour_from_certificate():
     )
     assert data.colour_raw == "GREY / BLACK ROOF"
     assert data.colour == "PILKA/JUODA"
+
+
+def test_vin_taken_from_the_file_name_when_unreadable():
+    """Gamintojų portalai liudijimus pavadina VIN numeriu."""
+    data = parse_coc_text(
+        "0.1. Make : NISSAN\n", source_file="SJNJ12TD3U2371076.pdf", ocr_used=True
+    )
+    assert data.vin == "SJNJ12TD3U2371076"
+    assert any("failo pavadinimo" in w for w in data.warnings)
+
+
+def test_file_name_vin_must_pass_the_check_digit():
+    data = parse_coc_text("0.1. Make : NISSAN\n", source_file="SJNJ12TD9U2371076.pdf")
+    assert data.vin == ""
+
+
+def test_file_name_disagreeing_with_the_certificate_is_flagged():
+    data = parse_coc_text(
+        "0.10. Vehicle identification number : SJNJ12TD3U2000001\n",
+        source_file="SJNJ12TD3U2371076.pdf",
+    )
+    assert data.vin == "SJNJ12TD3U2000001"
+    assert any("nesutampa su failo" in w for w in data.warnings)
+
+
+def test_approval_number_rebuilt_from_damaged_text():
+    """Po atpažinimo žvaigždutė dažnai virsta „%“ arba „x“."""
+    data = parse_coc_text(
+        "type described in approval e9%2018/858%11042%16 granted on 03/03/2026 and\n",
+        ocr_used=True,
+    )
+    assert data.approval_number == "e9*2018/858*11042*16"
+    assert data.approval_date == "03.03.2026"
+    assert any("sudėliotas iš neaiškiai" in w for w in data.warnings)
+
+
+def test_make_corrected_from_the_commercial_name():
+    data = parse_coc_text(
+        "0.1. Make : HISSAN\n0.2.1. Commercial Name : NISSAN QASHQAI\n", ocr_used=True
+    )
+    assert data.make == "NISSAN"
+    assert any("Markė pataisyta" in w for w in data.warnings)
+
+
+def test_make_left_alone_when_it_differs_by_more_than_one_letter():
+    data = parse_coc_text(
+        "0.1. Make : DACIA\n0.2.1. Commercial Name : NISSAN QASHQAI\n", ocr_used=True
+    )
+    assert data.make == "DACIA"

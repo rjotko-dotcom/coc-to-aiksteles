@@ -34,6 +34,13 @@ APPROVAL_RE = re.compile(
     r"\b[eE]\d{1,2}\s*\*\s*[A-Za-z0-9]{0,4}\d{2,4}\s*/\s*\d{1,3}\s*\*\s*\d{3,6}\s*\*\s*\d{1,3}\b"
 )
 
+#: Po OCR žvaigždutė virsta „%“, „x“ ar „¥“, brūkšnys – „l“. Todėl skaičius
+#: papildomai ieškomas laisvesniu būdu ir tik tada sudėliojamas taisyklingai.
+APPROVAL_LOOSE_RE = re.compile(
+    r"\b([eE]\d{1,2})\s*[^A-Za-z0-9\s]{1,2}\s*([A-Za-z]{0,4}\d{2,4})\s*[/|l]\s*(\d{1,3})"
+    r"\s*[^A-Za-z0-9\s]{1,2}\s*(\d{3,6})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{1,3})\b"
+)
+
 DATE_RE = re.compile(r"(?<!\d)(\d{1,2})[./\-](\d{1,2})[./\-](\d{4})(?!\d)")
 ISO_DATE_RE = re.compile(r"\b(\d{4})[./\-](\d{1,2})[./\-](\d{1,2})\b")
 
@@ -78,6 +85,19 @@ def vin_check_digit_valid(vin: str) -> bool:
     total = sum(_VIN_VALUES[ch] * weight for ch, weight in zip(vin, _VIN_WEIGHTS))
     remainder = total % 11
     return vin[8] == ("X" if remainder == 10 else str(remainder))
+
+
+def vin_from_filename(name: str) -> str:
+    """VIN iš failo pavadinimo, jei jis ten yra ir kontrolinis skaitmuo sutampa.
+
+    Gamintojų portalai liudijimus dažnai pavadina VIN numeriu, todėl tai
+    patikimas atsarginis šaltinis, kai skenuotame liudijime numeris neįskaitomas.
+    """
+    stem = Path(name or "").stem.upper()
+    for candidate in re.findall(r"[A-HJ-NPR-Z0-9]{17}", stem):
+        if vin_check_digit_valid(candidate):
+            return candidate
+    return ""
 
 
 def _clean(value: str) -> str:
@@ -270,6 +290,34 @@ def _split_label_value(line: str) -> tuple[str, str] | None:
     return label.strip(), value.strip()
 
 
+def _distance(first: str, second: str) -> int:
+    """Kiek ženklų skiriasi du žodžiai (Levenšteino atstumas)."""
+    previous = list(range(len(second) + 1))
+    for i, a in enumerate(first, 1):
+        current = [i]
+        for j, b in enumerate(second, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a != b)))
+        previous = current
+    return previous[-1]
+
+
+def _make_from_commercial_name(make: str, commercial_name: str) -> str:
+    """Pataiso vieno ženklo klaidą markėje pagal komercinį pavadinimą.
+
+    „HISSAN“ ir „NISSAN QASHQAI“ skiriasi vienu ženklu, o komercinis
+    pavadinimas paprastai prasideda ta pačia marke – tai patikimesnis šaltinis
+    nei atskirai atpažintas trumpas žodis.
+    """
+    if not make or not commercial_name:
+        return make
+    first = commercial_name.split()[0]
+    if len(make) < 4 or len(first) < 4 or make.upper() == first.upper():
+        return make
+    if _distance(make.upper(), first.upper()) == 1:
+        return first
+    return make
+
+
 def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> CoCData:
     """Iš CoC teksto sudaro `CoCData`."""
     from .ocr import normalise_ocr_text
@@ -330,14 +378,40 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
     # Frazė skiriasi pagal kalbą („granted on“, „issued on“, „délivrée le“,
     # „erteilt am“), todėl remiamės pačiu numeriu, o datos ieškome iškart po jo.
     m_num = APPROVAL_RE.search(flat)
-    if m_num:
-        data.approval_number = re.sub(r"\s+", "", m_num.group(0))
-        window = flat[m_num.end():m_num.end() + 120]
+    loose = None
+    if not m_num:
+        loose = APPROVAL_LOOSE_RE.search(flat)
+    if m_num or loose:
+        if m_num:
+            data.approval_number = re.sub(r"\s+", "", m_num.group(0))
+            end = m_num.end()
+        else:
+            parts = loose.groups()
+            data.approval_number = f"{parts[0]}*{parts[1]}/{parts[2]}*{parts[3]}*{parts[4]}"
+            end = loose.end()
+            data.warnings.append(
+                f"Tipo patvirtinimo Nr. „{data.approval_number}“ sudėliotas iš neaiškiai "
+                "atpažinto teksto – sulyginkite su liudijimu."
+            )
+        window = flat[end:end + 120]
         m_date = DATE_RE.search(window)
         if m_date:
             data.approval_date = normalise_date(m_date.group(0))
 
     # -- VIN atsarginis variantas -----------------------------------------
+    file_vin = vin_from_filename(source_file)
+    if not data.vin and file_vin:
+        data.vin = file_vin
+        data.warnings.append(
+            f"VIN „{file_vin}“ paimtas iš failo pavadinimo (liudijime jo atpažinti "
+            "nepavyko) – kontrolinis skaitmuo sutampa, bet sulyginkite."
+        )
+    elif data.vin and file_vin and data.vin != file_vin:
+        data.warnings.append(
+            f"Dėmesio: liudijime rastas VIN „{data.vin}“ nesutampa su failo "
+            f"pavadinimu („{file_vin}“)."
+        )
+
     if not data.vin:
         for candidate in VIN_RE.findall(flat):
             has_letter = any(ch.isalpha() for ch in candidate)
@@ -361,6 +435,13 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
     for attr, human in required.items():
         if not getattr(data, attr):
             data.warnings.append(f"Nerasta: {human}")
+    corrected = _make_from_commercial_name(data.make, data.commercial_name)
+    if corrected and corrected != data.make:
+        data.warnings.append(
+            f"Markė pataisyta iš „{data.make}“ į „{corrected}“ pagal komercinį pavadinimą."
+        )
+        data.make = corrected
+
     if data.vin and ocr_used and not vin_check_digit_valid(data.vin):
         data.warnings.append(
             f"VIN „{data.vin}“ kontrolinis skaitmuo nesutampa – po OCR būtinai "

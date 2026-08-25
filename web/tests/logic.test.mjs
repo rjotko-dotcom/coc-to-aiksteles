@@ -154,3 +154,42 @@ test("VIN pataisomas po atpažinimo", () => {
   assert.equal(repairVin("SJNF16FA7U2O00002"), "SJNF16FA7U2000002");
   assert.equal(repairVin("PERTRUMPAS"), "");
 });
+
+test("VIN paimamas iš failo pavadinimo, kai liudijime neįskaitomas", () => {
+  const data = parseCocText("0.1. Make : NISSAN\n",
+    { sourceFile: "SJNJ12TD3U2371076.pdf", ocrUsed: true });
+  assert.equal(data.vin, "SJNJ12TD3U2371076");
+  assert.ok(data.warnings.some((w) => w.includes("failo pavadinimo")));
+});
+
+test("failo pavadinimo VIN turi praeiti kontrolinį skaitmenį", () => {
+  const data = parseCocText("0.1. Make : NISSAN\n", { sourceFile: "SJNJ12TD9U2371076.pdf" });
+  assert.equal(data.vin, "");
+});
+
+test("nesutampantis failo pavadinimas pažymimas", () => {
+  const data = parseCocText("0.10. Vehicle identification number : SJNJ12TD3U2000001\n",
+    { sourceFile: "SJNJ12TD3U2371076.pdf" });
+  assert.equal(data.vin, "SJNJ12TD3U2000001");
+  assert.ok(data.warnings.some((w) => w.includes("nesutampa su failo")));
+});
+
+test("patvirtinimo numeris sudėliojamas iš iškraipyto teksto", () => {
+  const data = parseCocText(
+    "type described in approval e9%2018/858%11042%16 granted on 03/03/2026 and\n",
+    { ocrUsed: true },
+  );
+  assert.equal(data.approval_number, "e9*2018/858*11042*16");
+  assert.equal(data.approval_date, "03.03.2026");
+});
+
+test("markė pataisoma pagal komercinį pavadinimą", () => {
+  const data = parseCocText(
+    "0.1. Make : HISSAN\n0.2.1. Commercial Name : NISSAN QASHQAI\n", { ocrUsed: true },
+  );
+  assert.equal(data.make, "NISSAN");
+  const other = parseCocText(
+    "0.1. Make : DACIA\n0.2.1. Commercial Name : NISSAN QASHQAI\n", { ocrUsed: true },
+  );
+  assert.equal(other.make, "DACIA", "skiriasi daugiau nei vienu ženklu – neliečiama");
+});

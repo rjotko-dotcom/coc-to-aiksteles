@@ -10,6 +10,10 @@ const VIN_LOOSE_RE = /\b[A-Z0-9]{17}\b/g;
 // e9*2018/858*11042*16, e4*2007/46*1522*01, e3*2007/46*0046*10
 const APPROVAL_RE = /\b[eE]\d{1,2}\s*\*\s*[A-Za-z0-9]{0,4}\d{2,4}\s*\/\s*\d{1,3}\s*\*\s*\d{3,6}\s*\*\s*\d{1,3}\b/;
 
+// Po atpažinimo žvaigždutė virsta „%“, „x“ ar „¥“, brūkšnys – „l“. Todėl
+// numeris papildomai ieškomas laisviau ir tik tada sudėliojamas taisyklingai.
+const APPROVAL_LOOSE_RE = /\b([eE]\d{1,2})\s*[^A-Za-z0-9\s]{1,2}\s*([A-Za-z]{0,4}\d{2,4})\s*[/|l]\s*(\d{1,3})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{3,6})\s*[^A-Za-z0-9\s]{1,2}\s*(\d{1,3})\b/;
+
 const DATE_RE = /(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/;
 const ISO_DATE_RE = /\b(\d{4})[./-](\d{1,2})[./-](\d{1,2})\b/;
 const ITEM_CODE_RE = /^(\d+(?:\.\d+)*)\.?(?=\s|$)/;
@@ -148,6 +152,51 @@ export function repairVin(token) {
   return candidates.find((candidate) => vinCheckDigitValid(candidate)) || "";
 }
 
+/**
+ * VIN iš failo pavadinimo, jei jis ten yra ir kontrolinis skaitmuo sutampa.
+ *
+ * Gamintojų portalai liudijimus dažnai pavadina VIN numeriu, todėl tai
+ * patikimas atsarginis šaltinis, kai skenuotame liudijime numeris neįskaitomas.
+ */
+export function vinFromFilename(name) {
+  const stem = (name || "").replace(/\.[^.]*$/, "").toUpperCase();
+  for (const candidate of stem.match(/[A-HJ-NPR-Z0-9]{17}/g) || []) {
+    if (vinCheckDigitValid(candidate)) return candidate;
+  }
+  return "";
+}
+
+/** Kiek ženklų skiriasi du žodžiai (Levenšteino atstumas). */
+function distance(first, second) {
+  let previous = [...Array(second.length + 1).keys()];
+  for (let i = 1; i <= first.length; i += 1) {
+    const current = [i];
+    for (let j = 1; j <= second.length; j += 1) {
+      current.push(Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (first[i - 1] === second[j - 1] ? 0 : 1),
+      ));
+    }
+    previous = current;
+  }
+  return previous[second.length];
+}
+
+/**
+ * Pataiso vieno ženklo klaidą markėje pagal komercinį pavadinimą.
+ *
+ * „HISSAN“ ir „NISSAN QASHQAI“ skiriasi vienu ženklu, o komercinis pavadinimas
+ * paprastai prasideda ta pačia marke – tai patikimesnis šaltinis nei atskirai
+ * atpažintas trumpas žodis.
+ */
+function makeFromCommercialName(make, commercialName) {
+  if (!make || !commercialName) return make;
+  const first = commercialName.split(/\s+/)[0];
+  if (make.length < 4 || first.length < 4 || make.toUpperCase() === first.toUpperCase()) return make;
+  return distance(make.toUpperCase(), first.toUpperCase()) === 1 ? first : make;
+}
+
 function clean(value) {
   const text = value.replace(/\s+/g, " ").trim();
   return ["-", "--", "---", "N/A", "n/a"].includes(text) ? "" : text;
@@ -246,11 +295,33 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
   // Tipo patvirtinimas: frazė skiriasi pagal kalbą („granted on“, „issued on“,
   // „délivrée le“), todėl remiamės numeriu, o datos ieškome iškart po jo.
   const approval = APPROVAL_RE.exec(flat);
-  if (approval) {
-    data.approval_number = approval[0].replace(/\s+/g, "");
-    const window = flat.slice(approval.index + approval[0].length, approval.index + approval[0].length + 120);
-    const date = DATE_RE.exec(window);
+  const loose = approval ? null : APPROVAL_LOOSE_RE.exec(flat);
+  if (approval || loose) {
+    let end;
+    if (approval) {
+      data.approval_number = approval[0].replace(/\s+/g, "");
+      end = approval.index + approval[0].length;
+    } else {
+      data.approval_number = `${loose[1]}*${loose[2]}/${loose[3]}*${loose[4]}*${loose[5]}`;
+      end = loose.index + loose[0].length;
+      data.warnings.push(
+        `Tipo patvirtinimo Nr. „${data.approval_number}“ sudėliotas iš neaiškiai atpažinto teksto – sulyginkite su liudijimu.`,
+      );
+    }
+    const date = DATE_RE.exec(flat.slice(end, end + 120));
     if (date) data.approval_date = normaliseDate(date[0]);
+  }
+
+  const fileVin = vinFromFilename(sourceFile);
+  if (!data.vin && fileVin) {
+    data.vin = fileVin;
+    data.warnings.push(
+      `VIN „${fileVin}“ paimtas iš failo pavadinimo (liudijime jo atpažinti nepavyko) – kontrolinis skaitmuo sutampa, bet sulyginkite.`,
+    );
+  } else if (data.vin && fileVin && data.vin !== fileVin) {
+    data.warnings.push(
+      `Dėmesio: liudijime rastas VIN „${data.vin}“ nesutampa su failo pavadinimu („${fileVin}“).`,
+    );
   }
 
   if (!data.vin) {
@@ -274,6 +345,12 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
   for (const [field, human] of required) {
     if (!data[field]) data.warnings.push(`Nerasta: ${human}`);
   }
+  const corrected = makeFromCommercialName(data.make, data.commercial_name);
+  if (corrected !== data.make) {
+    data.warnings.push(`Markė pataisyta iš „${data.make}“ į „${corrected}“ pagal komercinį pavadinimą.`);
+    data.make = corrected;
+  }
+
   if (data.vin && ocrUsed && !vinCheckDigitValid(data.vin)) {
     data.warnings.push(
       `VIN „${data.vin}“ kontrolinis skaitmuo nesutampa – po atpažinimo būtinai sulyginkite su liudijimu.`,
