@@ -193,3 +193,25 @@ test("markė pataisoma pagal komercinį pavadinimą", () => {
   );
   assert.equal(other.make, "DACIA", "skiriasi daugiau nei vienu ženklu – neliečiama");
 });
+
+test("eilutė be dvitaškio vis tiek perskaitoma", () => {
+  const data = parseCocText([
+    "0.1. Make (Trade name of manufacturer) NISSAN",
+    "0.2. Type J12",
+    "0.2.1 Commercial Name NISSAN QASHQAI",
+    "0.10. Vehicle identification number SJNJ12TD3U2000001",
+    "0.4. Vehicle category M1",
+    "40. Colour of vehicle Black",
+  ].join("\n"), { ocrUsed: true });
+  assert.equal(data.make, "NISSAN");
+  assert.equal(data.type, "J12");
+  assert.equal(data.commercial_name, "NISSAN QASHQAI");
+  assert.equal(data.vin, "SJNJ12TD3U2000001");
+  assert.equal(data.colour, "JUODA");
+});
+
+test("eilutei be dvitaškio reikia žinomo skirsnio", () => {
+  const data = parseCocText("35. Fitted tyre wheel combination 215/55R18 92V\n");
+  assert.equal(data.make, "");
+  assert.equal(data.colour, "");
+});

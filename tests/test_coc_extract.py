@@ -157,3 +157,29 @@ def test_make_left_alone_when_it_differs_by_more_than_one_letter():
         "0.1. Make : DACIA\n0.2.1. Commercial Name : NISSAN QASHQAI\n", ocr_used=True
     )
     assert data.make == "DACIA"
+
+
+def test_line_without_a_colon_is_still_split():
+    """PP-OCR kartais dvitaškio nepamato visai."""
+    data = parse_coc_text(
+        "0.1. Make (Trade name of manufacturer) NISSAN\n"
+        "0.2. Type J12\n"
+        "0.2.1 Commercial Name NISSAN QASHQAI\n"
+        "0.10. Vehicle identification number SJNJ12TD3U2000001\n"
+        "0.4. Vehicle category M1\n"
+        "40. Colour of vehicle Black\n",
+        ocr_used=True,
+    )
+    assert data.make == "NISSAN"
+    assert data.type == "J12"
+    assert data.commercial_name == "NISSAN QASHQAI"
+    assert data.vin == "SJNJ12TD3U2000001"
+    assert data.category == "M1"
+    assert data.colour == "JUODA"
+
+
+def test_line_without_a_colon_needs_a_known_section():
+    """Atsitiktinė eilutė be dvitaškio nieko neužpildo."""
+    data = parse_coc_text("35. Fitted tyre wheel combination 215/55R18 92V\n")
+    assert data.make == ""
+    assert data.colour == ""

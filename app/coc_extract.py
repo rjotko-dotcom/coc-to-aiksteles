@@ -252,6 +252,24 @@ LABEL_KEYS: list[tuple[str, tuple[str, ...]]] = [
     )),
 ]
 
+#: Pavadinimų žodžiai. Kai atpažinimas praleidžia dvitaškį („40. Colour of
+#: vehicle Black“), reikšmė atskiriama nubraukiant šiuos žodžius po skirsnio
+#: numerio – pirmas jiems nepriklausantis žodis jau yra reikšmė.
+LABEL_WORDS = {
+    # anglų
+    "make", "trade", "name", "names", "of", "the", "manufacturer", "manufacture",
+    "type", "variant", "version", "commercial", "category", "vehicle", "vehicles",
+    "identification", "number", "date", "colour", "color", "company", "address",
+    "and", "s",
+    # prancūzų
+    "marque", "denomination", "commerciale", "du", "de", "la", "des", "le",
+    "categorie", "vehicule", "numero", "d", "appellation", "appellations",
+    "couleur", "raison", "sociale", "construction",
+    # vokiečių / italų / ispanų
+    "marke", "typ", "farbe", "fahrzeug", "nummer", "datum", "marca", "tipo",
+    "colore", "veicolo", "numero", "fecha", "vehiculo",
+}
+
 #: Etiketės, kurios kalba apie žymens *vietą*, o ne apie patį numerį
 #: („Location of the vehicle identification number“).
 _PLACE_WORDS = ("location", "emplacement", "anbringung", "posizione", "lugar")
@@ -282,10 +300,37 @@ def _key_for(code: str, label: str) -> str | None:
     return None
 
 
+def _split_without_colon(line: str) -> tuple[str, str] | None:
+    """Atskiria reikšmę eilutėje be dvitaškio.
+
+    Atpažinimas dvitaškio kartais nepamato visai. Tada pasikliaujame skirsnio
+    numeriu ir nubraukiame pavadinimo žodžius: „40. Colour of vehicle Black“ ->
+    („40 Colour of vehicle“, „Black“). Pirmas žodis, kuris nėra pavadinimo
+    dalis, jau yra reikšmė.
+    """
+    stripped = line.strip()
+    code_match = ITEM_CODE_RE.match(stripped)
+    if not code_match or code_match.group(1) not in CODE_KEYS:
+        return None
+
+    rest = re.sub(r"^\([^)]*\)\s*", "", stripped[code_match.end():].strip())
+    skipped: list[str] = []
+    while rest:
+        words = rest.split()
+        first = _fold(words[0]).strip("().,;:")
+        if not first or first not in LABEL_WORDS:
+            break
+        skipped.append(words.pop(0))
+        rest = re.sub(r"^\([^)]*\)\s*", "", " ".join(words))
+    if not skipped or not rest:
+        return None
+    return f"{code_match.group(1)} {' '.join(skipped)}", rest
+
+
 def _split_label_value(line: str) -> tuple[str, str] | None:
     """Eilutę "0.1. Make (Trade name) : NISSAN" skaido į (etiketė, reikšmė)."""
     if ":" not in line:
-        return None
+        return _split_without_colon(line)
     label, _, value = line.partition(":")
     return label.strip(), value.strip()
 

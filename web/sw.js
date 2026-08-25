@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-14984afeedd6";
+const VERSION = "aikstele-fc8daec060c2";
 const ASSETS = [
   "./",
   "./app.css",
@@ -24,11 +24,12 @@ const ASSETS = [
   "./vendor/fflate/fflate.mjs",
   "./vendor/pdfjs/pdf.min.mjs",
   "./vendor/pdfjs/pdf.worker.min.mjs",
-  "./vendor/tessdata/eng.traineddata.gz",
-  "./vendor/tesseract/core/tesseract-core-lstm.wasm.js",
-  "./vendor/tesseract/core/tesseract-core-simd-lstm.wasm.js",
-  "./vendor/tesseract/tesseract.min.js",
-  "./vendor/tesseract/worker.min.js",
+  "./vendor/ppocr/models/det.onnx",
+  "./vendor/ppocr/models/keys.txt",
+  "./vendor/ppocr/models/rec.onnx",
+  "./vendor/ppocr/ort/ort-wasm-simd-threaded.mjs",
+  "./vendor/ppocr/ort/ort-wasm-simd-threaded.wasm",
+  "./vendor/ppocr/ppocr.js",
 ];
 
 self.addEventListener("install", (event) => {
@@ -47,18 +48,33 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Antraštės, be kurių naršyklė neleidžia dirbti keliomis gijomis. Su jomis
+// atpažinimas paleidžiamas lygiagrečiai ir trunka kelis kartus trumpiau.
+function isolate(response) {
+  if (!response || !response.ok || response.type !== "basic") return response;
+  const headers = new Headers(response.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+  headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((cached) => {
-      if (cached) return cached;
+      if (cached) return isolate(cached);
       return fetch(event.request).then((response) => {
         if (response.ok && new URL(event.request.url).origin === self.location.origin) {
           const copy = response.clone();
           caches.open(VERSION).then((cache) => cache.put(event.request, copy));
         }
-        return response;
-      }).catch(() => caches.match("./index.html"));
+        return isolate(response);
+      }).catch(() => caches.match("./index.html").then(isolate));
     }),
   );
 });

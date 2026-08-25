@@ -239,7 +239,18 @@ showTemplateState();
 warmUp();
 
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./sw.js");
+      // Kelių gijų režimas įsijungia tik tada, kai puslapį jau aptarnauja
+      // `sw.js` – po pirmo įdiegimo vieną kartą persikrauname.
+      if (!self.crossOriginIsolated && navigator.serviceWorker.controller === null
+          && !sessionStorage.getItem("perkrauta")) {
+        sessionStorage.setItem("perkrauta", "1");
+        setTimeout(() => window.location.reload(), 500);
+      }
+    } catch {
+      // be aptarnaujančio failo programa vis tiek veikia, tik neveiks neprisijungus
+    }
   });
 }

@@ -57,6 +57,26 @@ const LABEL_KEYS = [
   ]],
 ];
 
+/**
+ * Pavadinimų žodžiai. Kai atpažinimas praleidžia dvitaškį („40. Colour of
+ * vehicle Black“), reikšmė atskiriama nubraukiant šiuos žodžius po skirsnio
+ * numerio – pirmas jiems nepriklausantis žodis jau yra reikšmė.
+ */
+const LABEL_WORDS = new Set([
+  // anglų
+  "make", "trade", "name", "names", "of", "the", "manufacturer", "manufacture",
+  "type", "variant", "version", "commercial", "category", "vehicle", "vehicles",
+  "identification", "number", "date", "colour", "color", "company", "address",
+  "and", "s",
+  // prancūzų
+  "marque", "denomination", "commerciale", "du", "de", "la", "des", "le",
+  "categorie", "vehicule", "numero", "d", "appellation", "appellations",
+  "couleur", "raison", "sociale", "construction",
+  // vokiečių / italų / ispanų
+  "marke", "typ", "farbe", "fahrzeug", "nummer", "datum", "marca", "tipo",
+  "colore", "veicolo", "fecha", "vehiculo",
+]);
+
 /** Etiketės apie žymens *vietą*, o ne apie patį numerį. */
 const PLACE_WORDS = ["location", "emplacement", "anbringung", "posizione", "lugar"];
 
@@ -216,6 +236,37 @@ function keyFor(code, label) {
   return null;
 }
 
+/**
+ * Atskiria reikšmę eilutėje be dvitaškio.
+ *
+ * Atpažinimas dvitaškio kartais nepamato visai. Tada pasikliaujame skirsnio
+ * numeriu ir nubraukiame pavadinimo žodžius: „40. Colour of vehicle Black“ ->
+ * („40 Colour of vehicle“, „Black“).
+ */
+function splitWithoutColon(line) {
+  const stripped = line.trim();
+  const codeMatch = ITEM_CODE_RE.exec(stripped);
+  if (!codeMatch || !CODE_KEYS[codeMatch[1]]) return null;
+
+  let rest = stripped.slice(codeMatch[0].length).trim().replace(/^\([^)]*\)\s*/, "");
+  const skipped = [];
+  while (rest) {
+    const words = rest.split(/\s+/);
+    const first = fold(words[0]).replace(/^[().,;:]+|[().,;:]+$/g, "");
+    if (!first || !LABEL_WORDS.has(first)) break;
+    skipped.push(words.shift());
+    rest = words.join(" ").replace(/^\([^)]*\)\s*/, "");
+  }
+  if (!skipped.length || !rest) return null;
+  return { label: `${codeMatch[1]} ${skipped.join(" ")}`, value: rest };
+}
+
+function splitLabelValue(line) {
+  const at = line.indexOf(":");
+  if (at < 0) return splitWithoutColon(line);
+  return { label: line.slice(0, at).trim(), value: line.slice(at + 1) };
+}
+
 export function typeVariantVersion(data) {
   return [data.type, data.variant, data.version].filter(Boolean).join("/");
 }
@@ -247,11 +298,12 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
 
   for (const [index, entry] of lines.entries()) {
     const line = entry.text.trim();
-    if (!line || !line.includes(":")) continue;
+    if (!line) continue;
 
-    const at = line.indexOf(":");
-    const label = line.slice(0, at).trim();
-    const value = clean(line.slice(at + 1));
+    const split = splitLabelValue(line);
+    if (!split) continue;
+    const label = split.label;
+    const value = clean(split.value);
     if (!value) continue;
 
     const codeMatch = ITEM_CODE_RE.exec(label.replace(/^[-–—•\s]+/, ""));
