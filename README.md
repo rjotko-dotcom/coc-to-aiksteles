@@ -56,10 +56,19 @@ skaitymas, skenuotų liudijimų atpažinimas ir Word failo pildymas vyksta Jūs�
 
 ### Paskelbimas
 
-Kartu su kodu yra `.github/workflows/pages.yml` – kiekvienas pakeitimas
-automatiškai paskelbiamas per GitHub Pages. Vieną kartą reikia įjungti:
-repozitorijos **Settings → Pages → Source: GitHub Actions**. Po to adresas
-matomas ten pat ir darbo eigos („Actions“) rezultate.
+Svetainė yra paprasti failai – jokio serverio jai nereikia, tad tinka bet kuris
+statinių puslapių talpintojas.
+
+**GitHub Pages.** Kartu su kodu yra `.github/workflows/pages.yml` – kiekvienas
+pakeitimas paskelbiamas automatiškai. Vieną kartą reikia įjungti:
+**Settings → Pages → Source: GitHub Actions**. Svarbu: privačiose
+repozitorijose Pages veikia tik su mokamu planu (Pro/Team), todėl arba
+repozitorija padaroma vieša, arba renkamasi kitą būdą.
+
+**Nusitempti ir paleisti.** `web/` katalogą (arba jo ZIP) galima tiesiog
+nuvilkti į [Netlify Drop](https://app.netlify.com/drop) ar Cloudflare Pages –
+per kelias sekundes gaunamas adresas. Kadangi programa neturi serverio dalies,
+talpintojas jokių liudijimų nemato: viskas lieka naršyklėje.
 
 Norint patikrinti vietoje:
 
