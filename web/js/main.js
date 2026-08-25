@@ -5,7 +5,9 @@ import { warmUp } from "./ocr.js";
 import {
   analyseTemplate, buildValues, fillTemplate, suggestedFilename, zipDocuments,
 } from "./docx.js";
-import { clearTemplate, getTemplate, saveTemplate } from "./store.js";
+import {
+  clearItems, clearTemplate, getTemplate, loadItems, saveItems, saveTemplate,
+} from "./store.js";
 
 const FIELDS = [
   ["make", "Gamybinė markė", false],
@@ -20,6 +22,13 @@ const FIELDS = [
 ];
 
 let items = [];
+let rememberTimer = null;
+
+/** Išsaugo darbo eilę įrenginyje (kad atnaujinus puslapį niekas nedingtų). */
+function remember() {
+  clearTimeout(rememberTimer);
+  rememberTimer = setTimeout(() => saveItems(items), 400);
+}
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"]/g, (ch) =>
@@ -80,6 +89,9 @@ function render() {
         <span>${meta}</span>
       </div>
       ${warnings}
+      ${Object.keys(item.snippets || {}).length
+        ? `<p class="note" style="margin:-4px 0 12px">Po kiekvienu laukeliu – ta pati vieta liudijime. Sulyginkite ir taisykite čia pat.</p>`
+        : ""}
       <div class="grid">
         ${FIELDS.map(([key, label, mono]) => `
           <div>
@@ -87,14 +99,26 @@ function render() {
             <input type="text" id="f-${index}-${key}" data-index="${index}" data-key="${key}"
                    class="${mono ? "code" : ""}" value="${esc(item[key] || "")}"
                    autocomplete="off" spellcheck="false">
+            ${(item.snippets || {})[key]
+              ? `<div class="snippet-box"><img class="snippet ${key === "type_variant_version" ? "snippet--stack" : ""}" src="${item.snippets[key]}"
+                   alt="Ta pati vieta liudijime" loading="lazy"></div>`
+              : ""}
           </div>`).join("")}
       </div>`;
     box.appendChild(card);
   });
+  // Reikšmės liudijime rašomos dešinėje, todėl iškarpą iškart pastumiame ten.
+  box.querySelectorAll(".snippet-box").forEach((frame) => {
+    const image = frame.querySelector("img");
+    const scroll = () => { frame.scrollLeft = frame.scrollWidth; };
+    if (image.complete) scroll(); else image.addEventListener("load", scroll, { once: true });
+  });
+
   box.querySelectorAll("input[data-key]").forEach((input) => {
     input.addEventListener("input", (event) => {
       const element = event.target;
       items[Number(element.dataset.index)][element.dataset.key] = element.value;
+      remember();
     });
   });
   $("actions").classList.toggle("hidden", !items.some((item) => !item.error));
@@ -108,7 +132,7 @@ async function handleFiles(fileList) {
   const files = [...fileList].filter((file) => file.name.toLowerCase().endsWith(".pdf"));
   if (!files.length) { status("Pasirinkite PDF failus."); return; }
 
-  items = [];
+  // Anksčiau nuskaityti liudijimai paliekami – taip galima pilti po kelis.
   render();
   for (const [position, file] of files.entries()) {
     const prefix = files.length > 1 ? `(${position + 1}/${files.length}) ` : "";
@@ -120,6 +144,7 @@ async function handleFiles(fileList) {
       items.push({ source_file: file.name, error: error.message || String(error) });
     }
     render();
+    remember();
   }
   const ok = items.filter((item) => !item.error).length;
   status(`Perskaityta ${ok} iš ${items.length}. Patikrinkite laukus ir spauskite „Generuoti“.`, ok > 0);
@@ -219,6 +244,7 @@ $("clear").addEventListener("click", () => {
   items = [];
   $("files").value = "";
   $("genstatus").textContent = "";
+  clearItems();
   status("Duomenys išvalyti.");
   render();
 });
@@ -235,6 +261,15 @@ $("tpldelete").addEventListener("click", async () => {
   await showTemplateState();
 });
 
+async function restore() {
+  const stored = await loadItems();
+  if (!stored.length) return;
+  items = stored;
+  render();
+  status(`Atkurta ${items.length} anksčiau nuskaityt(a)s liudijimas(-ai). Norėdami pradėti iš naujo, spauskite „Išvalyti duomenis“.`, true);
+}
+
+restore();
 showTemplateState();
 warmUp();
 
@@ -245,7 +280,7 @@ if ("serviceWorker" in navigator) {
       // Kelių gijų režimas įsijungia tik tada, kai puslapį jau aptarnauja
       // `sw.js` – po pirmo įdiegimo vieną kartą persikrauname.
       if (!self.crossOriginIsolated && navigator.serviceWorker.controller === null
-          && !sessionStorage.getItem("perkrauta")) {
+          && !items.length && !sessionStorage.getItem("perkrauta")) {
         sessionStorage.setItem("perkrauta", "1");
         setTimeout(() => window.location.reload(), 500);
       }

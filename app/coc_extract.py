@@ -391,7 +391,12 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
         text_label = _fold(label[code_match.end():] if code_match else label)
 
         key = _key_for(code, text_label)
-        if key is None or getattr(data, key, None):
+        if key is None:
+            continue
+        # Spalva laikoma originaliame lauke, todėl bendras patikrinimas jos
+        # nepagauna ir be šito vėlesnė eilutė perrašytų jau rastą.
+        taken = (data.colour_raw or colour_by_code) if key == "colour" else getattr(data, key)
+        if taken:
             continue
 
         if key == "vin":

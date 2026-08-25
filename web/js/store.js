@@ -46,3 +46,27 @@ export async function saveTemplate(name, bytes) {
 }
 
 export const clearTemplate = () => remove("template");
+
+// --- Darbo eilė ------------------------------------------------------------
+//
+// Nuskaityti liudijimų duomenys išsaugomi šiame įrenginyje, kad atnaujinus
+// puslapį ar netyčia jį uždarius nereikėtų viso atpažinimo kartoti. Ištrinami
+// mygtuku „Išvalyti duomenis“.
+
+export async function loadItems() {
+  try {
+    return (await get("items")) || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveItems(items) {
+  try {
+    await put("items", items);
+  } catch {
+    // jei įrenginyje neleidžiama saugoti, programa tiesiog veiks be atminties
+  }
+}
+
+export const clearItems = () => remove("items").catch(() => {});

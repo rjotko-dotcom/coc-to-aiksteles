@@ -311,7 +311,10 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
     const textLabel = fold(codeMatch ? label.slice(label.indexOf(codeMatch[1]) + codeMatch[1].length) : label);
 
     const key = keyFor(code, textLabel);
-    if (!key || data[key]) continue;
+    // Spalva laikoma originaliame lauke, todėl bendras patikrinimas jos
+    // nepagauna ir be šito vėlesnė eilutė perrašytų jau rastą.
+    const taken = key === "colour" ? data.colour_raw || colourByCode : data[key];
+    if (!key || taken) continue;
     data.sources[key] = index;
 
     if (key === "vin") {

@@ -92,10 +92,47 @@ const SEPARATOR_RE = /^[^\p{L}\p{N}(]{1,2}$/u;
  * eilutėje nėra, jis įrašomas ties didžiausiu tarpu, o šalia likę vieno ženklo
  * nuolaužos išmetamos.
  */
+/**
+ * Apytiksliai nustato, kurioje eilutės vietoje prasideda reikšmė.
+ *
+ * PP-OCR visą eilutę grąžina vienu langeliu, todėl tikslios reikšmės vietos
+ * nėra. Ji apskaičiuojama pagal ženklų dalį iki dvitaškio – to pakanka, kad
+ * sąsajoje būtų parodyta būtent reikšmės iškarpa, o ne visa eilutė.
+ */
+function estimateValueBox(line, part) {
+  const text = part.text;
+  const at = text.indexOf(":");
+  const share = at >= 0 && at < text.length - 1
+    ? (at + 1) / text.length
+    : 0.55; // be dvitaškio reikšmė beveik visada dešinėje eilutės pusėje
+  const width = part.x1 - part.x0;
+  line.valueBox = {
+    x0: part.x0 + width * share,
+    x1: part.x1,
+    y0: part.y - part.h / 2,
+    y1: part.y + part.h / 2,
+  };
+  return line;
+}
+
 function withSeparator(parts, minGap) {
   const texts = parts.map((part) => part.text);
-  const line = { text: texts.join(" ") };
-  if (parts.length < 2) return line;
+  // Visos eilutės vieta puslapyje – iš jos sąsajoje rodoma iškarpa tikrinimui.
+  const line = {
+    text: texts.join(" "),
+    // Atskiri fragmentai su savo vietomis – iš jų sąsajoje kerpamos iškarpos.
+    parts: parts.map((part) => ({
+      text: part.text,
+      x0: part.x0, x1: part.x1, y0: part.y - part.h / 2, y1: part.y + part.h / 2,
+    })),
+    box: {
+      x0: Math.min(...parts.map((part) => part.x0)),
+      x1: Math.max(...parts.map((part) => part.x1)),
+      y0: Math.min(...parts.map((part) => part.y - part.h / 2)),
+      y1: Math.max(...parts.map((part) => part.y + part.h / 2)),
+    },
+  };
+  if (parts.length < 2) return estimateValueBox(line, parts[0]);
 
   // Jau esantis dvitaškis: turi būti ne paskutinis ženklas eilutėje.
   let at = -1;
@@ -121,9 +158,10 @@ function withSeparator(parts, minGap) {
   if (SEPARATOR_RE.test(value[0]?.text || "")) value.shift();
   if (!label.length || !value.length) return line;
 
+
   line.label = label.map((part) => part.text).join(" ").replace(/[\s:*]+$/, "");
   line.value = value.map((part) => part.text).join(" ").replace(/^[:;*·•°©]+\s*/, "");
-  if (!line.value) return { text: line.text };
+  if (!line.value) return { text: line.text, box: line.box, parts: line.parts };
   line.text = `${line.label} : ${line.value}`;
   line.valueBox = {
     x0: Math.min(...value.map((part) => part.x0)),

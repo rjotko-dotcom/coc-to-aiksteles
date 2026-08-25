@@ -104,6 +104,17 @@
   input.code { font-family: var(--mono); font-size: 14px; }
   input[type=text]:focus { outline: none; border-color: var(--ink); background: #fff; }
   input[type=file] { font: inherit; font-size: 13px; max-width: 100%; }
+  /* Iškarpa iš liudijimo – kad reikšmę būtų galima sulyginti neatsidarius PDF. */
+  .snippet {
+    display: block; height: 34px; width: auto; max-width: none;
+    background: #fff; image-rendering: -webkit-optimize-contrast;
+  }
+  /* Tipas, variantas ir versija – trys eilutės viename paveikslėlyje. */
+  .snippet--stack { height: 96px; }
+  .snippet-box {
+    margin-top: 6px; border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; padding: 3px 5px; overflow-x: auto;
+  }
   .banner.err { background: #fdecec; border: 1px solid #f2c4c1; color: #a3231c; }
   code { font-family: var(--mono); font-size: .92em; background: var(--field); padding: 2px 6px; border-radius: 5px; }
 
