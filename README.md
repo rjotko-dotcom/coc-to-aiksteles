@@ -98,7 +98,7 @@ neleidžia įkelti modulių ir neįdiegia programos.)
   perskaitomos **antrą kartą**: iškarpa padidinama ir skaitoma tik
   didžiosiomis raidėmis bei skaitmenimis. Taip pataisomas prie reikšmės
   prilipęs dvitaškis („PJl2“ → `J12`);
-* VIN klaidos taisomos kontroliniu skaitmeniu: `SINJ12TD3U2000001` →
+* VIN klaidos taisomos kontroliniu skaitmeniu: `SINJ12TD3U2OOOOO1` →
   `SJNJ12TD3U2000001` (VIN abėcėlėje nėra I, O ir Q, o pataisymas priimamas
   tik jei sutampa kontrolinis skaitmuo).
 

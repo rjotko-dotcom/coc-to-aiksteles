@@ -31,7 +31,7 @@ Hyundai Motor Manufacturing Czech s.r.o.,
 On the left hand B-post, bonded
 Location of the vehicle identification number :
 Under the right front seat
-0.10. Vehicle identification number : TMAJ3815AKJ012345
+0.10. Vehicle identification number : TMAJ38157KJ000003
 0.11. Date of manufacture of the vehicle : 10.12.2020
 conforms in all respects to the type described in
 approval e4*2007/46*1522*01
@@ -76,7 +76,7 @@ Version : HY
 TABLIER COMPARTIMENT MOTEUR - rivetée
 Emplacement du numéro d'identification du véhicule :
 PASSAGE DE ROUE AVANT DROIT DANS HABITACLE
-0.10. Numéro d'identification du véhicule : VF7YCTMFC12345678
+0.10. Numéro d'identification du véhicule : VF7YCTMF012000004
 0.11. Date de construction du véhicule : 30/07/2015
 est conforme à tous égards au type décrit dans la réception e3*2007/46*0046*10
 délivrée le 04/02/2014 et peut être immatriculé à titre permanent
@@ -89,7 +89,7 @@ def test_hyundai_kona():
     assert data.make == "Hyundai"
     assert data.type_variant_version == "OSE/F5E11/E11B11"
     assert data.commercial_name == "Kona, Kauai"
-    assert data.vin == "TMAJ3815AKJ012345"
+    assert data.vin == "TMAJ38157KJ000003"
     assert data.category == "M1"
     assert data.approval_number == "e4*2007/46*1522*01"
     assert data.approval_date == "12.11.2020"
@@ -117,7 +117,7 @@ def test_citroen_in_french():
     assert data.make == "CITROEN"
     assert data.type_variant_version == "Y/CTMFC/HY"
     assert data.commercial_name == "RELAY"
-    assert data.vin == "VF7YCTMFC12345678"
+    assert data.vin == "VF7YCTMF012000004"
     assert data.category == "N1"
     assert data.approval_number == "e3*2007/46*0046*10"
     assert data.approval_date == "04.02.2014"

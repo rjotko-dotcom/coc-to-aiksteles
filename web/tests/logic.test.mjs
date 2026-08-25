@@ -111,7 +111,7 @@ test("Citroën liudijimas prancūziškai", () => {
     "Version : HY",
     "0.2.1. Appellation(s) commerciale(s) : RELAY",
     "0.4. Catégorie de véhicule : N1",
-    "0.10. Numéro d'identification du véhicule : VF7YCTMFC12345678",
+    "0.10. Numéro d'identification du véhicule : VF7YCTMF012000004",
     "0.11. Date de construction du véhicule : 30/07/2015",
     "est conforme au type décrit dans la réception e3*2007/46*0046*10",
     "délivrée le 04/02/2014 et peut être immatriculé",
@@ -120,7 +120,7 @@ test("Citroën liudijimas prancūziškai", () => {
   assert.equal(data.make, "CITROEN");
   assert.equal(data.type_variant_version, "Y/CTMFC/HY");
   assert.equal(data.commercial_name, "RELAY");
-  assert.equal(data.vin, "VF7YCTMFC12345678");
+  assert.equal(data.vin, "VF7YCTMF012000004");
   assert.equal(data.approval_date, "04.02.2014");
   assert.equal(data.colour, "BALTA");
 });
@@ -151,5 +151,6 @@ test("VIN kontrolinis skaitmuo", () => {
 test("VIN pataisomas po atpažinimo", () => {
   // I ir O VIN abėcėlėje neegzistuoja – tai atpažinimo klaidos.
   assert.equal(repairVin("SINJ12TD3U2000001"), "SJNJ12TD3U2000001");
+  assert.equal(repairVin("SJNF16FA7U2O00002"), "SJNF16FA7U2000002");
   assert.equal(repairVin("PERTRUMPAS"), "");
 });

@@ -10,6 +10,7 @@ from pathlib import Path
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 SKIP = {"sw.js"}
+SKIP_DIRS = {"tests"}
 
 TEMPLATE = """// Sugeneruota `tools/build_sw.py` – ranka nekeisti.
 //
@@ -59,6 +60,7 @@ def main() -> None:
     files = sorted(
         path for path in WEB.rglob("*")
         if path.is_file() and path.name not in SKIP and not path.name.startswith(".")
+        and not SKIP_DIRS & set(path.relative_to(WEB).parts)
     )
     digest = hashlib.sha256()
     for path in files:
