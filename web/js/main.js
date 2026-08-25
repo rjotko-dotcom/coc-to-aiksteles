@@ -45,11 +45,13 @@ function status(text, ok = false) {
 }
 
 function download(bytes, filename) {
-  const url = URL.createObjectURL(new Blob([bytes], {
-    type: filename.endsWith(".zip")
-      ? "application/zip"
-      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  }));
+  const types = {
+    ".zip": "application/zip",
+    ".csv": "text/csv;charset=utf-8",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  };
+  const suffix = filename.slice(filename.lastIndexOf("."));
+  const url = URL.createObjectURL(new Blob([bytes], { type: types[suffix] || "application/octet-stream" }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
@@ -185,6 +187,24 @@ async function generate() {
   }
 }
 
+/**
+ * Ataskaita apie visą eilę: ką kiekviename liudijime pavyko nuskaityti.
+ *
+ * Naudinga pasitikrinti visus failus iš karto lentelėje, o radus klaidų –
+ * atsiųsti šį failą taisymui. Jame yra tik nuskaityti laukai, be pačių
+ * liudijimų ir be paveikslėlių.
+ */
+function reportCsv() {
+  const columns = ["source_file", ...FIELDS.map(([key]) => key), "ocr_used", "warnings"];
+  const escape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const rows = items.map((item) => columns.map((column) => {
+    if (column === "warnings") return escape((item.warnings || []).join(" | "));
+    if (column === "ocr_used") return escape(item.ocr_used ? "OCR" : "tekstas");
+    return escape(item[column]);
+  }).join(","));
+  return "\uFEFF" + [columns.join(","), ...rows].join("\r\n");
+}
+
 // ---------------------------------------------------------------------------
 // Šablonas
 // ---------------------------------------------------------------------------
@@ -240,6 +260,12 @@ $("files").addEventListener("change", (event) => handleFiles(event.target.files)
 $("drop").addEventListener("drop", (event) => handleFiles(event.dataTransfer.files));
 
 $("generate").addEventListener("click", generate);
+$("report").addEventListener("click", () => {
+  if (!items.length) { $("genstatus").textContent = "Nėra ką aprašyti."; return; }
+  download(new TextEncoder().encode(reportCsv()), "aiksteles-ataskaita.csv");
+  $("genstatus").textContent = "Ataskaita parsiųsta.";
+});
+
 $("clear").addEventListener("click", () => {
   items = [];
   $("files").value = "";
