@@ -40,7 +40,65 @@ Datos suvienodinamos į `DD.MM.YYYY`, tipas/variantas/versija sujungiami per
 pasvirąjį brūkšnį (`F16/A/A45`), spalva iš angliško CoC užrašo išverčiama į
 lietuvišką (`SOLID WHITE (326)` → `BALTA`, žr. `app/colors.py`).
 
-## Diegimas
+## Svetainė (naršyklėje, be serverio)
+
+`web/` kataloge yra ta pati programa, veikianti **vien naršyklėje**: PDF
+skaitymas, skenuotų liudijimų atpažinimas ir Word failo pildymas vyksta Jūsų
+įrenginyje. Serverio nėra – liudijimai niekur nesiunčiami.
+
+**Ką ji duoda:**
+
+* atidaroma iš bet kurio įrenginio adresu, kurį galima įsidėti į žymes;
+* naršyklės meniu → **Įdiegti** – atsiranda ikona ir atskiras langas;
+* įdiegus **veikia be interneto** (visi failai, įskaitant atpažinimo variklį,
+  įrašomi į įrenginį – apie 12 MB);
+* Jūsų pažymos blankas išsaugomas įrenginyje (IndexedDB), ne serveryje.
+
+### Paskelbimas
+
+Kartu su kodu yra `.github/workflows/pages.yml` – kiekvienas pakeitimas
+automatiškai paskelbiamas per GitHub Pages. Vieną kartą reikia įjungti:
+repozitorijos **Settings → Pages → Source: GitHub Actions**. Po to adresas
+matomas ten pat ir darbo eigos („Actions“) rezultate.
+
+Norint patikrinti vietoje:
+
+```bash
+cd web && python3 -m http.server 8080     # http://127.0.0.1:8080
+```
+
+(Failą tiesiog atidaryti dukart spustelėjus negalima – naršyklė tokiu atveju
+neleidžia įkelti modulių ir neįdiegia programos.)
+
+### Kaip veikia atpažinimas naršyklėje
+
+* **pdf.js** paverčia puslapį vaizdu 300 dpi ir nuskaito teksto sluoksnį, jei
+  toks yra;
+* vaizdas paverčiamas juodu-baltu (Otsu slenkstis) – be to smulkūs ženklai
+  susilieja;
+* **Tesseract** (WebAssembly) atpažįsta tekstą su koordinatėmis, iš jų
+  atkuriamos eilutės ir stulpeliai – kaip ir Python versijoje;
+* svarbiausios reikšmės (tipas, variantas, versija, VIN, patvirtinimo Nr.)
+  perskaitomos **antrą kartą**: iškarpa padidinama ir skaitoma tik
+  didžiosiomis raidėmis bei skaitmenimis. Taip pataisomas prie reikšmės
+  prilipęs dvitaškis („PJl2“ → `J12`);
+* VIN klaidos taisomos kontroliniu skaitmeniu: `SINJ12TD3U2000001` →
+  `SJNJ12TD3U2000001` (VIN abėcėlėje nėra I, O ir Q, o pataisymas priimamas
+  tik jei sutampa kontrolinis skaitmuo).
+
+Patikrinta su tikru skenuotu Nissan Qashqai liudijimu: visi 8 pažymos laukai
+teisingi, trukmė ~20 s dviem puslapiams. Taip pat patikrinta **atjungus
+tinklą**: puslapis atsidaro, liudijimas nuskaitomas, pažyma parsisiunčiama.
+
+### Testai
+
+```bash
+node --test web/tests/logic.test.mjs
+```
+
+## Vietinė versija (Python)
+
+### Diegimas
 
 Reikia Python 3.10 ar naujesnio.
 
@@ -68,7 +126,7 @@ python -m venv .venv
 .venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
-## Naudojimas naršyklėje
+### Naudojimas naršyklėje
 
 1. Atidarykite <http://127.0.0.1:8000>.
 2. Nuvilkite CoC PDF failus į lauką (galima kelis iš karto).
@@ -79,7 +137,7 @@ python -m venv .venv
 
 Failas pavadinamas pagal VIN, pvz. `aikstele_SJNJ12TD3U2000001.docx`.
 
-## Savo Word šablono naudojimas (rekomenduojama)
+### Savo Word šablono naudojimas (rekomenduojama)
 
 Kad dokumentas atrodytų lygiai taip, kaip Jūsų įmonėje naudojama pažyma,
 skiltyje **Nustatymai** įkelkite savo `.docx` failą (tuščią pažymos blanką).
@@ -127,7 +185,7 @@ Tokiu atveju patvirtinimo tekstas imamas iš `app/aikstele_docx.py`
 (`PATVIRTINIMAS`) – **pasitikrinkite, ar jo redakcija sutampa su Jūsų
 naudojama**.
 
-## Komandinė eilutė
+### Komandinė eilutė
 
 ```bash
 # viena pažyma šalia PDF
@@ -140,7 +198,7 @@ naudojama**.
 .venv/bin/python -m app.cli CoC.pdf --json
 ```
 
-## Ką verta pasitikrinti kiekvieną kartą
+### Ką verta pasitikrinti kiekvieną kartą
 
 * **Spalva** – CoC 40 skirsnyje ji dažnai būna 2 puslapyje ir su gamintojo kodu.
   Dvispalvės mašinos užrašomos abiem spalvomis (`GREY/BLACK` → `PILKA/JUODA`);
@@ -149,7 +207,7 @@ naudojama**.
 * **Tipo patvirtinimo Nr.** – imamas iš sakinio „…described in approval …
   granted on …“. Jei CoC formatas kitoks, patikrinkite reikšmę.
 
-## Konfidencialumas
+### Konfidencialumas
 
 Programa sukurta taip, kad transporto priemonių duomenys neišeitų iš Jūsų
 kompiuterio ir niekur nebūtų kaupiami.
@@ -203,7 +261,7 @@ kompiuteryje):
   nepriklausomai nuo šios programos;
 * nenaudokite bendrame ar viešame kompiuteryje.
 
-## Kelių stulpelių ir kitų kalbų liudijimai
+### Kelių stulpelių ir kitų kalbų liudijimai
 
 Hyundai liudijimas atspausdintas ant abiejų lapo pusių ir kiekvienoje pusėje
 turi **tris stulpelius**, Citroën – dviejų dalių prancūzišką formą. Skaitant
@@ -218,7 +276,7 @@ reikšmės), pavadinimų skiltyje – irgi ne (vien pavadinimai).
 Tipo patvirtinimo data imama iš karto po patvirtinimo numerio, nesvarbu, kaip
 ji įvardyta – `granted on`, `issued on`, `délivrée le`, `erteilt am`.
 
-## Skenuoti CoC (OCR)
+### Skenuoti CoC (OCR)
 
 Nissan B2B portalo atitikties liudijimai yra **paveikslėliai PDF viduje** –
 teksto sluoksnio juose nėra, todėl duomenys atpažįstami automatiškai (OCR).
@@ -239,7 +297,7 @@ Papildoma apsauga nuo OCR klaidų: tikrinamas **VIN kontrolinis skaitmuo**
 (9-as ženklas pagal ISO 3779). Jei jis nesutampa, prie įrašo atsiranda
 įspėjimas – tada VIN verta sulyginti raidė po raidės.
 
-## Testai
+### Testai
 
 ```bash
 .venv/bin/pip install -r requirements-dev.txt
@@ -253,6 +311,11 @@ liudijimą), `samples/sample_coc.pdf` – iš jo sugeneruotas PDF bandymams
 ## Projekto struktūra
 
 ```
+web/                  svetainė (veikia vien naršyklėje, be serverio)
+web/js/layout.js      eilučių ir stulpelių atkūrimas
+web/js/coc.js         laukų atpažinimas
+web/js/refine.js      tikslinantis kodų perskaitymas
+web/js/docx.js        pažymos pildymas naršyklėje
 app/coc_extract.py    CoC PDF skaitymas ir laukų atpažinimas
 app/ocr.py            skenuotų CoC atpažinimas (OCR)
 app/colors.py         spalvų vertimas EN -> LT
