@@ -15,6 +15,7 @@ CoC skirsniai -> pažymos eilutės:
 
 from __future__ import annotations
 
+import io
 import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -115,33 +116,41 @@ class CoCData:
 # ---------------------------------------------------------------------------
 
 
-def pdf_to_text(pdf_path: str | Path) -> str:
-    """Ištraukia visą PDF tekstą (visus puslapius) išlaikant išdėstymą."""
+def pdf_to_text(source: str | Path | bytes) -> str:
+    """Ištraukia visą PDF tekstą (visus puslapius) išlaikant išdėstymą.
+
+    `source` gali būti failo kelias arba PDF baitai – baitų atveju niekas
+    nerašoma į diską, dirbama tik atmintyje.
+    """
     import pdfplumber
 
+    handle = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else str(source)
     chunks: list[str] = []
-    with pdfplumber.open(str(pdf_path)) as pdf:
+    with pdfplumber.open(handle) as pdf:
         for page in pdf.pages:
             text = page.extract_text(x_tolerance=1.5, y_tolerance=3) or ""
             chunks.append(text)
     return "\n".join(chunks)
 
 
-def _ocr_to_text(pdf_path: str | Path) -> str:
+def _ocr_to_text(source: str | Path | bytes) -> str:
     """Atsarginis variantas skenuotiems (be teksto sluoksnio) CoC.
 
     Veikia tik jei įdiegti `pytesseract` + `pdf2image` + Tesseract.
     """
     try:
         import pytesseract  # type: ignore
-        from pdf2image import convert_from_path  # type: ignore
+        from pdf2image import convert_from_bytes, convert_from_path  # type: ignore
     except Exception as exc:  # pragma: no cover - priklauso nuo aplinkos
         raise RuntimeError(
             "PDF neturi teksto sluoksnio (tikriausiai skenuotas). "
             "OCR reikalauja pytesseract, pdf2image ir Tesseract."
         ) from exc
 
-    pages = convert_from_path(str(pdf_path), dpi=300)
+    if isinstance(source, (bytes, bytearray)):
+        pages = convert_from_bytes(bytes(source), dpi=300)
+    else:
+        pages = convert_from_path(str(source), dpi=300)
     return "\n".join(pytesseract.image_to_string(p, lang="eng") for p in pages)
 
 
@@ -267,11 +276,16 @@ def parse_coc_text(text: str, source_file: str = "") -> CoCData:
     return data
 
 
-def extract_from_pdf(pdf_path: str | Path) -> CoCData:
-    """Pagrindinė funkcija: CoC PDF -> `CoCData`."""
-    pdf_path = Path(pdf_path)
-    text = pdf_to_text(pdf_path)
+def extract_from_bytes(content: bytes, source_file: str = "") -> CoCData:
+    """CoC PDF baitai -> `CoCData`. Į diską nieko nerašoma."""
+    text = pdf_to_text(content)
     if len(re.sub(r"\s", "", text)) < 200:
         # PDF greičiausiai skenuotas – bandome OCR
-        text = _ocr_to_text(pdf_path)
-    return parse_coc_text(text, source_file=pdf_path.name)
+        text = _ocr_to_text(content)
+    return parse_coc_text(text, source_file=source_file)
+
+
+def extract_from_pdf(pdf_path: str | Path) -> CoCData:
+    """Pagrindinė funkcija: CoC PDF failas -> `CoCData`."""
+    pdf_path = Path(pdf_path)
+    return extract_from_bytes(pdf_path.read_bytes(), source_file=pdf_path.name)

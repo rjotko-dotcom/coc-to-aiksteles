@@ -1,13 +1,20 @@
 """FastAPI programa: CoC PDF -> pažyma (aikštelė) .docx.
 
 Paleidimas:  uvicorn app.main:app --reload   (arba ./run.sh / run.bat)
+
+Konfidencialumas: programa veikia tik Jūsų kompiuteryje. Įkelti CoC failai
+apdorojami atmintyje ir į diską nerašomi, sugeneruota pažyma iškart
+grąžinama atsisiuntimui ir serveryje nesaugoma. Į išorę nesikreipiama.
+Diske laikomi tik du dalykai, kuriuos įrašote patys: `data/template.docx`
+(tuščias Jūsų pažymos blankas) ir `data/settings.json` (įmonės eilutė).
 """
 
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
-import tempfile
+import os
 import zipfile
 from pathlib import Path
 
@@ -16,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from .aikstele_docx import build_document, build_values, fill_template, suggested_filename
-from .coc_extract import extract_from_pdf
+from .coc_extract import extract_from_bytes
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR.parent / "data"
@@ -24,6 +31,32 @@ TEMPLATE_PATH = DATA_DIR / "template.docx"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
 app = FastAPI(title="CoC → aikštelė", version="1.0.0")
+
+#: Priimame tik vietinius (loopback) prisijungimus, kad duomenys neišeitų iš
+#: kompiuterio net ir netyčia paleidus serverį su `--host 0.0.0.0`.
+#: Sąmoningam naudojimui tinkle: nustatykite COC_ALLOW_REMOTE=1.
+ALLOW_REMOTE = os.environ.get("COC_ALLOW_REMOTE") == "1"
+
+
+def _is_loopback(host: str | None) -> bool:
+    if not host:
+        return False
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+@app.middleware("http")
+async def only_local_clients(request, call_next):
+    if not ALLOW_REMOTE and not _is_loopback(request.client.host if request.client else None):
+        return JSONResponse(
+            {"detail": "Leidžiami tik vietiniai prisijungimai (localhost)."},
+            status_code=403,
+        )
+    return await call_next(request)
 
 
 def _load_settings() -> dict:
@@ -112,14 +145,12 @@ async def extract(files: list[UploadFile] = File(...)) -> JSONResponse:
             results.append({"source_file": name, "error": "Ne PDF failas."})
             continue
         payload = await upload.read()
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=True) as tmp:
-            tmp.write(payload)
-            tmp.flush()
-            try:
-                data = extract_from_pdf(tmp.name)
-            except Exception as exc:  # netinkamas / apsaugotas / skenuotas PDF
-                results.append({"source_file": name, "error": str(exc)})
-                continue
+        try:
+            # Apdorojama tik atmintyje – PDF į diską nerašomas.
+            data = extract_from_bytes(payload, source_file=name)
+        except Exception as exc:  # netinkamas / apsaugotas / skenuotas PDF
+            results.append({"source_file": name, "error": str(exc)})
+            continue
         item = data.to_dict()
         item["source_file"] = name
         results.append(item)

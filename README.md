@@ -115,7 +115,57 @@ naudojama**.
 * **Tipo patvirtinimo Nr.** – imamas iš sakinio „…described in approval …
   granted on …“. Jei CoC formatas kitoks, patikrinkite reikšmę.
 
-Programa niekur nesiunčia duomenų – viskas vyksta Jūsų kompiuteryje.
+## Konfidencialumas
+
+Programa sukurta taip, kad transporto priemonių duomenys neišeitų iš Jūsų
+kompiuterio ir niekur nebūtų kaupiami.
+
+**Kas vyksta su įkeltu CoC:** naršyklė jį perduoda vietiniam serveriui
+(`127.0.0.1`), tekstas nuskaitomas **atmintyje** ir iškart grąžinami laukai.
+PDF į diską **neįrašomas** – net ne į laikinųjų failų katalogą. Sugeneruota
+pažyma taip pat suformuojama atmintyje ir atiduodama naršyklei; serveryje ji
+nesaugoma. Vienintelis diske atsirandantis failas – tas, kurį parsisiunčiate
+patys (arba nurodote per `-o` komandinėje eilutėje).
+
+**Nėra jokios istorijos:** nėra duomenų bazės, nėra apdorotų failų sąrašo,
+nėra žurnalo su VIN ar klientų duomenimis. Konsolėje uvicorn rodo tik
+`POST /api/extract 200` – be failų vardų ir be turinio. Uždarius arba
+atnaujinus puslapį, laukai iš naršyklės dingsta (galima ir mygtuku
+**Išvalyti duomenis**); slapukai ir `localStorage` nenaudojami, laukuose
+išjungtas naršyklės automatinis pildymas.
+
+**Nesikreipia į internetą:** sąsajoje nėra išorinių šriftų, skriptų ar
+paveikslėlių, nėra jokios analitikos ar telemetrijos. Programa veikia ir
+visiškai atjungus tinklą.
+
+**Tik vietiniai prisijungimai:** serveris klauso `127.0.0.1`, o papildomai
+kiekvienas ne loopback adreso užklausas atmeta su klaida 403 – net jei kas
+nors paleistų jį su `--host 0.0.0.0`, kiti tinklo kompiuteriai duomenų
+nepasieks. Sąmoningam naudojimui tinkle reikėtų nustatyti aplinkos kintamąjį
+`COC_ALLOW_REMOTE=1`.
+
+**Kas lieka diske:** tik `data/` kataloge ir tik tai, ką įkeliate patys –
+`template.docx` (tuščias pažymos blankas, be transporto priemonių duomenų) ir
+`settings.json` (įmonės eilutė). Šabloną bet kada galima pašalinti mygtuku
+**Pašalinti** arba tiesiog ištrinti `data/` katalogą. `data/`, `in/`, `out/`
+ir šakniniame kataloge esantys `*.pdf` / `*.docx` yra `.gitignore` sąraše, kad
+realūs CoC ar pažymos netyčia nepatektų į git.
+
+Šios garantijos padengtos testais (`tests/test_privacy.py`): tikrinama, kad
+kode nėra išorinio tinklo bibliotekų, kad sąsaja nesikreipia į išorinius
+adresus, kad apdorojant CoC diske neatsiranda naujų failų ir kad priimami tik
+vietiniai prisijungimai.
+
+**Dalykai, kurių programa nekontroliuoja** (verta turėti galvoje darbo
+kompiuteryje):
+
+* parsisiųstas `.docx` lieka „Atsisiuntimų“ kataloge – tvarkykite kaip bet kurį
+  kitą dokumentą su klientų duomenimis;
+* nelaikykite programos aplanko OneDrive / Google Drive kataloge, jei įmonės
+  politika neleidžia sinchronizuoti tokių duomenų į debesį;
+* įmonės atsarginės kopijos, DLP ar antivirusas gali skenuoti failus
+  nepriklausomai nuo šios programos;
+* nenaudokite bendrame ar viešame kompiuteryje.
 
 ## Skenuoti PDF
 

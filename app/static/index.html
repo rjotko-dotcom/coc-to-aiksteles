@@ -45,12 +45,14 @@
   details summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .status { font-size: 13px; color: var(--muted); }
   .status.ok { color: var(--ok); }
+  .privacy { color: var(--ok) !important; }
 </style>
 </head>
 <body>
 <header>
   <h1>CoC → aikštelė</h1>
   <p>Įkelkite atitikties liudijimo (CoC) PDF – duomenys bus surinkti ir sudėti į pažymą apie transporto priemonės tapatumo duomenis.</p>
+  <p class="privacy">Failai apdorojami tik šiame kompiuteryje: į diską neįrašomi, į internetą nesiunčiami, istorija nesaugoma.</p>
 </header>
 
 <main>
@@ -68,6 +70,7 @@
   <div class="card" id="actions" hidden>
     <div class="row">
       <button class="primary" id="generate">Generuoti pažymą (.docx)</button>
+      <button id="clear">Išvalyti duomenis</button>
       <span class="meta" id="genstatus"></span>
     </div>
   </div>
@@ -156,7 +159,8 @@ function render() {
           <div>
             <label for="f-${index}-${key}">${esc(label)}</label>
             <input type="text" id="f-${index}-${key}" data-index="${index}"
-                   data-key="${key}" value="${esc(item[key] || "")}">
+                   data-key="${key}" value="${esc(item[key] || "")}"
+                   autocomplete="off" spellcheck="false">
           </div>`).join("")}
       </div>`;
     box.appendChild(card);
@@ -224,6 +228,15 @@ $("generate").addEventListener("click", async () => {
   } catch (error) {
     $("genstatus").textContent = "Klaida: " + error.message;
   }
+});
+
+$("clear").addEventListener("click", () => {
+  items = [];
+  $("files").value = "";
+  $("genstatus").textContent = "";
+  $("status").textContent = "Duomenys išvalyti.";
+  $("status").className = "status";
+  render();
 });
 
 $("tplupload").addEventListener("click", async () => {
