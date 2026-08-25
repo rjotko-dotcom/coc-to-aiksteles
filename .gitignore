@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Konfidencialūs duomenys: šablonas, nustatymai, apdoroti CoC ir pažymos.
+# Realių CoC ar pažymų į git dėti nereikia.
+data/
+out/
+in/
+/*.pdf
+/*.docx
+/*.dotx

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Iš atitikties liudijimo (CoC) – užpildyta pažyma apie transporto priemonės tapatumo duomenis.">
+<meta name="theme-color" content="#0c0c0e">
+<title>CoC → aikštelė</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./app.css">
+</head>
+<body>
+<div class="shell">
+
+  <main class="panel">
+    <span class="eyebrow"><i></i><b>Nissan</b> · Hyundai · Citroën · kiti</span>
+    <h1>CoC → aikštelė</h1>
+    <p class="lede">
+      Įkelkite atitikties liudijimą – duomenys bus nuskaityti ir sudėti į pažymą apie
+      transporto priemonės tapatumo duomenis. Viskas vyksta šiame įrenginyje: failai
+      niekur nesiunčiami.
+    </p>
+
+    <div class="intake">
+      <button id="drop" type="button">
+        <span class="sheet"></span>
+        <strong>Įkelti CoC PDF</strong>
+        <span>arba nuvilkite failus čia</span>
+      </button>
+      <input id="files" type="file" accept="application/pdf" multiple hidden>
+
+      <div class="intake-copy">
+        <p class="status" id="status">Galima kelis failus iš karto – kiekvienam bus atskira pažyma.</p>
+        <div class="stats">
+          <div class="stat"><b>8</b><span>pažymos laukai</span></div>
+          <div class="stat"><b>~20 s</b><span>skenuotam liudijimui</span></div>
+          <div class="stat"><b>5</b><span>kalbos</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="results"></div>
+
+  <section class="panel hidden" id="actions">
+    <div class="row">
+      <button class="primary" id="generate">Generuoti pažymą (.docx)</button>
+      <button id="clear">Išvalyti duomenis</button>
+      <span class="note" id="genstatus"></span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <details>
+      <summary>Pažymos šablonas</summary>
+      <p class="note" style="margin:0 0 16px; max-width:66ch">
+        Įkelkite savo Word blanką – pažymos bus formuojamos jo pagrindu: išliks antraštė,
+        rekvizitai, patvirtinimo tekstas ir formatavimas. Eilutė „Nr.“ neliečiama: numerį
+        įrašote pats. Blankas gali būti ir ankstesnės pažymos kopija – seni duomenys
+        perrašomi. Failas lieka šiame įrenginyje.
+      </p>
+      <div class="row">
+        <input id="tplfile" type="file" accept=".docx,.dotx">
+        <button id="tplupload">Įkelti šabloną</button>
+        <button id="tplcheck">Patikrinti</button>
+        <button id="tpldelete">Pašalinti</button>
+      </div>
+      <p class="note" id="tplstatus" style="margin:12px 0 0"></p>
+      <div id="tplreport" style="margin-top:14px"></div>
+    </details>
+  </section>
+
+  <footer>
+    Liudijimai apdorojami naršyklėje: į internetą nesiunčiami, serveryje nesaugomi.
+    Įsidiegus (naršyklės meniu → „Įdiegti“) veikia ir be interneto.
+  </footer>
+</div>
+
+<script src="./vendor/tesseract/tesseract.min.js"></script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

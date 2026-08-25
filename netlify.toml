@@ -1,0 +1,17 @@
+# Svetainės nustatymai, kai Netlify prijungiamas prie šios repozitorijos.
+# Nieko „statyti“ nereikia – `web/` kataloge guli galutiniai failai.
+
+[build]
+  publish = "web"
+
+# Aptarnaujantis failas (offline talpykla) neturi būti laikomas naršyklėje
+# senas – kitaip po pakeitimo programa liktų ankstesnės versijos.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"

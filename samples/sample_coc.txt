@@ -1,0 +1,62 @@
+EC CERTIFICATE OF CONFORMITY
+Complete Vehicles
+
+The undersigned, Derek Smith, Vice President hereby certifies that the vehicle:
+
+0.1. Make (Trade name of manufacturer) : NISSAN
+0.2. Type : J12
+Variant : D
+Version : D13
+0.2.1 Commercial Name : NISSAN QASHQAI
+0.2.2.1 Allowed Parameter values for multistage type approval to use
+the base vehicle emission values (insert range if applicable)
+Final vehicle technically permissible maximum laden mass : - kg
+Final vehicle actual mass : - kg
+Frontal area for final vehicle : - cm2
+Rolling resistance : - kg/t
+Cross-sectional area of air entrance of the front grille : - cm2
+0.2.3 Identifiers (if applicable):
+0.2.3.1. Interpolation family's identifier : IP-J12A1DNP6EBA9_0-JN1
+0.2.3.2. ATCT family's identifier : AT-J12A_1497P_A_00-JN1
+0.2.3.3. PEMS family's identifier : 2-JN1-0042
+0.2.3.4. Roadload family's identifier : KL-J12BDNA9A_00000-JN1
+0.2.3.5. Roadload Matrix family's identifier : -
+0.2.3.6. Periodic regeneration family's identifier : PR-J12A1DNP6D19_00-JN1
+0.2.3.7. Evaporative test family's identifier : EV-J12PRNW5CH6_000-JN1
+0.4. Category : M1
+0.5. Company name and address of the manufacturer : Nissan Automotive Europe S.A.S
+8, rue Jean Pierre Timbaud
+78180, Montigny-le-Bretonneux
+France
+0.6. Location and method of attachment of the statutory plates : Self adhesive on the right side B pillar
+0.9. Name and address of the manufacturer's representative (if any) : -
+0.10. Vehicle identification number : SJNJ12TD3U2000001
+0.11. Date of manufacture of the vehicle : 07/05/2026
+
+Conforms in all respects to the type described in approval e9*2018/858*11042*16 granted on
+03/03/2026 Montigny-le-Bretonneux, 28/05/2026
+
+General construction characteristics
+1. Number of axles : 2
+and wheels : 4
+3. Powered axles (number, position, interconnection) : 1, front, no
+3.1 The vehicle is : non-automated
+
+Main dimensions
+4. Wheelbase : 2665 mm
+4.1 Axle spacing 1-2: 2665 mm
+5. Length : 4425 mm
+6. Width : 1835 mm
+7. Height : 1625 mm
+
+Masses
+13. Mass in running order : 1624 kg
+13.2. Actual mass of the vehicle : 1661 kg
+16. Technically permissible maximum masses:
+16.1. Technically permissible maximum laden mass : 2140 kg
+16.2. Technically permissible maximum mass on each axle 1: 1260 kg 2: 1110 kg 3: - kg
+
+Body work
+38. Code for body work : AC
+40. Colour of the vehicle : SOLID WHITE (326)
+41. Number and configuration of doors : 5
