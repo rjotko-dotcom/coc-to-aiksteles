@@ -5,6 +5,12 @@ failo išrenka transporto priemonės duomenis ir sudeda juos į **pažymą apie
 transporto priemonės tapatumo duomenis** (M, N ir O kategorijų transporto
 priemonei) – Word `.docx` dokumentą.
 
+Veikia su skirtingų gamintojų liudijimais: Nissan (vieno stulpelio, skenuotas),
+Hyundai (dviejų pusių, trijų stulpelių forma), Citroën / Stellantis (prancūziška
+forma) ir kitais. Skirsnių numeriai (0.1, 0.2, 0.10, 40) yra vienodi visose
+kalbose, todėl jais remiamasi pirmiausia, o pavadinimai atpažįstami angliškai,
+prancūziškai, vokiškai, itališkai ir ispaniškai.
+
 Galima naudoti dviem būdais:
 
 * **naršyklėje** – įkeliate vieną ar kelis CoC PDF, peržiūrite/pataisote laukus,
@@ -196,6 +202,21 @@ kompiuteryje):
 * įmonės atsarginės kopijos, DLP ar antivirusas gali skenuoti failus
   nepriklausomai nuo šios programos;
 * nenaudokite bendrame ar viešame kompiuteryje.
+
+## Kelių stulpelių ir kitų kalbų liudijimai
+
+Hyundai liudijimas atspausdintas ant abiejų lapo pusių ir kiekvienoje pusėje
+turi **tris stulpelius**, Citroën – dviejų dalių prancūzišką formą. Skaitant
+tokį puslapį eilutėmis, gretimų stulpelių tekstas sulimpa į vieną eilutę ir
+reikšmės susimaišo, todėl puslapis pirmiausia padalijamas į stulpelius.
+
+Stulpelio riba pripažįstama ne tiesiog pagal tarpą (tarpas yra ir tarp
+pavadinimų bei reikšmių skilties), o pagal tai, ar **abiejose** pusėse yra
+savarankiškų „pavadinimas : reikšmė“ eilučių: reikšmių skiltyje jų nėra (vien
+reikšmės), pavadinimų skiltyje – irgi ne (vien pavadinimai).
+
+Tipo patvirtinimo data imama iš karto po patvirtinimo numerio, nesvarbu, kaip
+ji įvardyta – `granted on`, `issued on`, `délivrée le`, `erteilt am`.
 
 ## Skenuoti CoC (OCR)
 

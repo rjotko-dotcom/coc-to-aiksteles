@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import io
 import re
+import unicodedata
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -142,20 +143,36 @@ class CoCData:
 
 
 def pdf_to_text(source: str | Path | bytes) -> str:
-    """Ištraukia visą PDF tekstą (visus puslapius) išlaikant išdėstymą.
+    """Ištraukia PDF tekstą išlaikant eilutes ir stulpelius.
+
+    Naudojamos žodžių koordinatės ir tas pats eilučių atkūrimas kaip ir po
+    OCR – taip teisingai perskaitomos ir kelių stulpelių formos (Hyundai,
+    Citroën), kuriose viename aukštyje yra keli skirsniai.
 
     `source` gali būti failo kelias arba PDF baitai – baitų atveju niekas
     nerašoma į diską, dirbama tik atmintyje.
     """
     import pdfplumber
 
+    from .ocr import _lines_from_boxes
+
     handle = io.BytesIO(source) if isinstance(source, (bytes, bytearray)) else str(source)
-    chunks: list[str] = []
+    pages: list[str] = []
     with pdfplumber.open(handle) as pdf:
         for page in pdf.pages:
-            text = page.extract_text(x_tolerance=1.5, y_tolerance=3) or ""
-            chunks.append(text)
-    return "\n".join(chunks)
+            words = page.extract_words(x_tolerance=1.5, y_tolerance=3)
+            items = [
+                (
+                    (word["top"] + word["bottom"]) / 2,
+                    word["x0"],
+                    word["x1"],
+                    word["bottom"] - word["top"],
+                    word["text"],
+                )
+                for word in words
+            ]
+            pages.append("\n".join(_lines_from_boxes(items)))
+    return "\n".join(pages)
 
 
 def _ocr_to_text(source: str | Path | bytes) -> str:
@@ -169,6 +186,80 @@ def _ocr_to_text(source: str | Path | bytes) -> str:
 # ---------------------------------------------------------------------------
 # Parsinimas
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Skirsniai ir etiketės (CoC būna įvairiomis kalbomis)
+# ---------------------------------------------------------------------------
+
+#: Skirsnių numeriai yra vienodi visose kalbose – jais pasitikime pirmiausia.
+CODE_KEYS = {
+    "0.1": "make",
+    "0.2": "type",
+    "0.2.1": "commercial_name",
+    "0.4": "category",
+    "0.5": "manufacturer",
+    "0.10": "vin",
+    "0.11": "manufacture_date",
+    "40": "colour",
+}
+
+#: Atsarginis variantas, kai skirsnio numerio eilutėje nėra (pvz. „Variante“)
+#: arba jo neatpažino OCR. Tikrinama iš eilės, ieškant fragmento etiketėje.
+LABEL_KEYS: list[tuple[str, tuple[str, ...]]] = [
+    ("variant", ("variant", "variante", "wariant")),
+    ("version", ("version", "versione", "versión", "wersja", "ausfuhrung")),
+    ("commercial_name", (
+        "commercial name", "appellation commerciale", "handelsbezeichnung",
+        "denominazione commerciale", "denominacion comercial", "nome commercial",
+    )),
+    ("vin", (
+        "vehicle identification number", "numero d'identification",
+        "numero de identification", "fahrzeug-identifizierungsnummer",
+        "numero di identificazione", "numero de identificacion",
+    )),
+    ("manufacture_date", (
+        "date of manufacture", "date de construction", "datum der herstellung",
+        "data di costruzione", "fecha de fabricacion",
+    )),
+    ("colour", ("colour", "color", "couleur", "farbe", "colore")),
+    ("category", ("category", "categorie", "categoria", "klasse", "kategorie")),
+    ("make", ("make", "marque", "marke", "marca")),
+    ("type", ("type", "typ", "tipo")),
+    ("manufacturer", (
+        "name and address of the manufacturer", "company name and address",
+        "raison sociale", "name und anschrift", "nome e indirizzo",
+    )),
+]
+
+#: Etiketės, kurios kalba apie žymens *vietą*, o ne apie patį numerį
+#: („Location of the vehicle identification number“).
+_PLACE_WORDS = ("location", "emplacement", "anbringung", "posizione", "lugar")
+
+
+def _fold(text: str) -> str:
+    """Etiketės palyginimui: be diakritikų, mažosiomis, be pradinių brūkšnelių."""
+    text = unicodedata.normalize("NFKD", text or "")
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = text.replace("ß", "ss").lower()
+    text = text.lstrip("-–—•* ").strip()
+    return re.sub(r"\s+", " ", text)
+
+
+def _key_for(code: str, label: str) -> str | None:
+    """Pagal skirsnio numerį ir etiketę nusako, koks tai laukas."""
+    # Variantas ir versija tikrinami pirmiau: kai kuriuose liudijimuose jie
+    # pažymėti tuo pačiu 0.2 numeriu kaip ir tipas arba tik brūkšneliu.
+    for key in ("variant", "version"):
+        needles = dict(LABEL_KEYS)[key]
+        if any(label.startswith(needle) for needle in needles):
+            return key
+    if code in CODE_KEYS:
+        return CODE_KEYS[code]
+    for key, needles in LABEL_KEYS:
+        if any(needle in label for needle in needles):
+            return key
+    return None
 
 
 def _split_label_value(line: str) -> tuple[str, str] | None:
@@ -202,60 +293,49 @@ def parse_coc_text(text: str, source_file: str = "", ocr_used: bool = False) -> 
         if not value:
             continue
 
-        code_match = ITEM_CODE_RE.match(label)
+        code_match = ITEM_CODE_RE.match(label.lstrip("-–—• "))
         code = code_match.group(1) if code_match else ""
-        text_label = label[code_match.end():].strip() if code_match else label
-        text_label = re.sub(r"\s+", " ", text_label).lower()
+        text_label = _fold(label[code_match.end():] if code_match else label)
 
-        # Variantas/versija tikrinami pirmiau: kai kuriuose CoC jie pažymėti
-        # tuo pačiu 0.2 skirsnio numeriu kaip ir tipas.
-        if text_label.startswith("variant"):
-            data.variant = data.variant or value
-        elif text_label.startswith("version"):
-            data.version = data.version or value
-        elif code == "0.1" or text_label.startswith("make"):
-            data.make = data.make or value
-        elif code == "0.2" or text_label == "type":
-            data.type = data.type or value
-        elif code == "0.2.1" or text_label.startswith("commercial name"):
-            data.commercial_name = data.commercial_name or value
-        elif code == "0.4" or text_label == "category":
-            data.category = data.category or value
-        elif code == "0.5" or text_label.startswith("company name"):
-            data.manufacturer = data.manufacturer or value
-        elif code == "0.10" or "vehicle identification number" in text_label:
-            m = VIN_RE.search(value.replace(" ", ""))
-            data.vin = data.vin or (m.group(0) if m else value)
-        elif code == "0.11" or text_label.startswith("date of manufacture"):
-            data.manufacture_date = data.manufacture_date or normalise_date(value)
-        elif "colour of" in text_label or "color of" in text_label:
-            data.colour_raw = data.colour_raw or value
-        elif code == "40":
-            colour_by_code = colour_by_code or value
+        key = _key_for(code, text_label)
+        if key is None or getattr(data, key, None):
+            continue
+
+        if key == "vin":
+            # „Location of the vehicle identification number“ nėra pats numeris,
+            # o reikšmė turi atrodyti kaip VIN.
+            if any(word in text_label for word in _PLACE_WORDS):
+                continue
+            found = VIN_RE.search(value.replace(" ", "").upper())
+            if not found:
+                continue
+            data.vin = found.group(0)
+        elif key == "manufacture_date":
+            data.manufacture_date = normalise_date(value)
+        elif key == "colour":
+            if code == "40" and "colour" not in text_label and "color" not in text_label \
+                    and "couleur" not in text_label and "farbe" not in text_label \
+                    and "colore" not in text_label:
+                colour_by_code = colour_by_code or value
+            else:
+                data.colour_raw = value
+        else:
+            setattr(data, key, value)
 
     if not data.colour_raw and colour_by_code:
         data.colour_raw = colour_by_code
     data.colour = to_lithuanian(data.colour_raw)
 
     # -- tipo patvirtinimas ------------------------------------------------
-    m = re.search(
-        r"approval\s*(" + APPROVAL_RE.pattern + r")\s*granted\s*on\s*"
-        r"(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})",
-        flat,
-        re.IGNORECASE,
-    )
-    if m:
-        data.approval_number = re.sub(r"\s+", "", m.group(1))
-        data.approval_date = normalise_date(m.group(2))
-    else:
-        m_num = APPROVAL_RE.search(flat)
-        if m_num:
-            data.approval_number = re.sub(r"\s+", "", m_num.group(0))
-        m_date = re.search(
-            r"granted\s*on\s*(\d{1,2}[./\-]\d{1,2}[./\-]\d{4})", flat, re.IGNORECASE
-        )
+    # Frazė skiriasi pagal kalbą („granted on“, „issued on“, „délivrée le“,
+    # „erteilt am“), todėl remiamės pačiu numeriu, o datos ieškome iškart po jo.
+    m_num = APPROVAL_RE.search(flat)
+    if m_num:
+        data.approval_number = re.sub(r"\s+", "", m_num.group(0))
+        window = flat[m_num.end():m_num.end() + 120]
+        m_date = DATE_RE.search(window)
         if m_date:
-            data.approval_date = normalise_date(m_date.group(1))
+            data.approval_date = normalise_date(m_date.group(0))
 
     # -- VIN atsarginis variantas -----------------------------------------
     if not data.vin:
