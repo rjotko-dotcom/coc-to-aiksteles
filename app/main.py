@@ -191,11 +191,7 @@ def generate(payload: GenerateRequest) -> Response:
     documents: list[tuple[str, bytes]] = []
     warnings: list[str] = []
     for item in payload.items:
-        values = build_values(
-            item,
-            doc_number=str(item.get("doc_number", "")),
-            doc_date=str(item.get("doc_date", "")),
-        )
+        values = build_values(item, doc_date=str(item.get("doc_date", "")))
         if template_bytes is not None:
             content, warns = fill_template(template_bytes, values)
             warnings.extend(warns)

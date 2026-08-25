@@ -68,8 +68,8 @@ python -m venv .venv
 2. Nuvilkite CoC PDF failus į lauką (galima kelis iš karto).
 3. Patikrinkite užpildytus laukus – jie visi redaguojami. Geltona juosta rodo,
    ko rasti nepavyko.
-4. Įrašykite pažymos Nr. (data pasiūloma šiandienos).
-5. Spauskite **Generuoti pažymą (.docx)**.
+4. Jei reikia, pakeiskite pažymos datą (pasiūloma šiandienos).
+5. Spauskite **Generuoti pažymą (.docx)**. Numerį prie „Nr.“ įrašote pats.
 
 Failas pavadinamas pagal VIN, pvz. `aikstele_SJNJ12TD3U2000001.docx`.
 
@@ -94,13 +94,14 @@ duomenys jokiu būdu neliktų naujoje pažymoje. Reikšmių stulpelis atpažįst
 ne pagal tuščius langelius, o pagal tai, kuriame stulpelyje surašyti CoC
 skirsniai (0.1, 0.2, 40…) ir RL kodai (D.1, E, K, R…) – jie neliečiami.
 
-**Data ir Nr. atnaujinami kiekvieną kartą.** Datos langeliuose įrašoma pažymos
-data (pagal nutylėjimą – šiandienos, sąsajoje redaguojama), išsaugant blanke
-esančius brūkšnelius; eilutė „Nr.“ perrašoma jūsų įvestu numeriu.
+**Data atnaujinama kiekvieną kartą, „Nr.“ – neliečiamas.** Datos langeliuose
+įrašoma pažymos data (pagal nutylėjimą – šiandienos, sąsajoje redaguojama),
+išsaugant blanke esančius brūkšnelius. Eilutė „Nr.“ paliekama tokia, kokia yra –
+numerį rašote pats.
 
 **Šablono patikra.** Vos įkėlus šabloną (arba paspaudus **Patikrinti**)
 parodoma, ką programa jame atpažino: kurios eilutės bus užpildytos, į kurį
-stulpelį bus rašoma, ar rasti datos langeliai ir eilutė „Nr.“. Jei kurios nors
+stulpelį bus rašoma, ar rasti datos langeliai. Jei kurios nors
 eilutės pavadinimas skiriasi ir neatpažįstamas, jis bus išvardytas – tada
 pakanka į tą langelį įrašyti žymeklį (pvz. `{{colour}}`). Tą patį galima
 padaryti ir be naršyklės:
@@ -112,7 +113,7 @@ padaryti ir be naršyklės:
 Jei norite tikslesnės kontrolės, šablone galite naudoti ir žymeklius:
 `{{make}}`, `{{type_variant_version}}`, `{{commercial_name}}`, `{{vin}}`,
 `{{approval_number}}`, `{{approval_date}}`, `{{national_approval_number}}`,
-`{{colour}}`, `{{doc_number}}`, `{{doc_date}}`, `{{category}}`,
+`{{colour}}`, `{{doc_date}}`, `{{category}}`,
 `{{manufacture_date}}`, `{{manufacturer}}`.
 
 Neįkėlus šablono dokumentas sukuriamas nuo nulio pagal pažymos struktūrą.
@@ -126,8 +127,8 @@ naudojama**.
 # viena pažyma šalia PDF
 .venv/bin/python -m app.cli CoC.pdf -o out
 
-# visas aplankas, naudojant šabloną ir pažymos numerį
-.venv/bin/python -m app.cli /kelias/*.pdf -o out -t data/template.docx -n 17
+# visas aplankas, naudojant šabloną
+.venv/bin/python -m app.cli /kelias/*.pdf -o out -t data/template.docx
 
 # tik pažiūrėti, kas ištraukta (JSON, nieko negeneruojant)
 .venv/bin/python -m app.cli CoC.pdf --json

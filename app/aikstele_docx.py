@@ -115,13 +115,16 @@ def _row_cells(row):
     return out
 
 
-def build_values(data: dict, doc_number: str = "", doc_date: str = "") -> dict:
-    """Iš CoC duomenų žodyno paruošia visas dokumento reikšmes."""
+def build_values(data: dict, doc_date: str = "") -> dict:
+    """Iš CoC duomenų žodyno paruošia visas dokumento reikšmes.
+
+    Pažymos numeris čia nedalyvauja sąmoningai: eilutė „Nr.“ dokumente
+    neliečiama, ją pildo pats vartotojas.
+    """
     values = dict(data)
     if not values.get("type_variant_version"):
         parts = [values.get(k, "") for k in ("type", "variant", "version")]
         values["type_variant_version"] = "/".join(p for p in parts if p)
-    values["doc_number"] = doc_number or ""
     values["doc_date"] = doc_date or date.today().isoformat()
     values["today"] = date.today().strftime("%Y-%m-%d")
     values.setdefault("national_approval_number", "")
@@ -292,30 +295,6 @@ def _fill_date_boxes(document, doc_date: str) -> bool:
     return False
 
 
-def _find_number_paragraph(document):
-    """Suranda pastraipą su pažymos numeriu ("Nr. …")."""
-    for para in document.paragraphs:
-        text = para.text.strip()
-        if len(text) <= 40 and text.lower().startswith("nr."):
-            return para
-    return None
-
-
-def _fill_number(document, doc_number: str) -> bool:
-    """Įrašo pažymos numerį – ir perrašo blanke likusį ankstesnį numerį."""
-    para = _find_number_paragraph(document)
-    if para is None:
-        return False
-    value = f"Nr. {doc_number}".strip()
-    if para.runs:
-        para.runs[0].text = value
-        for run in para.runs[1:]:
-            run.text = ""
-    else:
-        para.add_run(value)
-    return True
-
-
 def fill_template(template: str | Path | bytes, values: dict) -> tuple[bytes, list[str]]:
     """Užpildo esamą pažymos šabloną. Grąžina (docx baitai, įspėjimai)."""
     source = io.BytesIO(template) if isinstance(template, (bytes, bytearray)) else str(template)
@@ -337,7 +316,7 @@ def fill_template(template: str | Path | bytes, values: dict) -> tuple[bytes, li
 
     filled = _fill_tables(document, values)
     _fill_date_boxes(document, values.get("doc_date", ""))
-    _fill_number(document, values.get("doc_number", ""))
+    # Pažymos numerio ("Nr. …") neliečiame – jį rašo pats vartotojas.
 
     expected = {key for key, *_ in PAZYMA_ROWS if values.get(key)}
     missing = expected - set(filled)
@@ -413,16 +392,11 @@ def analyse_template(template: str | Path | bytes) -> dict:
         "placeholders": placeholders,
         "missing": missing,
         "date_boxes": _has_date_boxes(document),
-        "number_paragraph": _has_number_paragraph(document),
     }
 
 
 def _has_date_boxes(document) -> bool:
     return _find_date_boxes(document) is not None
-
-
-def _has_number_paragraph(document) -> bool:
-    return _find_number_paragraph(document) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -488,12 +462,8 @@ def build_document(values: dict, company_line: str = "") -> bytes:
         _set_cell_text(cell, ch)
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
     _add_paragraph(document, "(data)", align=WD_ALIGN_PARAGRAPH.CENTER, size=9)
-    _add_paragraph(
-        document,
-        f"Nr. {values.get('doc_number', '')}".rstrip(),
-        align=WD_ALIGN_PARAGRAPH.CENTER,
-        space_after=12,
-    )
+    # Numerį įrašo pats vartotojas – paliekame tuščią eilutę.
+    _add_paragraph(document, "Nr.", align=WD_ALIGN_PARAGRAPH.CENTER, space_after=12)
 
     # pagrindinė lentelė
     table = document.add_table(rows=1, cols=4)

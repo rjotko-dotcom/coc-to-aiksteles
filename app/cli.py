@@ -39,7 +39,6 @@ def _check_template(path: str) -> int:
         for name in report["missing"]:
             print(f"  - {name}")
     print("Datos langeliai:", "rasta" if report["date_boxes"] else "nerasta")
-    print("Eilutė „Nr.“:", "rasta" if report["number_paragraph"] else "nerasta")
     return 0 if not report["missing"] else 1
 
 
@@ -48,7 +47,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("pdfs", nargs="*", help="CoC PDF failai")
     parser.add_argument("-o", "--out", default=".", help="katalogas rezultatams")
     parser.add_argument("-t", "--template", help="pažymos .docx šablonas")
-    parser.add_argument("-n", "--number", default="", help="pažymos Nr.")
     parser.add_argument("-d", "--date", default=date.today().isoformat(), help="pažymos data")
     parser.add_argument("--company", default="", help="įmonės eilutė (be šablono)")
     parser.add_argument("--json", action="store_true", help="tik parodyti duomenis (JSON)")
@@ -81,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(data.to_dict(), ensure_ascii=False, indent=2))
             continue
 
-        values = build_values(data.to_dict(), doc_number=args.number, doc_date=args.date)
+        values = build_values(data.to_dict(), doc_date=args.date)
         if template_bytes is not None:
             content, warnings = fill_template(template_bytes, values)
         else:

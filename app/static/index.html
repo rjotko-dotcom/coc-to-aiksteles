@@ -81,7 +81,8 @@
       <div style="margin-top:12px">
         <p class="meta">
           Įkėlus Jūsų <strong>Word šabloną</strong>, pažymos bus formuojamos jo pagrindu –
-          išliks visas Jūsų tekstas, antraštė ir formatavimas. Eilutės randamos pagal
+          išliks visas Jūsų tekstas, antraštė ir formatavimas. Eilutė „Nr.“ neliečiama –
+          numerį įrašote pats. Eilutės randamos pagal
           pavadinimus lentelės pirmame stulpelyje („Gamybinė markė…“, „Tipas/Variantas/Versija“
           ir t. t.), todėl šablone nieko keisti nereikia.
         </p>
@@ -116,7 +117,6 @@ const FIELDS = [
   ["approval_date", "Tipo patvirtinimo suteikimo data"],
   ["national_approval_number", "Nacionalinis patvirtinimo numeris (→ K1)"],
   ["colour", "Transporto priemonės spalva (40 → R)"],
-  ["doc_number", "Pažymos Nr."],
   ["doc_date", "Pažymos data (MMMM-MM-DD)"],
 ];
 
@@ -189,7 +189,7 @@ async function upload(fileList) {
     const response = await fetch("/api/extract", { method: "POST", body });
     if (!response.ok) throw new Error(await response.text());
     const data = await response.json();
-    items = data.results.map((item) => ({ ...item, doc_number: "", doc_date: today() }));
+    items = data.results.map((item) => ({ ...item, doc_date: today() }));
     const ok = items.filter((i) => !i.error).length;
     $("status").className = "status ok";
     $("status").textContent = `Perskaityta: ${ok} iš ${items.length}. Patikrinkite laukus ir spauskite „Generuoti“.`;
@@ -252,7 +252,6 @@ function renderTemplateReport(analysis) {
   const missing = analysis.missing || [];
   const extras = [
     analysis.date_boxes ? "datos langeliai" : null,
-    analysis.number_paragraph ? "eilutė „Nr.“" : null,
     (analysis.placeholders || []).length ? "žymekliai: " + analysis.placeholders.join(", ") : null,
   ].filter(Boolean);
 

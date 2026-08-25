@@ -37,7 +37,7 @@ def all_text(content: bytes) -> str:
 
 
 def test_build_document_contains_all_values():
-    values = build_values(DATA, doc_number="17", doc_date="2026-08-17")
+    values = build_values(DATA, doc_date="2026-08-17")
     text = all_text(build_document(values, company_line="UAB Pavyzdys"))
     assert "NISSAN JUKE" in text
     assert "F16/A/A45" in text
@@ -51,7 +51,7 @@ def test_fill_template_writes_into_value_column():
     empty = build_values({key: "" for key in DATA}, doc_date="")
     template = build_document(empty)
     filled, warnings = fill_template(
-        template, build_values(DATA, doc_number="17", doc_date="2026-08-17")
+        template, build_values(DATA, doc_date="2026-08-17")
     )
     assert warnings == []
 
@@ -122,7 +122,6 @@ def test_analyse_template_recognises_all_rows():
     assert report["missing"] == []
     assert report["value_column"] == 2
     assert report["date_boxes"] is True
-    assert report["number_paragraph"] is True
     assert report["unrecognised_rows"] == []
 
 
@@ -207,7 +206,7 @@ def test_value_column_found_when_template_is_a_previous_pazyma():
 
 def test_previous_vehicle_data_is_replaced_not_kept():
     filled, warnings = fill_template(
-        _previous_pazyma(), build_values(DATA, doc_number="42", doc_date="2026-09-01")
+        _previous_pazyma(), build_values(DATA, doc_date="2026-09-01")
     )
     assert warnings == []
     text = all_text(filled)
@@ -226,12 +225,13 @@ def test_previous_vehicle_data_is_replaced_not_kept():
     assert rows["Transporto priemonės spalva"][3] == "R"
 
 
-def test_date_and_number_are_refreshed_every_time():
+def test_date_is_refreshed_but_number_is_left_alone():
     filled, _ = fill_template(
-        _previous_pazyma(), build_values(DATA, doc_number="42", doc_date="2026-09-01")
+        _previous_pazyma(), build_values(DATA, doc_date="2026-09-01")
     )
     document = Document(io.BytesIO(filled))
     boxes = [cell.text for cell in document.tables[0].rows[0].cells]
     assert "".join(boxes) == "2026-09-01"
     assert boxes[4] == "-" and boxes[7] == "-"  # skirtukai išsaugoti
-    assert any(p.text.strip() == "Nr. 42" for p in document.paragraphs)
+    # Pažymos numerį rašo pats vartotojas – programa jo neliečia
+    assert any(p.text.strip() == "Nr. 41" for p in document.paragraphs)
