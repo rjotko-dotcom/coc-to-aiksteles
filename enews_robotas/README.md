@@ -43,6 +43,29 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 4. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
    **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
 
+## Išbandyti namuose, be B2B
+
+Valdymo lange pažymėkite **„BANDYMAS be B2B (namuose)“** ir spauskite **▶ Pradėti**.
+
+* Atsidaro **netikras eNEWS** – padarytas pagal tikro eNEWS nuotraukas, veikia tik
+  Jūsų kompiuteryje (viršuje raudona juosta „BANDOMASIS eNEWS“). Tie patys skirtukai,
+  „Atidavimas klientui“ langelis su X, Akumuliatorius → Perdavimas klientui →
+  Midtronics → 3 kodo laukeliai, PDI langas, Update / Confirm / Save, WBMR ir Drukāt.
+* Robotas dirba su **Excel kopija** (`bandymas/bandymui.xlsx`), tikras failas
+  nepaliečiamas. Jei tikro Excel namuose nėra – sukuriamas pavyzdys su keliomis
+  mašinomis (viena jau padaryta, viena su blogu akumuliatoriumi, viena su trūkstamu kodu).
+* **Niekas nespausdinama** – žurnale parašoma, kas ir į kurį spausdintuvą būtų
+  spausdinta, PDF išsaugomi aplanke `spausdinti`.
+* Klaidoms išbandyti: kodas, prasidedantis **BAD** (pvz. `BAD36-1Q9D77-TE204`) –
+  „Replace battery“ (oranžinė eilutė); tas pats kodas antrai mašinai – „already used“.
+* **„Nauja kopija“** – iš naujo nukopijuoja Excel ir galima bandyti dar kartą.
+
+Taip galima pasitikrinti langą, Excel skaitymą, patikras, spalvinimą ir visą eigą.
+Ko bandymas **negali** patikrinti – ar tikrame eNEWS mygtukai vadinasi lygiai taip
+pat; tam darbe pirmą kartą naudokite „Žingsniais“ (žr. žemiau).
+
+Netikrą eNEWS galima atsidaryti ir vieną, be roboto: `python netikras_enews.py`.
+
 ## Valdymo langas
 
 Dukart spustelėjus **`paleisti.bat`** atsidaro valdymo langas (juodo lango nėra).
@@ -112,7 +135,7 @@ paieška, Akumuliatorius, PDI, Automobilis po „Update“, WBMR), kiekviename s
 
 ### Be lango
 
-`paleisti.bat --vienas --zingsniais` arba `paleisti.bat --diagnostika` – tas pats
+`paleisti.bat --vienas --zingsniais`, `paleisti.bat --bandymas` arba `paleisti.bat --diagnostika` – tas pats
 komandinėje eilutėje.
 
 ## Failai
@@ -125,6 +148,7 @@ komandinėje eilutėje.
 | `nustatymai.py` | numatytieji nustatymai (pakeisti – `nustatymai.json`) |
 | `robotas.py` | eNEWS žingsniai |
 | `excel_eiles.py` | Excel skaitymas ir spalvinimas |
+| `netikras_enews.py`, `bandymas/` | netikras eNEWS bandymui be B2B |
 | `chrome_profilis/` | roboto Chrome profilis (prisijungimas), į git nededamas |
 | `spausdinti/` | išsaugoti PDF |
 | `klaidos/` | ekrano nuotraukos, kai nepavyko |

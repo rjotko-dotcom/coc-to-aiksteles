@@ -108,9 +108,9 @@ def rasti_sumatra(nurodytas: str) -> Path | None:
     return next((k for k in kandidatai if k and k.is_file()), None)
 
 
-def aplinka(N, profilis: Path) -> list[Pastaba]:
+def aplinka(N, profilis: Path, excel: str | None = None, bandymas: bool = False) -> list[Pastaba]:
     p: list[Pastaba] = []
-    excel = Path(N.EXCEL_FAILAS)
+    excel = Path(excel or N.EXCEL_FAILAS)
     if not excel.is_file():
         p.append(Pastaba(KLAIDA, f"nerastas Excel failas: {excel}"))
     elif uzrakintas(excel):
@@ -121,6 +121,8 @@ def aplinka(N, profilis: Path) -> list[Pastaba]:
     if (profilis / "SingletonLock").exists() or (profilis / "lockfile").exists():
         p.append(Pastaba(PERSPEJIMAS, "roboto Chrome langas gal dar atidarytas – uždarykite jį"))
 
+    if bandymas:  # spausdinti nereikės
+        return p
     sumatra = rasti_sumatra(N.SUMATRA)
     if sumatra is None:
         p.append(Pastaba(PERSPEJIMAS, "nerastas SumatraPDF – PDF bus tik išsaugoti aplanke „spausdinti“, "

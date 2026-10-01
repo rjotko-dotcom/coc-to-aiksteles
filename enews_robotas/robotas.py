@@ -77,6 +77,7 @@ class Valdymas:
 
 
 V = Valdymas()
+BANDYMAS = False  # True – netikras eNEWS, niekas nespausdinama
 
 
 def zingsnis(tekstas: str) -> None:
@@ -178,7 +179,8 @@ def spausti(page: Page, raktas: str, laukti: float | None = None) -> None:
     laukti_ramybes(page)
 
 
-TEKSTO_LAUKAS = "input[(@type='text' or not(@type)) and not(@disabled)]"
+# Ir išjungti laukai: po „Update“ jie įsijungia ne iš karto – irasyti() palaukia.
+TEKSTO_LAUKAS = "input[(@type='text' or not(@type))]"
 
 
 def po(elementas: str, tikslas: str, pirmas: bool = True) -> str:
@@ -191,9 +193,10 @@ def su_tekstu(raktas: str, kelintas: str = "1", tiksliai: bool = False) -> str:
     """Teksto mazgas su užrašu (ne visas elementas – taip „po juo“ reiškia tikrai
     po šiuo užrašu, net jei keli užrašai viename langelyje)."""
     t = T1(raktas)
+    matomas = "not(ancestor::script) and not(ancestor::style) and not(ancestor::title)"
     if tiksliai:
-        return f"(//text()[normalize-space(.)='{t}'])[{kelintas}]"
-    return f"(//text()[contains(normalize-space(.),'{ascii_dalis(t)}')])[{kelintas}]"
+        return f"(//text()[{matomas} and normalize-space(.)='{t}'])[{kelintas}]"
+    return f"(//text()[{matomas} and contains(normalize-space(.),'{ascii_dalis(t)}')])[{kelintas}]"
 
 
 def lauka_po(raktas: str, kelintas: str = "last()") -> str:
@@ -202,6 +205,11 @@ def lauka_po(raktas: str, kelintas: str = "last()") -> str:
 
 
 def irasyti(laukas: Locator, tekstas: str, kas: str) -> None:
+    pabaiga = time.time() + N.LAUKTI_SEK
+    while not laukas.is_enabled():
+        if time.time() > pabaiga:
+            raise Klaida(f"laukas {kas} neaktyvus")
+        time.sleep(0.3)
     try:
         if laukas.get_attribute("readonly") is not None:
             raise ValueError("tik skaitomas")
@@ -300,25 +308,26 @@ def akumuliatorius(page: Page, m: Masina) -> None:
         irasyti(laukas, dalis, "kodo laukelis")
     spausti(page, "validate")
 
-    geras = T1("good_battery")
+    # Laukiame rezultato puslapio („Test Result: …“) ir tik tada vertiname, kad
+    # nesupainiotume su ankstesnių testų lentele.
+    geras, antraste = T1("good_battery"), T1("test_result")
     pabaiga = time.time() + N.LAUKTI_SEK
+    tekstas = ""
     while time.time() < pabaiga:
         tekstas = puslapio_tekstas(page)
-        if geras in tekstas:
-            if m.vin not in tekstas:
-                raise Klaida("testo rezultate ne ta mašina")
-            zingsnis(f"{geras} → OK")
-            spausti(page, "ok")
-            return
-        if "Test Result" in tekstas:
+        if antraste in tekstas:
             break
         time.sleep(0.5)
-    tekstas = puslapio_tekstas(page)
-    rezultatas = ""
-    for eil in tekstas.splitlines():
-        if eil.strip() and any(z in eil for z in ("Result", "rror", "used", "nvalid")):
-            rezultatas = eil.strip()
-            break
+    rezultatas = next((e.strip() for e in tekstas.splitlines() if antraste in e), "")
+    if geras in rezultatas:
+        if m.vin not in tekstas:
+            raise Klaida("testo rezultate ne ta mašina")
+        zingsnis(f"{geras} → OK")
+        spausti(page, "ok")
+        return
+    if not rezultatas:
+        rezultatas = next((e.strip() for e in tekstas.splitlines()
+                           if any(z in e for z in ("rror", "used", "nvalid"))), "")
     raise BlogasAkumas(rezultatas or f"ne „{geras}“")
 
 
@@ -380,12 +389,17 @@ def garantija(page: Page, m: Masina) -> None:
     except Klaida:
         log.info("     (atskiro Save mygtuko nebuvo)")
 
-    # Apsauga: ar eNEWS tikrai išsaugojo.
-    tekstas = puslapio_tekstas(page)
-    if m.numeris not in tekstas:
-        raise Klaida("po išsaugojimo nesimato valst. numerio – patikrinkite Automobilis skirtuką")
-    if data not in tekstas:
-        raise Klaida(f"po išsaugojimo nesimato garantijos datos {data}")
+    # Apsauga: ar eNEWS tikrai išsaugojo (palaukiame – serveris atsako ne iš karto).
+    pabaiga = time.time() + N.LAUKTI_SEK
+    while True:
+        tekstas = puslapio_tekstas(page)
+        if m.numeris in tekstas and data in tekstas:
+            break
+        if time.time() > pabaiga:
+            if m.numeris not in tekstas:
+                raise Klaida("po išsaugojimo nesimato valst. numerio – patikrinkite Automobilis skirtuką")
+            raise Klaida(f"po išsaugojimo nesimato garantijos datos {data}")
+        time.sleep(0.5)
 
 
 # --- Failai ir spausdinimas ---------------------------------------------------
@@ -457,6 +471,10 @@ def spausdinti(failas: Path, lipnus: bool) -> None:
     spausdintuvas = N.SPAUSDINTUVAS_LIPNUS if lipnus else N.SPAUSDINTUVAS_PAPRASTAS
     nust = N.NUSTATYMAI_LIPNUS if lipnus else N.NUSTATYMAI_PAPRASTAS
     rusis = "lipnus" if lipnus else "paprastas"
+    if BANDYMAS:
+        zingsnis(f"(bandymas) būtų spausdinama {failas.name} ({rusis}, "
+                 f"{spausdintuvas or 'numatytasis'}) – failas aplanke spausdinti")
+        return
     sumatra = rasti_sumatra(N.SUMATRA)
     if sumatra is None:
         log.warning("     SumatraPDF nerastas – %s (%s) atsispausdinkite patys", failas.name, rusis)
@@ -520,12 +538,15 @@ def atidaryti_narsykle(pw):
     )
 
 
-def atidaryti_enews(ctx) -> tuple[Page, str]:
+def atidaryti_enews(ctx, adresas: str | None = None) -> tuple[Page, str]:
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
-    if not page.url.startswith("http"):
+    if adresas:  # bandymas – iškart netikras eNEWS
+        page.goto(adresas)
+    elif not page.url.startswith("http"):
         page.goto(N.PORTALO_ADRESAS)
     while True:
-        V.klausti("Prisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite „Tęsti“")
+        V.klausti("BANDYMAS: atsidarė netikras eNEWS – spauskite „Tęsti“" if adresas else
+                  "Prisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite „Tęsti“")
         enews = [p for p in ctx.pages if "enews" in p.url.lower()]
         if enews:
             break
@@ -541,14 +562,24 @@ def atidaryti_enews(ctx) -> tuple[Page, str]:
     return page, page.url
 
 
-def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False) -> tuple[int, int]:
-    """Pagrindinis ciklas. Grąžina (atlikta, atidėta)."""
-    log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
+def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
+            bandymas: bool = False) -> tuple[int, int]:
+    """Pagrindinis ciklas. Grąžina (atlikta, atidėta).
+    bandymas=True – netikras eNEWS šiame kompiuteryje, niekas nespausdinama."""
+    global BANDYMAS
+    BANDYMAS = bandymas
+    serveris = adresas = None
+    if bandymas:
+        import netikras_enews
+        serveris, adresas = netikras_enews.paleisti()
+        log.info("BANDYMAS: netikras eNEWS %s, Excel kopija %s", adresas, sarasas.kelias.name)
+    else:
+        log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
     atlikta = atideta = 0
     with sync_playwright() as pw:
         ctx = atidaryti_narsykle(pw)
         try:
-            page, pradzia = atidaryti_enews(ctx)
+            page, pradzia = atidaryti_enews(ctx, adresas)
             for m in masinos:
                 if V.stabdyti.is_set():
                     log.info("Sustabdyta.")
@@ -587,6 +618,8 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False) -> tu
             V.klausti("Baigta – naršyklė bus uždaryta")
         finally:
             ctx.close()
+            if serveris:
+                serveris.shutdown()
     return atlikta, atideta
 
 
@@ -633,6 +666,8 @@ def main() -> None:
     ap.add_argument("--vienas", action="store_true", help="apdoroti tik vieną mašiną")
     ap.add_argument("--zingsniais", action="store_true", help="sustoti prieš kiekvieną veiksmą")
     ap.add_argument("--diagnostika", action="store_true", help="tik išsaugoti puslapių HTML")
+    ap.add_argument("--bandymas", action="store_true",
+                    help="be B2B: netikras eNEWS, Excel kopija, niekas nespausdinama")
     args = ap.parse_args()
     V.zingsniais = args.zingsniais
     nustatyti_zurnala(logging.StreamHandler())
@@ -641,6 +676,9 @@ def main() -> None:
         diagnostika()
         return
     from tikrinimas import KLAIDA, blokuojamos_eilutes, duomenys
+    if args.bandymas:
+        import netikras_enews
+        args.excel = str(netikras_enews.paruosti_excel(args.excel))
     if not Path(args.excel).exists():
         sys.exit(f"Nerastas Excel failas: {args.excel}")
     if uzrakintas(args.excel):
@@ -655,7 +693,7 @@ def main() -> None:
     if not masinos:
         sys.exit("Nėra ką daryti (visos eilutės nuspalvintos arba su klaidomis).")
     log.info("Bus daroma mašinų: %d", len(masinos))
-    vykdyti(sarasas, masinos, vienas=args.vienas)
+    vykdyti(sarasas, masinos, vienas=args.vienas, bandymas=args.bandymas)
 
 
 if __name__ == "__main__":

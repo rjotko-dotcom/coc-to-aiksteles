@@ -14,6 +14,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import nustatymai as N
 import robotas
+import netikras_enews
 import tikrinimas
 from excel_eiles import Masina, Sarasas, menuo_diena, uzrakintas
 
@@ -109,7 +110,7 @@ class Langas(tk.Tk):
 
     def atidaryti_excel(self):
         if sys.platform == "win32":
-            os.startfile(self.excel_kelias.get())  # noqa: S606
+            os.startfile(self.aktyvus_excel())  # noqa: S606
         messagebox.showinfo(PAVADINIMAS, "Pataisę Excel'yje, jį išsaugokite ir UŽDARYKITE, "
                                          "tada spauskite „Perskaityti“.")
 
@@ -132,18 +133,28 @@ class Langas(tk.Tk):
         varneles.pack(fill="x", pady=(0, 4))
         self.zingsniais = tk.BooleanVar(value=False)
         self.tik_pazymetos = tk.BooleanVar(value=False)
+        self.bandymas = tk.BooleanVar(value=False)
         self.rodyti_visas = tk.BooleanVar(value=False)
         ttk.Checkbutton(varneles, text="Žingsniais (laukti „Tęsti“ prieš kiekvieną veiksmą)",
                         variable=self.zingsniais).pack(side="left", padx=(0, 12))
         ttk.Checkbutton(varneles, text="Tik pažymėtos eilutės", variable=self.tik_pazymetos).pack(side="left", padx=12)
         ttk.Checkbutton(varneles, text="Rodyti ir jau padarytas", variable=self.rodyti_visas,
                         command=self.rodyti).pack(side="left", padx=12)
+        ttk.Checkbutton(varneles, text="BANDYMAS be B2B (namuose)", variable=self.bandymas,
+                        command=self.perjungti_bandyma).pack(side="left", padx=12)
 
         self.klausimas = tk.StringVar(value="")
         ttk.Label(f, textvariable=self.klausimas, style="Klausimas.TLabel").pack(fill="x", pady=(0, 4))
 
+        self.bandymo_juosta = tk.Frame(f, background="#fff2b3")
+        tk.Label(self.bandymo_juosta, background="#fff2b3", font=("Segoe UI", 10, "bold"),
+                 text="BANDYMAS: netikras eNEWS šiame kompiuteryje, Excel kopija, niekas nespausdinama. "
+                      "Kodas „BAD…“ – blogas akumuliatorius.").pack(side="left", padx=6, pady=3)
+        ttk.Button(self.bandymo_juosta, text="Nauja kopija", command=self.nauja_bandymo_kopija).pack(side="right")
+
         dalys = ttk.PanedWindow(f, orient="vertical")
         dalys.pack(fill="both", expand=True)
+        self.dalys = dalys
 
         lent = ttk.Frame(dalys)
         self.medis = ttk.Treeview(lent, columns=[k for k, *_ in self.STULPELIAI], show="headings",
@@ -181,8 +192,35 @@ class Langas(tk.Tk):
         self.suvestine = tk.StringVar()
         ttk.Label(f, textvariable=self.suvestine).pack(fill="x", pady=(4, 0))
 
+    def aktyvus_excel(self) -> str:
+        """Bandymo režime – Excel kopija, kad tikras failas liktų nepaliestas."""
+        if self.bandymas.get():
+            return str(netikras_enews.ARCH / "bandymui.xlsx")
+        return self.excel_kelias.get()
+
+    def perjungti_bandyma(self):
+        if self.gija and self.gija.is_alive():
+            self.bandymas.set(not self.bandymas.get())
+            return
+        if self.bandymas.get():
+            kopija = netikras_enews.paruosti_excel(self.excel_kelias.get())
+            self.log(f"BANDYMAS be B2B: netikras eNEWS, dirbama su Excel kopija {kopija.name} "
+                     "(tikras failas nepaliečiamas), niekas nespausdinama.")
+            self.bandymo_juosta.pack(fill="x", pady=(0, 4), before=self.dalys)
+        else:
+            self.bandymo_juosta.pack_forget()
+            self.log("Bandymas išjungtas – dirbama su tikru Excel ir tikru eNEWS.")
+        self.perskaityti()
+
+    def nauja_bandymo_kopija(self):
+        if self.gija and self.gija.is_alive():
+            return
+        netikras_enews.paruosti_excel(self.excel_kelias.get())
+        self.log("Bandymui padaryta nauja Excel kopija.")
+        self.perskaityti()
+
     def perskaityti(self):
-        kelias = self.excel_kelias.get()
+        kelias = self.aktyvus_excel()
         self.masinos, self.pastabos = [], []
         if not Path(kelias).is_file():
             self.suvestine.set(f"Nerastas Excel failas: {kelias} – pasirinkite jį viršuje.")
@@ -242,7 +280,7 @@ class Langas(tk.Tk):
     def tikrinti(self) -> bool:
         """Patikrina kompiuterį ir duomenis. Grąžina True, jei galima pradėti."""
         self.perskaityti()
-        aplinka = tikrinimas.aplinka(N, robotas.PROFILIS)
+        aplinka = tikrinimas.aplinka(N, robotas.PROFILIS, self.aktyvus_excel(), self.bandymas.get())
         self.log("— Patikra —")
         for p in aplinka:
             self.log(("✖ " if p.lygis == tikrinimas.KLAIDA else "! ") + p.tekstas,
@@ -267,7 +305,7 @@ class Langas(tk.Tk):
         if self.gija and self.gija.is_alive():
             messagebox.showwarning(PAVADINIMAS, "Robotas dirba – taisyti galėsite jam baigus.")
             return False
-        if uzrakintas(self.excel_kelias.get()):
+        if uzrakintas(self.aktyvus_excel()):
             messagebox.showwarning(PAVADINIMAS, "Excel failas atidarytas – uždarykite jį ir bandykite dar kartą.")
             return False
         return True
@@ -284,14 +322,14 @@ class Langas(tk.Tk):
             return
         if not messagebox.askyesno(PAVADINIMAS, f"Nuimti spalvą nuo {len(sel)} eil.? Robotas jas darys iš naujo."):
             return
-        s = Sarasas(self.excel_kelias.get(), N)
+        s = Sarasas(self.aktyvus_excel(), N)
         for iid in sel:
             s.nuimti_spalva(int(iid))
         s.issaugoti()
         self.perskaityti()
 
     def irasyti_pataisyma(self, m: Masina, reiksmes: dict[str, str]):
-        s = Sarasas(self.excel_kelias.get(), N)
+        s = Sarasas(self.aktyvus_excel(), N)
         stulp = {"vin": N.STULP_VIN, "kodas1": N.STULP_KODAS[0], "kodas2": N.STULP_KODAS[1],
                  "kodas3": N.STULP_KODAS[2], "pdi": N.STULP_PDI_DATA, "tech": N.STULP_GARANTIJA,
                  "numeris": N.STULP_NUMERIS}
@@ -325,12 +363,13 @@ class Langas(tk.Tk):
         if blok and not messagebox.askyesno(
                 PAVADINIMAS, f"{len(blok)} eil. su klaidomis bus praleistos. Daryti likusias {len(darbo)}?"):
             return
-        sarasas = Sarasas(self.excel_kelias.get(), N)
+        sarasas = Sarasas(self.aktyvus_excel(), N)
         self.valdymas.stabdyti.clear()
         self.valdymas.zingsniais = self.zingsniais.get()
         self._dirba(True)
         self.log(f"▶ Pradedama: {len(darbo)} mašinų.")
-        self.gija = threading.Thread(target=self._vykdyti, args=(robotas.vykdyti, sarasas, darbo), daemon=True)
+        self.gija = threading.Thread(target=self._vykdyti, args=(robotas.vykdyti, sarasas, darbo, False, self.bandymas.get()),
+                                     daemon=True)
         self.gija.start()
 
     def diagnostika(self):

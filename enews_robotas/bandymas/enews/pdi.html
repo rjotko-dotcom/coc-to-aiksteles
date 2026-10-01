@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="lt"><head><meta charset="utf-8"><title>PDI (BANDYMAS)</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;margin:16px}
+ table.t{border-collapse:collapse;width:100%} table.t td,table.t th{border-bottom:1px solid #ddd;padding:3px;text-align:left}
+ th{background:#1f5f8b;color:#fff} .pastaba{color:#c00}</style></head>
+<body>
+<h3>NAUJO AUTOMOBILIO APŽIŪRA PRIEŠ PRISTATYMĄ</h3>
+<table><tr><td>Data:</td><td><input type=text id=data readonly size=12> 📅</td></tr>
+<tr><td>Kliento vardas, pavardė:</td><td><input type=text></td></tr></table>
+<table class="t"><tr><th style="width:40px">Nr. <input type=checkbox id=visi onchange="document.querySelectorAll('.p').forEach(c => c.checked = this.checked)"></th><th>VEIKSMAS</th></tr>
+<tr><td colspan=2><b>BENDROJI INFORMACIJA</b></td></tr>
+<tr><td>1 <input type=checkbox class=p checked></td><td>With ignition switch OFF install transit fuse</td></tr>
+<tr><td>2 <input type=checkbox class=p checked></td><td>Automobilio apsauginių įtaisų montavimas</td></tr>
+<tr><td>5 <input type=checkbox class=p></td><td>Remonto darbai pagal galiojančias serviso kampanijas</td></tr>
+<tr><td colspan=2><b>PO VARIKLIO DANGČIU</b></td></tr>
+<tr><td>7 <input type=checkbox class=p checked></td><td>Aušinimo skysčio lygio patikra</td></tr>
+<tr><td>8 <input type=checkbox class=p></td><td>Akumuliatoriaus būklės patikra</td></tr>
+<tr><td>40 <input type=checkbox class=p></td><td>Place EU battery regulations leaflet in the glove box</td></tr>
+</table><br>
+<input type=button value="Išsaugoti ir uždaryti" onclick="saugoti()"> <input type=button value="Išsaugoti ir spausdinti">
+<div id=klaida class=pastaba></div>
+<script>
+function saugoti(){
+  const d = document.getElementById('data').value.trim();
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(d)) { document.getElementById('klaida').textContent = 'Įveskite datą'; return; }
+  if ([...document.querySelectorAll('.p')].some(c => !c.checked)) { document.getElementById('klaida').textContent = 'Pažymėkite visus punktus'; return; }
+  window.opener.pdiIssaugotas(d); window.close();
+}
+</script></body></html>

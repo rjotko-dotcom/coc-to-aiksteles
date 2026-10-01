@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="lt"><head><meta charset="utf-8"><title>eNEWS (BANDYMAS)</title>
+<style>
+ body{font-family:Arial,Helvetica,sans-serif;font-size:12px;margin:0;background:#fff}
+ .juosta{background:#c00;color:#fff;font-weight:bold;text-align:center;padding:4px}
+ .virsus{display:flex;align-items:center;gap:30px;padding:8px 16px}
+ .logo{font-size:26px;letter-spacing:6px;color:#333}
+ .meniu span{margin-right:20px}
+ .melyna{background:#1f5f8b;color:#fff;height:50px;text-align:right;padding:4px 16px;font-weight:bold}
+ .blokas{border:1px solid #ccc;margin:12px;display:inline-block;vertical-align:top}
+ .blokas h3{margin:0;background:#4a7fb0;color:#fff;padding:5px;font-size:12px}
+ .blokas div{padding:10px}
+ .tabs span{display:inline-block;border:1px solid #aaa;padding:3px 10px;margin-right:2px;cursor:pointer;background:#f2f2f2}
+ .tabs span.akt{background:#fff;font-weight:bold;border-bottom-color:#fff}
+ .galva{padding:8px 16px;border-bottom:1px solid #999}
+ .galva b{margin:0 30px 0 6px;font-weight:normal}
+ .turinys{padding:12px 16px}
+ table.t{border-collapse:collapse;margin:6px 0}
+ table.t td,table.t th{border:1px solid #ccc;padding:4px 8px}
+ .modal{position:fixed;left:15%;top:25%;width:600px;background:#eee;border:1px solid #888;box-shadow:0 0 20px #0005}
+ .modal .ant{background:#888;color:#fff;text-align:center;padding:3px;position:relative}
+ .ui-dialog-titlebar-close{position:absolute;right:6px;top:0;cursor:pointer;color:#000;font-weight:bold}
+ .uzdengimas{position:fixed;inset:0;background:#0003}
+ .geras{background:#6a3;color:#fff;padding:1px 4px}
+ .blogas{background:#c33;color:#fff;padding:1px 4px}
+ input[readonly]{background:#f6f6f6}
+ .pastaba{color:#c00}
+</style></head>
+<body>
+<div class="juosta">BANDOMASIS eNEWS – tai ne Nissan sistema. Čia niekas niekur nesiunčiama.</div>
+<div class="virsus"><span class="logo">NISSAN</span><span class="meniu"><span>Garantijos informacija</span><span>Valdymas</span><span>Kampanija</span></span></div>
+<div class="melyna">Welcome 000 - BANDYMAS<br>MANO PASKYRA &nbsp; ATSIJUNGTI</div>
+
+<div id="pradzia">
+ <div class="blokas" style="width:220px"><h3>PERDAVIMO BŪSENA</h3><div>Bendra apžvalga</div></div>
+ <div class="blokas" style="width:560px"><h3>KĖBULO NUMERIO PAIEŠKA</h3>
+  <div><table><tr><td>Kėbulo numeris:</td><td><input type="text" id="vin" size="22"></td>
+   <td>REG. NUMERIS:</td><td><input type="text" id="reg" size="10"></td>
+   <td><input type="image" id="ieskoti" alt="▶" style="width:24px;height:22px;background:#1f5f8b" onclick="ieskoti();return false"></td></tr></table>
+   <div id="nerasta" class="pastaba"></div></div></div>
+</div>
+
+<div id="masina" style="display:none">
+ <div class="uzdengimas" id="uzd"></div>
+ <div class="modal" id="modalas"><div class="ant">Atidavimas klientui<span class="ui-dialog-titlebar-close" title="Close" onclick="uzdarytiModala()">×</span></div>
+  <div style="padding:12px"><table class="t"><tr><td>Kėbulo numeris:</td><td id="mvin"></td></tr>
+  <tr><td>Šis automobilis nėra priskirtas Jūsų atstovybei, prašome patvirtinkite, kad ruošiatės perduoti automobilį klientui.</td><td><input type=radio name=tn checked>Taip <input type=radio name=tn>Ne</td></tr>
+  <tr><td>Atvykimo į atstovybę data</td><td><input type=text readonly></td></tr></table>
+  <button>Baigti</button> <button>Gerai</button></div></div>
+
+ <div class="tabs" style="padding:8px 16px 0">
+  <span>Atšaukimo ir aptarnavimo kampanijos</span><span data-t="auto">Automobilis</span><span>Istorija ir nauja užklausa</span><span data-t="wbmr">WBMR</span><span>Servisas</span><span>EV LIB</span><span>Komerciniai produktai</span><span data-t="akum">Akumuliatorius</span><span>Vietiniai gaminiai</span>
+ </div>
+ <div class="galva">VIN: <b id="gvin"></b> Reg. No: <b id="greg"></b> Warranty Start Date: <b id="gwsd"></b></div>
+
+ <div class="turinys" id="t-akum" style="display:none">
+  <div id="akum-pagr">
+   <b>BATTERY TEST PROCEDURE</b><br><b>RESULTS</b>
+   <table class="t" id="rezultatai"><tr><th>Input Date</th><th>Test Code Date</th><th>Test Stage</th><th>Test Code</th><th>Result</th><th>Claim No</th></tr></table>
+   <b>TEST STAGE</b>
+   <table class="t"><tr>
+    <td>ATVYKIMAS<br><small>Naudokite šį punktą jeigu naujas automobilis atvyko į atstovybę</small><br><input type=radio name=etapas></td>
+    <td>APTARNAVIMAS SANDĖLYJE<br><small>Naudokite šį punktą įvedant kodus jeigu automobilis neperduotas klientui per 30 dienų</small><br><input type=radio name=etapas></td>
+    <td>PERDAVIMAS KLIENTUI<br><small>Naudokite šį punktą įvesti akumuliatoriaus bandymo kodą automobilio perdavimo klientui dieną</small><br><input type=radio name=etapas id=perdavimas onchange="rodyti('gamintojas')"></td>
+   </tr></table>
+   <div id="gamintojas" style="display:none">SELECT THE TESTER MANUFACTURER<br>
+    <input type=checkbox id=midtronics onchange="rodyti('kodai')"><label for=midtronics>Midtronics</label>
+    <input type=checkbox id=exteq><label for=exteq>eXTEQ</label>
+    <div id="kodai" style="display:none;margin-top:8px">Midtronics Battery Tester Selection<br>
+     <table><tr><td>Current Date</td><td id="dabar"></td></tr>
+     <tr><td>TEST Code</td><td><input type=text id=k1 size=8> - <input type=text id=k2 size=8> - <input type=text id=k3 size=8></td></tr></table>
+     <input type=button value="Validate" onclick="tikrintiKoda()"></div>
+   </div>
+  </div>
+  <div id="akum-rez" style="display:none"><table id="rez-lent"></table>
+   <input type=button value="OK" onclick="patvirtintiTesta()"> <input type=button value="Retry" onclick="atgalITesta()"></div>
+ </div>
+
+ <div class="turinys" id="t-auto" style="display:none">
+  <table class="t">
+   <tr><td>Model:</td><td>J12 QASHQAI</td><td>Scrap date:</td><td></td></tr>
+   <tr><td>Latest Battery Test Result:</td><td id="a-akum"></td><td>Vehicle Registration:</td><td><input type=text id="a-reg" disabled size=10></td></tr>
+   <tr><td>Battery Test Code:</td><td id="a-kodas"></td><td>Warranty Start Date:</td><td><input type=text id="a-wsd" disabled readonly size=10><span title="kalendorius">📅</span></td></tr>
+   <tr><td></td><td></td><td>PDI date:</td><td><span id="a-pdi"></span> <input type=button value="PDI" onclick="atidarytiPdi()"></td></tr>
+   <tr><td></td><td></td><td>Rida pristatant:</td><td><input type=text id="a-rida" disabled size=6></td></tr>
+  </table>
+  EV battery data: <input type=button value="Update" onclick="redaguoti()">
+  <span id="a-mygt" style="display:none"><input type=button value="Confirm" onclick="patvirtinti()"> <input type=button value="Save" onclick="saugoti()"></span>
+  <div id="a-klaida" class="pastaba"></div>
+ </div>
+
+ <div class="turinys" id="t-wbmr" style="display:none">
+  <div class="tabs"><span data-p="sert" class="akt">Garantijos sertifikatas</span><span data-p="tp">Techninės priežiūros planas</span></div>
+  <div style="padding:10px"><b id="w-pav">WARRANTY CERTIFICATE</b>
+   <table class="t"><tr><th>Item</th><th>Completed</th></tr>
+    <tr><td>Warranty Start date</td><td id="w-wsd"></td></tr><tr><td>Battery test (12V)</td><td id="w-akum"></td></tr>
+    <tr><td>PDI Date</td><td id="w-pdi"></td></tr></table>
+   <input type=button value="Drukāt" onclick="drukat()"> <span id="w-klaida" class="pastaba"></span></div>
+ </div>
+</div>
+
+<script>
+// Būsena laikoma naršyklėje, kad pakartotinai atidarius tą pačią mašiną matytųsi, kas jau padaryta.
+const DB = JSON.parse(localStorage.getItem('bandymas') || '{}');
+function issaugoti(){ localStorage.setItem('bandymas', JSON.stringify(DB)); }
+let vin = null, puslapis = 'sert';
+const $ = id => document.getElementById(id);
+function m(){ return DB[vin] = DB[vin] || {testai: []}; }
+function rodyti(id){ $(id).style.display = ''; }
+function veliau(f){ setTimeout(f, 300 + Math.random()*500); }  // kaip tikras serveris – ne iškart
+
+function ieskoti(){
+  const v = $('vin').value.trim().toUpperCase();
+  if (!/^[A-Z0-9]{17}$/.test(v)) { $('nerasta').textContent = 'Kėbulo numeris nerastas'; return; }
+  veliau(() => {
+    vin = v; m(); issaugoti();
+    $('pradzia').style.display = 'none'; $('masina').style.display = '';
+    $('mvin').textContent = vin; galva(); skirtukas('auto');
+  });
+}
+function uzdarytiModala(){ $('modalas').style.display = 'none'; $('uzd').style.display = 'none'; }
+function galva(){ $('gvin').textContent = vin; $('greg').textContent = m().reg || ''; $('gwsd').textContent = m().wsd || ''; }
+document.querySelectorAll('.tabs span[data-t]').forEach(s => s.onclick = () => veliau(() => skirtukas(s.dataset.t)));
+document.querySelectorAll('.tabs span[data-p]').forEach(s => s.onclick = () => veliau(() => { puslapis = s.dataset.p;
+  document.querySelectorAll('.tabs span[data-p]').forEach(x => x.classList.toggle('akt', x === s));
+  $('w-pav').textContent = puslapis === 'sert' ? 'WARRANTY CERTIFICATE' : 'TECHNINĖS PRIEŽIŪROS PLANAS'; }));
+
+function skirtukas(t){
+  ['akum','auto','wbmr'].forEach(x => $('t-' + x).style.display = x === t ? '' : 'none');
+  document.querySelectorAll('.tabs span[data-t]').forEach(x => x.classList.toggle('akt', x.dataset.t === t));
+  if (t === 'akum') { $('akum-pagr').style.display = ''; $('akum-rez').style.display = 'none';
+    $('gamintojas').style.display = 'none'; $('kodai').style.display = 'none';
+    $('perdavimas').checked = false; $('midtronics').checked = false; ['k1','k2','k3'].forEach(k => $(k).value = '');
+    $('dabar').textContent = new Date().toLocaleString('lt-LT');
+    const l = $('rezultatai'); while (l.rows.length > 1) l.deleteRow(1);
+    m().testai.forEach(x => { const r = l.insertRow(); [x.data, x.data, 'PERDAVIMAS KLIENTUI', x.kodas].forEach(v => r.insertCell().textContent = v);
+      r.insertCell().innerHTML = '<span class="geras">Good battery</span>'; r.insertCell(); }); }
+  if (t === 'auto') { const x = m(); const geras = x.testai.length > 0;
+    $('a-akum').textContent = geras ? 'Good battery' : ''; $('a-kodas').textContent = geras ? x.testai[x.testai.length-1].kodas : '';
+    $('a-pdi').textContent = x.pdi || ''; $('a-reg').value = x.reg || ''; $('a-wsd').value = x.wsd || ''; $('a-rida').value = x.rida || '';
+    ['a-reg','a-wsd','a-rida'].forEach(k => $(k).disabled = true); $('a-mygt').style.display = 'none'; $('a-klaida').textContent = ''; }
+  if (t === 'wbmr') { const x = m(); $('w-wsd').textContent = x.wsd ? '✔' : ''; $('w-akum').textContent = x.testai.length ? '✔' : '';
+    $('w-pdi').textContent = x.pdi ? '✔' : ''; $('w-klaida').textContent = ''; }
+}
+
+function visiKodai(){ const r = {}; Object.entries(DB).forEach(([v, x]) => x.testai.forEach(t => r[t.kodas] = v)); return r; }
+function tikrintiKoda(){
+  const kodas = ['k1','k2','k3'].map(k => $(k).value.trim().toUpperCase()).join('-');
+  veliau(() => {
+    let rezultatas, klase = 'geras';
+    if (kodas.split('-').some(d => !d)) { rezultatas = 'Error: invalid test code'; klase = 'blogas'; }
+    else if (kodas.startsWith('BAD')) { rezultatas = 'Replace battery'; klase = 'blogas'; }
+    else if (visiKodai()[kodas] && visiKodai()[kodas] !== vin) { rezultatas = 'Error: test code already used'; klase = 'blogas'; }
+    else rezultatas = 'Good battery';
+    window._testas = {kodas, geras: klase === 'geras'};
+    $('rez-lent').innerHTML = `<tr><td>VIN:</td><td>${vin}</td></tr><tr><td>Test Code:</td><td>${kodas}</td></tr>
+      <tr><td>Test Result:</td><td><span class="${klase}">${rezultatas}</span></td></tr><tr><td>Measured Voltage:</td><td>12,5 V</td></tr>`;
+    $('akum-pagr').style.display = 'none'; $('akum-rez').style.display = '';
+  });
+}
+function patvirtintiTesta(){ veliau(() => { if (window._testas.geras) { m().testai.push({kodas: window._testas.kodas,
+  data: new Date().toLocaleDateString('lt-LT')}); issaugoti(); } skirtukas('akum'); }); }
+function atgalITesta(){ skirtukas('akum'); }
+
+function atidarytiPdi(){ window.open('pdi.html?vin=' + vin, 'pdi', 'width=900,height=700'); }
+window.pdiIssaugotas = (data) => { m().pdi = data; issaugoti(); if ($('t-auto').style.display === '') $('a-pdi').textContent = data; };
+
+function redaguoti(){ veliau(() => { ['a-reg','a-wsd','a-rida'].forEach(k => $(k).disabled = false); $('a-mygt').style.display = ''; }); }
+function patvirtinti(){
+  const wsd = $('a-wsd').value.trim();
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(wsd)) { $('a-klaida').textContent = 'Warranty Start Date neteisinga (DD/MM/YYYY)'; return false; }
+  if (!$('a-reg').value.trim()) { $('a-klaida').textContent = 'Įveskite Vehicle Registration'; return false; }
+  $('a-klaida').textContent = ''; window._patvirtinta = true; return true;
+}
+function saugoti(){ if (!window._patvirtinta && !patvirtinti()) return;
+  veliau(() => { const x = m(); x.reg = $('a-reg').value.trim().toUpperCase(); x.wsd = $('a-wsd').value.trim(); x.rida = $('a-rida').value.trim();
+    issaugoti(); window._patvirtinta = false; galva(); skirtukas('auto'); }); }
+
+function drukat(){ const x = m();
+  if (!x.wsd || !x.pdi || !x.testai.length) { $('w-klaida').textContent = 'Ne visi privalomi punktai atlikti'; return; }
+  window.open(`/dokumentas.pdf?tipas=${puslapis}&vin=${vin}&reg=${x.reg}&wsd=${encodeURIComponent(x.wsd)}`); }
+</script>
+</body></html>
