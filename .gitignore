@@ -13,3 +13,11 @@ in/
 /*.pdf
 /*.docx
 /*.dotx
+
+# eNEWS robotas: naršyklės profilis (prisijungimas), PDF ir klaidų nuotraukos
+enews_robotas/chrome_profilis/
+enews_robotas/spausdinti/
+enews_robotas/klaidos/
+enews_robotas/diagnostika/
+enews_robotas/robotas.log
+enews_robotas/.venv/

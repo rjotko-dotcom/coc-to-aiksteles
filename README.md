@@ -347,6 +347,8 @@ app/aikstele_docx.py  pažymos kūrimas / šablono pildymas
 app/main.py           FastAPI serveris (API)
 app/static/index.html naršyklės sąsaja
 app/cli.py            komandinės eilutės įrankis
+enews_robotas/        eNEWS robotas: akumuliatoriaus testas, PDI, garantija, spausdinimas
+                      (žr. enews_robotas/README.md)
 tests/                testai
 samples/              demonstracinis CoC
 ```
