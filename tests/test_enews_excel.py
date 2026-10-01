@@ -66,3 +66,63 @@ def test_pazymeti_issaugo_spalva_ir_busena(tmp_path):
     s2 = Sarasas(kelias, nustatymai)
     assert s2.ws["N2"].value == "Atlikta"
     assert [m.eilute for m in s2.neapdorotos(SIANDIEN)] == [3]
+
+
+def test_tikrinimas_randa_dublikatus_ir_formatus(tmp_path):
+    import tikrinimas
+    s = Sarasas(_sarasas(tmp_path), nustatymai)
+    s.irasyti(3, "G", "1Q9D77")
+    s.irasyti(3, "E", "JRH36")
+    s.irasyti(3, "I", "TE204")    # tas pats kodas kaip 2 eil.
+    s.irasyti(2, "M", "OAU 28")   # ne ABC123
+    s.irasyti(2, "K", "09.30")    # PDI vėliau nei tech. pradžia
+    pastabos = tikrinimas.duomenys(s.visos(SIANDIEN), SIANDIEN)
+    tekstai = {(p.eilute, p.lygis, p.tekstas.split(" ")[0]) for p in pastabos}
+    assert (2, tikrinimas.KLAIDA, "Midtronics") in tekstai
+    assert (3, tikrinimas.KLAIDA, "Midtronics") in tekstai
+    assert (2, tikrinimas.PERSPEJIMAS, "numeris") in tekstai
+    assert (2, tikrinimas.PERSPEJIMAS, "PDI") in tekstai
+    assert tikrinimas.blokuojamos_eilutes(pastabos) == {2, 3}
+
+
+def test_kodas_jau_panaudotas_padarytoje_eiluteje(tmp_path):
+    import tikrinimas
+    s = Sarasas(_sarasas(tmp_path), nustatymai)
+    for st, v in (("E", "JRJ36"), ("G", "1Q1H77"), ("I", "S3604")):  # kaip nuspalvintoje 1 eil.
+        s.irasyti(2, st, v)
+    pastabos = tikrinimas.duomenys(s.visos(SIANDIEN), SIANDIEN)
+    assert any(p.eilute == 2 and "kartojasi" in p.tekstas for p in pastabos)
+    assert not any(p.eilute == 1 for p in pastabos)  # padarytų eilučių nekritikuojame
+
+
+def test_bloga_vin_rodoma_su_klaida(tmp_path):
+    s = Sarasas(_sarasas(tmp_path), nustatymai)
+    s.irasyti(2, "B", "SJNJ12TDOU2373741")  # O vietoj 0
+    m = next(m for m in s.visos(SIANDIEN) if m.eilute == 2)
+    assert any("VIN" in k for k in m.klaidos)
+
+
+def test_nustatymai_issaugomi_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(nustatymai, "JSON_FAILAS", tmp_path / "n.json")
+    try:
+        nauji = nustatymai.dabartines()
+        nauji["RIDA"] = "7"
+        nauji["TEKSTAI"] = dict(nauji["TEKSTAI"], validate="Validate | Patvirtinti")
+        nustatymai.issaugoti(nauji)
+        assert nustatymai.RIDA == "7"
+        assert nustatymai.tekstai("validate") == ["Validate", "Patvirtinti"]
+        import json
+        assert json.loads((tmp_path / "n.json").read_text(encoding="utf-8")) == {
+            "RIDA": "7", "TEKSTAI": {"validate": "Validate | Patvirtinti"}}
+    finally:
+        (tmp_path / "n.json").unlink()
+        nustatymai.perkrauti()
+    assert nustatymai.RIDA == "5"
+
+
+def test_ascii_dalis():
+    pytest.importorskip("playwright")
+    import robotas
+    assert robotas.ascii_dalis("Išsaugoti ir uždaryti") == "saugoti ir u"
+    assert robotas.ascii_dalis("Techninės priežiūros planas") == "ros planas"
+    assert robotas.ascii_dalis("Validate") == "Validate"

@@ -10,8 +10,9 @@ Kiekvienai nenuspalvintai Excel eilutei:
      Drukāt (lipniai);
   6. eilutė nuspalvinama žaliai.
 
-Paleidimas:  python robotas.py [failas.xlsx] [--vienas] [--zingsniais]
-             python robotas.py --diagnostika
+Įprastai paleidžiamas per valdymo langą (langas.py). Be lango:
+    python robotas.py [failas.xlsx] [--vienas] [--zingsniais]
+    python robotas.py --diagnostika
 """
 
 from __future__ import annotations
@@ -21,8 +22,10 @@ import base64
 import datetime as dt
 import json
 import logging
+import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -48,13 +51,53 @@ class BlogasAkumas(Exception):
     """Akumuliatoriaus testas ne „Good battery“ – eilutė pažymima oranžine."""
 
 
-ZINGSNIAIS = False
+class Sustabdyta(Exception):
+    """Naudotojas paspaudė „Stabdyti“."""
+
+
+class Valdymas:
+    """Ryšys su žmogumi: komandinėje eilutėje – input(), lange – mygtukas „Tęsti“."""
+
+    def __init__(self, zingsniais: bool = False):
+        self.zingsniais = zingsniais
+        self.stabdyti = threading.Event()
+
+    def klausti(self, tekstas: str) -> None:
+        input(f"     {tekstas} [Enter] ")
+
+    def busena(self, m: Masina, tekstas: str) -> None:
+        """Pranešimas, kad eilutės būsena pasikeitė (langas atnaujina lentelę)."""
+
+    def zingsnis(self, tekstas: str) -> None:
+        log.info("  → %s", tekstas)
+        if self.stabdyti.is_set():
+            raise Sustabdyta()
+        if self.zingsniais:
+            self.klausti(f"Toliau: {tekstas}")
+
+
+V = Valdymas()
 
 
 def zingsnis(tekstas: str) -> None:
-    log.info("  → %s", tekstas)
-    if ZINGSNIAIS:
-        input(f"     [Enter – daryti: {tekstas}] ")
+    V.zingsnis(tekstas)
+
+
+# --- eNEWS užrašai (keičiami valdymo lange „Nustatymai → eNEWS užrašai“) ------
+
+def ascii_dalis(tekstas: str) -> str:
+    """Ilgiausia teksto dalis be lietuviškų raidžių – jei puslapio koduotė jas
+    sugadintų, ieškoma pagal ją („Išsaugoti ir uždaryti“ → „saugoti ir u“)."""
+    dalys = [d for d in re.split(r"[^\x20-\x7e]", tekstas) if d.strip()]
+    return max(dalys, key=len).strip() if dalys else tekstas
+
+
+def T(raktas: str) -> list[str]:
+    return N.tekstai(raktas)
+
+
+def T1(raktas: str) -> str:
+    return T(raktas)[0]
 
 
 # --- Paieška puslapyje (eNEWS turi kadrų, todėl ieškome visuose) -------------
@@ -93,7 +136,7 @@ def rasti_visus(page: Page, selektorius: str, kiek: int, kas: str) -> list[Locat
         time.sleep(0.3)
 
 
-def mygtuko_selektoriai(*tekstai: str) -> list[str]:
+def mygtuko_selektoriai(tekstai: list[str]) -> list[str]:
     sel = []
     for t in tekstai:
         sel += [
@@ -105,6 +148,11 @@ def mygtuko_selektoriai(*tekstai: str) -> list[str]:
             f"td:text-is('{t}')",
             f"text='{t}'",
         ]
+    for t in tekstai:
+        d = ascii_dalis(t)
+        if d != t and len(d) >= 3:
+            sel += [f"input[value*='{d}']", f"a:has-text('{d}')", f"span:has-text('{d}')",
+                    f"button:has-text('{d}')", f"td:has-text('{d}') >> nth=-1"]
     return sel
 
 
@@ -119,14 +167,14 @@ def laukti_ramybes(page: Page) -> None:
             raise
 
 
-def spausti(page: Page, *tekstai: str, laukti: float | None = None, dalis: str | None = None) -> None:
-    """Paspaudžia mygtuką/skirtuką pagal tikslų tekstą; „dalis“ – atsarginė teksto dalis
-    be lietuviškų raidžių (jei puslapio koduotė jas sugadintų)."""
-    sel = mygtuko_selektoriai(*tekstai)
-    if dalis:
-        sel += [f"input[value*='{dalis}']", f"a:has-text('{dalis}')", f"span:has-text('{dalis}')",
-                f"button:has-text('{dalis}')", f"td:has-text('{dalis}') >> nth=-1"]
-    rasti(page, sel, " / ".join(tekstai), laukti).click()
+def spausti(page: Page, raktas: str, laukti: float | None = None) -> None:
+    mygtukas = rasti(page, mygtuko_selektoriai(T(raktas)), " / ".join(T(raktas)), laukti)
+    try:
+        mygtukas.click()
+    except Exception:
+        if page.is_closed():  # mygtukas uždarė savo langą (pvz. PDI „Išsaugoti ir uždaryti“)
+            return
+        raise
     laukti_ramybes(page)
 
 
@@ -139,19 +187,24 @@ def po(elementas: str, tikslas: str, pirmas: bool = True) -> str:
     return "xpath=" + (x + "[1]" if pirmas else x)
 
 
-def su_tekstu(tekstas: str, kelintas: str = "1") -> str:
-    """Teksto mazgas, kuriame yra „tekstas“ (ne visas elementas – taip „po juo“
-    reiškia tikrai po šiuo užrašu, net jei keli užrašai viename langelyje)."""
-    return f"(//text()[contains(normalize-space(.),'{tekstas}')])[{kelintas}]"
+def su_tekstu(raktas: str, kelintas: str = "1", tiksliai: bool = False) -> str:
+    """Teksto mazgas su užrašu (ne visas elementas – taip „po juo“ reiškia tikrai
+    po šiuo užrašu, net jei keli užrašai viename langelyje)."""
+    t = T1(raktas)
+    if tiksliai:
+        return f"(//text()[normalize-space(.)='{t}'])[{kelintas}]"
+    return f"(//text()[contains(normalize-space(.),'{ascii_dalis(t)}')])[{kelintas}]"
 
 
-def lauka_po(etikete: str, kelintas: str = "last()") -> str:
-    """Įvedimo laukas, einantis po teksto „etikete“ (pvz. „Rida pristatant:“)."""
-    return po(su_tekstu(etikete, kelintas), TEKSTO_LAUKAS)
+def lauka_po(raktas: str, kelintas: str = "last()") -> str:
+    """Įvedimo laukas, einantis po užrašo (pvz. „Rida pristatant:“)."""
+    return po(su_tekstu(raktas, kelintas), TEKSTO_LAUKAS)
 
 
 def irasyti(laukas: Locator, tekstas: str, kas: str) -> None:
     try:
+        if laukas.get_attribute("readonly") is not None:
+            raise ValueError("tik skaitomas")
         laukas.fill(tekstas, timeout=3000)
     except Exception:
         # Datos laukai su kalendoriumi kartais „tik skaitomi“ – įrašome tiesiogiai.
@@ -163,10 +216,6 @@ def irasyti(laukas: Locator, tekstas: str, kas: str) -> None:
         )
     if laukas.input_value().strip() != tekstas:
         raise Klaida(f"nepavyko įrašyti „{tekstas}“ į {kas}")
-
-
-def irasyti_data(page: Page, etikete: str, data: dt.date, kas: str) -> None:
-    irasyti(rasti(page, [lauka_po(etikete)], kas), data.strftime(N.DATOS_FORMATAS), kas)
 
 
 def puslapio_tekstas(page: Page) -> str:
@@ -195,10 +244,10 @@ def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
     zingsnis(f"VIN paieška {vin}")
     page.goto(pradzia)
     laukti_ramybes(page)
-    laukas = rasti(page, [lauka_po("bulo numeris", "1")], "Kėbulo numeris laukas")
-    irasyti(laukas, vin, "Kėbulo numeris")
+    laukas = rasti(page, [lauka_po("kebulo_numeris", "1")], "VIN paieškos laukas")
+    irasyti(laukas, vin, "VIN paieška")
     try:
-        rasti(page, [po(su_tekstu("REG. NUMERIS"),
+        rasti(page, [po(su_tekstu("reg_numeris"),
                         "*[self::input[@type='image' or @type='submit' or @type='button']"
                         " or self::button or self::a or self::img]")],
               "paieškos rodyklė", laukti=3).click()
@@ -206,55 +255,60 @@ def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
         laukas.press("Enter")
     laukti_ramybes(page)
 
-    zingsnis("uždaryti „Atidavimas klientui“ langelį")
+    zingsnis(f"uždaryti „{T1('atidavimas')}“ langelį")
     try:
         rasti(page, [
             ".ui-dialog-titlebar-close",
-            "xpath=//*[contains(text(),'Atidavimas klientui')]/ancestor::*[3]"
+            f"xpath={su_tekstu('atidavimas')}/ancestor::*[3]"
             "//*[contains(@class,'close') or contains(@id,'close') or contains(@id,'Close')]",
             "[title='Close']", "[title='close']", "[title='Uždaryti']", "text='×'",
         ], "X mygtukas", laukti=8).click()
         laukti_ramybes(page)
     except Klaida:
-        log.info("     („Atidavimas klientui“ langelio nebuvo)")
-    rasti(page, mygtuko_selektoriai("Akumuliatorius"), "Akumuliatorius skirtukas")
+        log.info("     (langelio nebuvo)")
+    rasti(page, mygtuko_selektoriai(T("akumuliatorius")), "Akumuliatorius skirtukas")
+    # Apsauga: ar tikrai atidaryta ta mašina, o ne ankstesnė / kita.
+    if vin not in puslapio_tekstas(page):
+        raise Klaida(f"eNEWS neatidarė mašinos {vin} – patikrinkite VIN")
 
 
 def akumuliatorius(page: Page, m: Masina) -> None:
     zingsnis("Akumuliatorius skirtukas")
-    spausti(page, "Akumuliatorius")
+    spausti(page, "akumuliatorius")
     if m.kodas_tekstu in puslapio_tekstas(page):
         log.info("     kodas %s jau įvestas anksčiau – praleidžiama", m.kodas_tekstu)
         return
 
     zingsnis("Perdavimas klientui")
-    rasti(page, [po(su_tekstu("PERDAVIMAS KLIENTUI", "last()"), "input[@type='radio']")],
+    rasti(page, [po(su_tekstu("perdavimas", "last()"), "input[@type='radio']")],
           "Perdavimas klientui pasirinkimas").check()
     laukti_ramybes(page)
 
     zingsnis("Midtronics")
+    mid = T1("midtronics")
     rasti(page, [
-        "xpath=//label[normalize-space()='Midtronics']//input[@type='checkbox']",
-        "xpath=(//label[normalize-space()='Midtronics'])[1]/preceding::input[@type='checkbox'][1]",
-        "xpath=(//text()[normalize-space(.)='Midtronics'])[1]/preceding::input[@type='checkbox'][1]",
+        f"xpath=//label[normalize-space()='{mid}']//input[@type='checkbox']",
+        f"xpath=(//label[normalize-space()='{mid}'])[1]/preceding::input[@type='checkbox'][1]",
+        f"xpath={su_tekstu('midtronics', tiksliai=True)}/preceding::input[@type='checkbox'][1]",
     ], "Midtronics varnelė").check()
     laukti_ramybes(page)
 
     zingsnis(f"kodas {m.kodas_tekstu} → Validate")
-    laukai = rasti_visus(
-        page,
-        po(su_tekstu("TEST Code"), TEKSTO_LAUKAS, pirmas=False),
-        3, "3 TEST Code laukai")
+    laukai = rasti_visus(page, po(su_tekstu("test_code"), TEKSTO_LAUKAS, pirmas=False),
+                         3, "3 kodo laukeliai")
     for laukas, dalis in zip(laukai, m.kodas):
-        irasyti(laukas, dalis, "TEST Code")
-    spausti(page, "Validate")
+        irasyti(laukas, dalis, "kodo laukelis")
+    spausti(page, "validate")
 
+    geras = T1("good_battery")
     pabaiga = time.time() + N.LAUKTI_SEK
     while time.time() < pabaiga:
         tekstas = puslapio_tekstas(page)
-        if "Good battery" in tekstas:
-            zingsnis("Good battery → OK")
-            spausti(page, "OK")
+        if geras in tekstas:
+            if m.vin not in tekstas:
+                raise Klaida("testo rezultate ne ta mašina")
+            zingsnis(f"{geras} → OK")
+            spausti(page, "ok")
             return
         if "Test Result" in tekstas:
             break
@@ -262,40 +316,40 @@ def akumuliatorius(page: Page, m: Masina) -> None:
     tekstas = puslapio_tekstas(page)
     rezultatas = ""
     for eil in tekstas.splitlines():
-        if eil.strip() and any(z in eil for z in ("Result", "Error", "rror", "used", "invalid", "Invalid")):
+        if eil.strip() and any(z in eil for z in ("Result", "rror", "used", "nvalid")):
             rezultatas = eil.strip()
             break
-    raise BlogasAkumas(rezultatas or "ne „Good battery“")
+    raise BlogasAkumas(rezultatas or f"ne „{geras}“")
 
 
 def pdi(page: Page, m: Masina) -> None:
     zingsnis("Automobilis skirtukas")
-    spausti(page, "Automobilis")
+    spausti(page, "automobilis")
 
     zingsnis("PDI mygtukas")
     langu_pries = len(page.context.pages)
-    spausti(page, "PDI")
+    spausti(page, "pdi")
     forma = page
     for _ in range(10):
         if len(page.context.pages) > langu_pries:
             forma = page.context.pages[-1]
             laukti_ramybes(forma)
             break
-        if "VEIKSMAS" in puslapio_tekstas(page):
+        if T1("veiksmas") in puslapio_tekstas(page):
             break
         time.sleep(0.5)
 
     zingsnis(f"PDI data {m.pdi_data:%Y-%m-%d}")
-    irasyti(rasti(forma, [po("(//text()[normalize-space(.)='Data:'])[1]", "input[(@type='text' or not(@type))]")],
-                  "PDI Data laukas"), m.pdi_data.strftime(N.DATOS_FORMATAS), "PDI data")
+    irasyti(rasti(forma, [po(su_tekstu("pdi_data", tiksliai=True), "input[(@type='text' or not(@type))]")],
+                  "PDI datos laukas"),
+            m.pdi_data.strftime(N.DATOS_FORMATAS), "PDI data")
 
     zingsnis("varnelė prie VEIKSMAS (visi punktai)")
-    rasti(forma, [
-        "xpath=" + su_tekstu("VEIKSMAS") + "/preceding::input[@type='checkbox'][1]",
-    ], "VEIKSMAS varnelė").check()
+    rasti(forma, [f"xpath={su_tekstu('veiksmas')}/preceding::input[@type='checkbox'][1]"],
+          "VEIKSMAS varnelė").check()
 
-    zingsnis("Išsaugoti ir uždaryti")
-    spausti(forma, "Išsaugoti ir uždaryti", dalis="saugoti ir u")
+    zingsnis(T1("pdi_saugoti"))
+    spausti(forma, "pdi_saugoti")
     if forma is not page and not forma.is_closed():
         try:
             forma.wait_for_event("close", timeout=N.LAUKTI_SEK * 1000)
@@ -305,36 +359,33 @@ def pdi(page: Page, m: Masina) -> None:
 
 
 def garantija(page: Page, m: Masina) -> None:
-    if not _rodo_update(page):
-        spausti(page, "Automobilis")
+    try:
+        rasti(page, mygtuko_selektoriai(T("update")), "Update", laukti=1)
+    except Klaida:
+        spausti(page, "automobilis")
     zingsnis("Update")
-    spausti(page, "Update")
+    spausti(page, "update")
 
-    zingsnis(f"Warranty Start Date {m.garantija:%Y-%m-%d}, {m.numeris}, rida {N.RIDA}")
-    irasyti_data(page, "Warranty Start Date:", m.garantija, "Warranty Start Date")
-    irasyti(rasti(page, [lauka_po("Vehicle Registration:")], "Vehicle Registration"),
-            m.numeris, "Vehicle Registration")
-    irasyti(rasti(page, [lauka_po("Rida pristatant:")], "Rida pristatant"),
-            N.RIDA, "Rida pristatant")
+    data = m.garantija.strftime(N.DATOS_FORMATAS)
+    zingsnis(f"Warranty Start Date {data}, {m.numeris}, rida {N.RIDA}")
+    irasyti(rasti(page, [lauka_po("warranty")], "Warranty Start Date"), data, "Warranty Start Date")
+    irasyti(rasti(page, [lauka_po("registracija")], "Vehicle Registration"), m.numeris, "Vehicle Registration")
+    irasyti(rasti(page, [lauka_po("rida")], "Rida pristatant"), str(N.RIDA), "Rida pristatant")
 
     zingsnis("Confirm")
-    spausti(page, "Confirm", "Patvirtinti", "Apstiprināt", "Apstiprinat", dalis="Confirm")
+    spausti(page, "confirm")
     zingsnis("Save")
     try:
-        spausti(page, "Save", "Išsaugoti", "Saglabāt", "Saglabat", laukti=8)
+        spausti(page, "save", laukti=8)
     except Klaida:
         log.info("     (atskiro Save mygtuko nebuvo)")
 
-    if m.numeris not in puslapio_tekstas(page):
+    # Apsauga: ar eNEWS tikrai išsaugojo.
+    tekstas = puslapio_tekstas(page)
+    if m.numeris not in tekstas:
         raise Klaida("po išsaugojimo nesimato valst. numerio – patikrinkite Automobilis skirtuką")
-
-
-def _rodo_update(page: Page) -> bool:
-    try:
-        rasti(page, mygtuko_selektoriai("Update"), "Update", laukti=1)
-        return True
-    except Klaida:
-        return False
+    if data not in tekstas:
+        raise Klaida(f"po išsaugojimo nesimato garantijos datos {data}")
 
 
 # --- Failai ir spausdinimas ---------------------------------------------------
@@ -373,9 +424,9 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
     url_pries = page.url
     pradzia = time.time()
     try:
-        spausti(page, "Drukāt", "Drukat", "Spausdinti", "Print", dalis="Druk")
+        spausti(page, "drukat")
         while time.time() < pradzia + 60 and "dl" not in ivykiai:
-            if time.time() > pradzia + 10 and ("pg" in ivykiai or page.url != url_pries):
+            if time.time() > pradzia + 6 and ("pg" in ivykiai or page.url != url_pries):
                 break  # langas atsidarė ir nieko nesiuntė – skaitome jį patį
             time.sleep(0.3)
     finally:
@@ -395,37 +446,41 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
         laukti_ramybes(page)
     else:
         raise Klaida("paspaudus Drukāt failas neatsirado")
+    if not kelias.read_bytes()[:5].startswith(b"%PDF"):
+        raise Klaida(f"{kelias.name} nėra PDF")
     log.info("     išsaugota %s", kelias.name)
     return kelias
 
 
 def spausdinti(failas: Path, lipnus: bool) -> None:
+    from tikrinimas import rasti_sumatra
     spausdintuvas = N.SPAUSDINTUVAS_LIPNUS if lipnus else N.SPAUSDINTUVAS_PAPRASTAS
     nust = N.NUSTATYMAI_LIPNUS if lipnus else N.NUSTATYMAI_PAPRASTAS
     rusis = "lipnus" if lipnus else "paprastas"
-    if not Path(N.SUMATRA).exists():
+    sumatra = rasti_sumatra(N.SUMATRA)
+    if sumatra is None:
         log.warning("     SumatraPDF nerastas – %s (%s) atsispausdinkite patys", failas.name, rusis)
         return
+    zingsnis(f"spausdinti {failas.name} ({rusis})")
     if lipnus and N.KLAUSTI_PRIES_LIPNU:
-        input("     Įdėkite LIPNŲ popierių ir spauskite Enter… ")
-    komanda = [N.SUMATRA]
+        V.klausti("Įdėkite LIPNŲ popierių")
+    komanda = [str(sumatra)]
     komanda += ["-print-to", spausdintuvas] if spausdintuvas else ["-print-to-default"]
     if nust:
         komanda += ["-print-settings", nust]
     komanda += ["-silent", str(failas)]
-    zingsnis(f"spausdinti {failas.name} ({rusis})")
     subprocess.run(komanda, check=True, timeout=180)
 
 
 def wbmr(page: Page, m: Masina) -> None:
     SPAUSDINTI.mkdir(exist_ok=True)
     zingsnis("WBMR skirtukas")
-    spausti(page, "WBMR")
+    spausti(page, "wbmr")
     zingsnis("Drukāt (garantijos sertifikatas)")
     pirmas = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-1-sertifikatas.pdf")
 
-    zingsnis("Techninės priežiūros planas")
-    spausti(page, "Techninės priežiūros planas", dalis="ros planas")
+    zingsnis(T1("tp_planas"))
+    spausti(page, "tp_planas")
     zingsnis("Drukāt (techninės priežiūros planas)")
     antras = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-2-tp-planas.pdf")
 
@@ -434,7 +489,15 @@ def wbmr(page: Page, m: Masina) -> None:
     spausdinti(antras, lipnus=True)
 
 
-# --- Pagrindinis ciklas --------------------------------------------------------
+def apdoroti(page: Page, pradzia: str, m: Masina) -> None:
+    ieskoti_vin(page, pradzia, m.vin)
+    akumuliatorius(page, m)
+    pdi(page, m)
+    garantija(page, m)
+    wbmr(page, m)
+
+
+# --- Naršyklė ----------------------------------------------------------------
 
 def paruosti_profili() -> None:
     """Kad Chrome PDF ne atidarytų, o atsisiųstų – tada jį lengva atspausdinti."""
@@ -449,127 +512,150 @@ def paruosti_profili() -> None:
     nust.write_text(json.dumps(duom), encoding="utf-8")
 
 
+def atidaryti_narsykle(pw):
+    paruosti_profili()
+    return pw.chromium.launch_persistent_context(
+        str(PROFILIS), channel="chrome", headless=False, accept_downloads=True,
+        no_viewport=True, args=["--start-maximized"],
+    )
+
+
 def atidaryti_enews(ctx) -> tuple[Page, str]:
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     if not page.url.startswith("http"):
         page.goto(N.PORTALO_ADRESAS)
-    input("\nPrisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite čia Enter… ")
-    enews = [p for p in ctx.pages if "enews" in p.url.lower()]
-    if not enews:
-        sys.exit("Neradau atidaryto eNEWS skirtuko. Atsidarykite eNEWS ir paleiskite iš naujo.")
+    while True:
+        V.klausti("Prisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite „Tęsti“")
+        enews = [p for p in ctx.pages if "enews" in p.url.lower()]
+        if enews:
+            break
+        log.warning("Neradau atidaryto eNEWS skirtuko – atsidarykite jį.")
     page = enews[-1]
     page.bring_to_front()
-    page.on("dialog", lambda d: (log.info("     pranešimas: %s", d.message), d.accept()))
-    ctx.on("page", lambda p: p.on("dialog", lambda d: (log.info("     pranešimas: %s", d.message), d.accept())))
+
+    def dialogas(d):
+        log.info("     eNEWS pranešimas: %s", d.message)
+        d.accept()
+    page.on("dialog", dialogas)
+    ctx.on("page", lambda p: p.on("dialog", dialogas))
     return page, page.url
 
 
-def apdoroti(page: Page, pradzia: str, m: Masina) -> None:
-    ieskoti_vin(page, pradzia, m.vin)
-    akumuliatorius(page, m)
-    pdi(page, m)
-    garantija(page, m)
-    wbmr(page, m)
-
-
-def diagnostika(ctx) -> None:
-    """Išsaugo atidaryto puslapio HTML – jį atsiuntus galima pataisyti robotą."""
-    DIAGNOSTIKA.mkdir(exist_ok=True)
-    nr = 0
-    while True:
-        ats = input("\nAtsidarykite reikiamą eNEWS vietą ir spauskite Enter (q – baigti): ")
-        if ats.strip().lower() == "q":
-            break
-        for p in ctx.pages:
-            if "enews" not in p.url.lower():
-                continue
-            nr += 1
-            p.screenshot(path=str(DIAGNOSTIKA / f"{nr:02d}.png"), full_page=True)
-            for k, kadras in enumerate(p.frames):
+def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False) -> tuple[int, int]:
+    """Pagrindinis ciklas. Grąžina (atlikta, atidėta)."""
+    log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
+    atlikta = atideta = 0
+    with sync_playwright() as pw:
+        ctx = atidaryti_narsykle(pw)
+        try:
+            page, pradzia = atidaryti_enews(ctx)
+            for m in masinos:
+                if V.stabdyti.is_set():
+                    log.info("Sustabdyta.")
+                    break
+                log.info("=== %d eil. %s (%s) ===", m.eilute, m.vin, m.numeris)
+                V.busena(m, "dirbama…")
                 try:
-                    (DIAGNOSTIKA / f"{nr:02d}-kadras{k}.html").write_text(kadras.content(), encoding="utf-8")
-                except Exception:
-                    pass
-            print(f"  išsaugota {nr:02d} ({p.url[:80]})")
-    print(f"\nSuarchyvuokite aplanką {DIAGNOSTIKA} ir atsiųskite.")
+                    apdoroti(page, pradzia, m)
+                    tekstas = f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M}"
+                    sarasas.pazymeti(m.eilute, N.SPALVA_ATLIKTA, tekstas)
+                    atlikta += 1
+                    log.info("  ✔ atlikta")
+                except Sustabdyta:
+                    tekstas = "sustabdyta (nebaigta)"
+                    log.info("Sustabdyta – ši mašina nebaigta, bus daroma kitą kartą.")
+                except BlogasAkumas as e:
+                    tekstas = f"Akumuliatorius: {e}"
+                    sarasas.pazymeti(m.eilute, N.SPALVA_AKUMAS, tekstas)
+                    nuotrauka(page, m.vin)
+                    atideta += 1
+                    log.warning("  ✖ akumuliatorius: %s", e)
+                except Exception as e:  # noqa: BLE001 – viena mašina neturi sustabdyti visų
+                    kelias = nuotrauka(page, m.vin)
+                    tekstas = f"Klaida: {e}".splitlines()[0][:250]
+                    sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, tekstas)
+                    atideta += 1
+                    log.error("  ✖ %s (nuotrauka klaidos/%s)", tekstas, kelias.name)
+                V.busena(m, tekstas)
+                try:
+                    sarasas.issaugoti()
+                except PermissionError:
+                    log.error("  Excel failas atidarytas – uždarykite jį, būsena įrašoma po kitos mašinos")
+                if vienas or V.stabdyti.is_set():
+                    break
+            log.info("Baigta. Atlikta: %d, atidėta: %d.", atlikta, atideta)
+            V.klausti("Baigta – naršyklė bus uždaryta")
+        finally:
+            ctx.close()
+    return atlikta, atideta
+
+
+def diagnostika() -> None:
+    """Išsaugo atidarytų eNEWS puslapių HTML ir nuotraukas – jas atsiuntus
+    galima tiksliai pataisyti robotą."""
+    DIAGNOSTIKA.mkdir(exist_ok=True)
+    with sync_playwright() as pw:
+        ctx = atidaryti_narsykle(pw)
+        try:
+            ctx.pages[0].goto(N.PORTALO_ADRESAS)
+            nr = 0
+            while not V.stabdyti.is_set():
+                V.klausti("Atsidarykite eNEWS vietą, kurią išsaugoti, ir spauskite „Tęsti“ "
+                          "(baigti – „Stabdyti“)")
+                if V.stabdyti.is_set():
+                    break
+                for p in ctx.pages:
+                    if "enews" not in p.url.lower():
+                        continue
+                    nr += 1
+                    p.screenshot(path=str(DIAGNOSTIKA / f"{nr:02d}.png"), full_page=True)
+                    for k, kadras in enumerate(p.frames):
+                        try:
+                            (DIAGNOSTIKA / f"{nr:02d}-kadras{k}.html").write_text(kadras.content(), encoding="utf-8")
+                        except Exception:
+                            pass
+                    log.info("išsaugota %02d (%s)", nr, p.url[:80])
+        finally:
+            ctx.close()
+    log.info("Suarchyvuokite aplanką %s ir atsiųskite.", DIAGNOSTIKA)
+
+
+def nustatyti_zurnala(*papildomi: logging.Handler) -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
+        handlers=[logging.FileHandler(ARCH / "robotas.log", encoding="utf-8"), *papildomi],
+    )
 
 
 def main() -> None:
-    global ZINGSNIAIS
-    ap = argparse.ArgumentParser(description="eNEWS robotas")
+    ap = argparse.ArgumentParser(description="eNEWS robotas (be lango)")
     ap.add_argument("excel", nargs="?", default=N.EXCEL_FAILAS)
     ap.add_argument("--vienas", action="store_true", help="apdoroti tik vieną mašiną")
     ap.add_argument("--zingsniais", action="store_true", help="sustoti prieš kiekvieną veiksmą")
     ap.add_argument("--diagnostika", action="store_true", help="tik išsaugoti puslapių HTML")
     args = ap.parse_args()
-    ZINGSNIAIS = args.zingsniais
+    V.zingsniais = args.zingsniais
+    nustatyti_zurnala(logging.StreamHandler())
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S",
-        handlers=[logging.StreamHandler(), logging.FileHandler(ARCH / "robotas.log", encoding="utf-8")],
-    )
-
-    sarasas = None
-    if not args.diagnostika:
-        if not Path(args.excel).exists():
-            sys.exit(f"Nerastas Excel failas: {args.excel}\nPataisykite EXCEL_FAILAS nustatymai.py faile.")
-        if uzrakintas(args.excel):
-            sys.exit("Excel failas atidarytas – uždarykite jį ir paleiskite iš naujo.")
-        sarasas = Sarasas(args.excel, N)
-        masinos = sarasas.neapdorotos()
-        if not masinos:
-            sys.exit("Nėra nenuspalvintų eilučių – nėra ką daryti.")
-        log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
-        log.info("Rasta mašinų: %d", len(masinos))
-        for m in masinos:
-            log.info("  %d eil.: %s %s kodas %s PDI %s tech. %s%s", m.eilute, m.vin, m.numeris,
-                     m.kodas_tekstu, m.pdi_data, m.garantija,
-                     ("  ← " + ", ".join(m.klaidos)) if m.klaidos else "")
-
-    paruosti_profili()
-    with sync_playwright() as pw:
-        ctx = pw.chromium.launch_persistent_context(
-            str(PROFILIS), channel="chrome", headless=False, accept_downloads=True,
-            no_viewport=True, args=["--start-maximized"],
-        )
-        try:
-            if args.diagnostika:
-                ctx.pages[0].goto(N.PORTALO_ADRESAS)
-                diagnostika(ctx)
-                return
-            page, pradzia = atidaryti_enews(ctx)
-            atlikta = atideta = 0
-            for m in masinos:
-                log.info("=== %d eil. %s (%s) ===", m.eilute, m.vin, m.numeris)
-                if m.klaidos:
-                    sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, "Excel: " + ", ".join(m.klaidos))
-                    atideta += 1
-                else:
-                    try:
-                        apdoroti(page, pradzia, m)
-                        sarasas.pazymeti(m.eilute, N.SPALVA_ATLIKTA, f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M}")
-                        atlikta += 1
-                        log.info("  ✔ atlikta")
-                    except BlogasAkumas as e:
-                        sarasas.pazymeti(m.eilute, N.SPALVA_AKUMAS, f"Akumuliatorius: {e}")
-                        nuotrauka(page, m.vin)
-                        atideta += 1
-                        log.warning("  ✖ akumuliatorius: %s", e)
-                    except Exception as e:  # noqa: BLE001 – viena mašina neturi sustabdyti visų
-                        kelias = nuotrauka(page, m.vin)
-                        sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, f"Klaida: {e}".splitlines()[0][:250])
-                        atideta += 1
-                        log.error("  ✖ klaida: %s (nuotrauka %s)", e, kelias.name)
-                try:
-                    sarasas.issaugoti()
-                except PermissionError:
-                    log.error("  Excel failas atidarytas – būsena bus įrašyta vėliau, uždarykite jį")
-                if args.vienas:
-                    break
-            log.info("Baigta. Atlikta: %d, atidėta: %d. Žr. Excel stulpelį %s.", atlikta, atideta, N.STULP_BUSENA)
-            input("Spauskite Enter, kad uždarytumėte naršyklę… ")
-        finally:
-            ctx.close()
+    if args.diagnostika:
+        diagnostika()
+        return
+    from tikrinimas import KLAIDA, blokuojamos_eilutes, duomenys
+    if not Path(args.excel).exists():
+        sys.exit(f"Nerastas Excel failas: {args.excel}")
+    if uzrakintas(args.excel):
+        sys.exit("Excel failas atidarytas – uždarykite jį ir paleiskite iš naujo.")
+    sarasas = Sarasas(args.excel, N)
+    visos = sarasas.visos()
+    pastabos = duomenys(visos)
+    for p in pastabos:
+        log.info("%s %d eil.: %s", "✖" if p.lygis == KLAIDA else "!", p.eilute, p.tekstas)
+    blok = blokuojamos_eilutes(pastabos)
+    masinos = [m for m in visos if not m.nuspalvinta and m.eilute not in blok]
+    if not masinos:
+        sys.exit("Nėra ką daryti (visos eilutės nuspalvintos arba su klaidomis).")
+    log.info("Bus daroma mašinų: %d", len(masinos))
+    vykdyti(sarasas, masinos, vienas=args.vienas)
 
 
 if __name__ == "__main__":

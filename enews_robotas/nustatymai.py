@@ -1,60 +1,139 @@
-"""eNEWS roboto nustatymai. Keiskite tik reikšmes po lygybės ženklo."""
+"""eNEWS roboto nustatymai.
 
-# --- Excel failas -----------------------------------------------------------
+Čia – numatytosios reikšmės. Valdymo lange („Nustatymai“) pakeistos reikšmės
+įrašomos į nustatymai.json ir naudojamos vietoj šių, todėl šio failo keisti
+nereikia.
+"""
 
-# Kelias iki Excel failo su mašinų sąrašu. Paleidžiant galima nurodyti ir kitą:
-#   paleisti.bat "C:\kelias\failas.xlsx"
-EXCEL_FAILAS = r"C:\Users\Rimvydas\Desktop\masinos.xlsx"
+import json
+from pathlib import Path
 
-# Lapo pavadinimas (None – pirmas lapas).
-EXCEL_LAPAS = None
+JSON_FAILAS = Path(__file__).resolve().parent / "nustatymai.json"
 
-# Stulpeliai (raidės kaip Excel'yje).
-STULP_VIN = "B"
-STULP_KODAS = ("E", "G", "I")  # Midtronics kodas: trys dalys tarp brūkšnelių
-STULP_PDI_DATA = "K"           # MM.DD, pvz. 09.24
-STULP_GARANTIJA = "L"          # tech. pradžia / Warranty Start Date, MM.DD
-STULP_NUMERIS = "M"            # valstybinis numeris
-STULP_BUSENA = "N"             # čia robotas rašo, kas padaryta arba kas nepavyko
+NUMATYTIEJI = {
+    # --- Excel ---
+    "EXCEL_FAILAS": r"C:\Users\Rimvydas\Desktop\masinos.xlsx",
+    "EXCEL_LAPAS": "",              # tuščias – pirmas lapas
+    "STULP_VIN": "B",
+    "STULP_KODAS": ["E", "G", "I"],  # Midtronics kodas: trys dalys
+    "STULP_PDI_DATA": "K",          # MM.DD, pvz. 09.24
+    "STULP_GARANTIJA": "L",         # tech. pradžia / Warranty Start Date
+    "STULP_NUMERIS": "M",           # valstybinis numeris
+    "STULP_BUSENA": "N",            # čia robotas rašo, kas padaryta ar kas nepavyko
+    "SPALVA_ATLIKTA": "92D050",     # žalia
+    "SPALVA_AKUMAS": "FFC000",      # oranžinė – akumuliatorius ne „Good battery“
+    "SPALVA_KLAIDA": "FF7C80",      # raudona – kita klaida
 
-# Spalvos, kuriomis robotas nuspalvina eilutę (RGB, kaip Excel'yje).
-SPALVA_ATLIKTA = "92D050"      # žalia – viskas padaryta
-SPALVA_AKUMAS = "FFC000"       # oranžinė – akumuliatorius ne „Good battery“
-SPALVA_KLAIDA = "FF7C80"       # raudona – kita klaida, reikia pažiūrėti
+    # --- eNEWS ---
+    "PORTALO_ADRESAS": "https://eu.nissan.biz/wps/myportal/b2bdealerportal",
+    "RIDA": "5",
+    "DATOS_FORMATAS": "%d/%m/%Y",   # 22/09/2026
+    "LAUKTI_SEK": 20,
 
-# --- eNEWS ------------------------------------------------------------------
+    # --- Spausdinimas ---
+    "SUMATRA": r"C:\Program Files\SumatraPDF\SumatraPDF.exe",
+    "SPAUSDINTUVAS_PAPRASTAS": "",  # tuščias – numatytasis Windows spausdintuvas
+    "SPAUSDINTUVAS_LIPNUS": "Lipnus",
+    "NUSTATYMAI_PAPRASTAS": "",     # SumatraPDF -print-settings, pvz. "bin=2"
+    "NUSTATYMAI_LIPNUS": "",
+    "KLAUSTI_PRIES_LIPNU": False,
 
-# Nuo čia robotas pradeda. Prisijungiate ir atsidarote eNEWS patys.
-PORTALO_ADRESAS = "https://eu.nissan.biz/wps/myportal/b2bdealerportal"
+    # --- eNEWS užrašai ir mygtukai. Kelios galimybės atskiriamos „ | “. ---
+    "TEKSTAI": {
+        "kebulo_numeris": "Kėbulo numeris",
+        "reg_numeris": "REG. NUMERIS",
+        "atidavimas": "Atidavimas klientui",
+        "akumuliatorius": "Akumuliatorius",
+        "perdavimas": "PERDAVIMAS KLIENTUI",
+        "midtronics": "Midtronics",
+        "test_code": "TEST Code",
+        "validate": "Validate",
+        "good_battery": "Good battery",
+        "ok": "OK",
+        "automobilis": "Automobilis",
+        "pdi": "PDI",
+        "pdi_data": "Data:",
+        "veiksmas": "VEIKSMAS",
+        "pdi_saugoti": "Išsaugoti ir uždaryti",
+        "update": "Update",
+        "warranty": "Warranty Start Date:",
+        "registracija": "Vehicle Registration:",
+        "rida": "Rida pristatant:",
+        "confirm": "Confirm | Patvirtinti | Apstiprināt",
+        "save": "Save | Išsaugoti | Saglabāt",
+        "wbmr": "WBMR",
+        "drukat": "Drukāt | Drukat | Print",
+        "tp_planas": "Techninės priežiūros planas",
+    },
+}
 
-# Rida, kuri įrašoma į „Rida pristatant“.
-RIDA = "5"
+TEKSTU_PAVADINIMAI = {
+    "kebulo_numeris": "VIN paieškos laukelio užrašas",
+    "reg_numeris": "Užrašas prieš paieškos rodyklę",
+    "atidavimas": "Langelio, kurį uždaro X, pavadinimas",
+    "akumuliatorius": "Akumuliatoriaus skirtukas",
+    "perdavimas": "Testo etapas",
+    "midtronics": "Testerio varnelė",
+    "test_code": "Kodo laukelių užrašas",
+    "validate": "Kodo tikrinimo mygtukas",
+    "good_battery": "Gero akumuliatoriaus užrašas",
+    "ok": "Patvirtinimo mygtukas po testo",
+    "automobilis": "Automobilio skirtukas",
+    "pdi": "PDI mygtukas",
+    "pdi_data": "PDI formos datos užrašas",
+    "veiksmas": "Stulpelis su „visi“ varnele",
+    "pdi_saugoti": "PDI išsaugojimo mygtukas",
+    "update": "Redagavimo mygtukas",
+    "warranty": "Garantijos pradžios užrašas",
+    "registracija": "Valst. numerio užrašas",
+    "rida": "Ridos užrašas",
+    "confirm": "Patvirtinimo mygtukas",
+    "save": "Išsaugojimo mygtukas",
+    "wbmr": "WBMR skirtukas",
+    "drukat": "Spausdinimo mygtukas",
+    "tp_planas": "Techninės priežiūros plano skirtukas",
+}
 
-# Kokiu formatu eNEWS rodo datas (22/09/2026 → %d/%m/%Y).
-DATOS_FORMATAS = "%d/%m/%Y"
 
-# Kiek sekundžių laukti, kol atsiras mygtukas ar laukelis.
-LAUKTI_SEK = 20
+def _ikelti() -> dict:
+    reiksmes = json.loads(json.dumps(NUMATYTIEJI))  # gili kopija
+    if JSON_FAILAS.exists():
+        try:
+            savi = json.loads(JSON_FAILAS.read_text(encoding="utf-8"))
+        except ValueError:
+            savi = {}
+        for k, v in savi.items():
+            if k == "TEKSTAI" and isinstance(v, dict):
+                reiksmes["TEKSTAI"].update(v)
+            elif k in reiksmes:
+                reiksmes[k] = v
+    return reiksmes
 
-# --- Spausdinimas -----------------------------------------------------------
 
-# SumatraPDF (nemokama programa, https://www.sumatrapdfreader.org) spausdina
-# PDF be jokių langų. Jei kelias neteisingas, failai tik išsaugomi aplanke
-# „spausdinti“ ir juos atsispausdinate patys.
-SUMATRA = r"C:\Program Files\SumatraPDF\SumatraPDF.exe"
+def perkrauti() -> None:
+    globals().update(_ikelti())
 
-# Spausdintuvų pavadinimai, kaip jie matosi Windows „Printers & scanners“.
-# Paprasčiausia: tą patį spausdintuvą pridėti du kartus ir antrajam
-# („... Lipnus“) numatytuosius nustatymus pakeisti į lipnų popierių.
-# Tuščias tekstas "" – numatytasis Windows spausdintuvas.
-SPAUSDINTUVAS_PAPRASTAS = ""
-SPAUSDINTUVAS_LIPNUS = "Lipnus"
 
-# Papildomi SumatraPDF nustatymai, pvz. "bin=2" (antras stalčius) arba
-# "paper=A4". Tuščias – spausdintuvo numatytieji.
-NUSTATYMAI_PAPRASTAS = ""
-NUSTATYMAI_LIPNUS = ""
+def issaugoti(naujos: dict) -> None:
+    """Įrašo tik tas reikšmes, kurios skiriasi nuo numatytųjų."""
+    skirtumai = {}
+    for k, v in naujos.items():
+        if k == "TEKSTAI":
+            t = {kk: vv for kk, vv in v.items() if NUMATYTIEJI["TEKSTAI"].get(kk) != vv}
+            if t:
+                skirtumai[k] = t
+        elif NUMATYTIEJI.get(k) != v:
+            skirtumai[k] = v
+    JSON_FAILAS.write_text(json.dumps(skirtumai, ensure_ascii=False, indent=2), encoding="utf-8")
+    perkrauti()
 
-# True – prieš kiekvieną spausdinimą ant lipnaus popieriaus robotas sustoja ir
-# paprašo įdėti lipnų popierių (jei jį dedate ranka).
-KLAUSTI_PRIES_LIPNU = False
+
+def dabartines() -> dict:
+    return {k: globals()[k] for k in NUMATYTIEJI}
+
+
+def tekstai(raktas: str) -> list[str]:
+    return [t.strip() for t in globals()["TEKSTAI"][raktas].split("|") if t.strip()]
+
+
+perkrauti()

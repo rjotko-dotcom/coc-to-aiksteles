@@ -13,6 +13,9 @@ from openpyxl.styles import PatternFill
 from openpyxl.utils import column_index_from_string
 
 VIN_RE = re.compile(r"^[A-HJ-NPR-Z0-9]{17}$")
+# Eilutė laikoma mašina, jei B stulpelyje kažkas panašaus į VIN (net su klaida –
+# tada ji parodoma su klaida, o ne tyliai praleidžiama).
+PANASU_I_VIN = re.compile(r"^(?=.*\d)(?=.*[A-Z])[A-Z0-9]{14,20}$")
 
 
 @dataclass
@@ -24,6 +27,8 @@ class Masina:
     garantija: dt.date | None
     numeris: str
     klaidos: list[str] = field(default_factory=list)
+    nuspalvinta: bool = False   # jau padaryta / atidėta – robotas nelies
+    busena: str = ""            # kas parašyta būsenos stulpelyje
 
     @property
     def kodas_tekstu(self) -> str:
@@ -98,13 +103,17 @@ class Sarasas:
         return self.ws.cell(row=eilute, column=column_index_from_string(stulpelis))
 
     def neapdorotos(self, siandien: dt.date | None = None) -> list[Masina]:
+        return [m for m in self.visos(siandien) if not m.nuspalvinta]
+
+    def visos(self, siandien: dt.date | None = None) -> list[Masina]:
+        """Visos eilutės su VIN (ir jau nuspalvintos – jas rodo valdymo langas)."""
         siandien = siandien or dt.date.today()
         n = self.n
         masinos = []
         for eil in range(1, self.ws.max_row + 1):
             vin_l = self._r(n.STULP_VIN, eil)
             vin = _tekstas(vin_l.value)
-            if not VIN_RE.match(vin) or nuspalvinta(vin_l):
+            if not PANASU_I_VIN.match(vin):
                 continue
             kodas = tuple(_tekstas(self._r(s, eil).value) for s in n.STULP_KODAS)
             m = Masina(
@@ -114,7 +123,11 @@ class Sarasas:
                 pdi_data=menuo_diena(self._r(n.STULP_PDI_DATA, eil).value, siandien),
                 garantija=menuo_diena(self._r(n.STULP_GARANTIJA, eil).value, siandien),
                 numeris=_tekstas(self._r(n.STULP_NUMERIS, eil).value).replace(" ", ""),
+                nuspalvinta=nuspalvinta(vin_l),
+                busena=str(self._r(n.STULP_BUSENA, eil).value or ""),
             )
+            if not VIN_RE.match(vin):
+                m.klaidos.append(f"VIN su klaida ({len(vin)} simb.; raidžių I, O, Q VIN nebūna)")
             if not all(kodas):
                 m.klaidos.append("nepilnas Midtronics kodas")
             if m.pdi_data is None:
@@ -133,6 +146,18 @@ class Sarasas:
         for st in range(1, paskutinis + 1):
             self.ws.cell(row=eilute, column=st).fill = fill
         self._r(self.n.STULP_BUSENA, eilute).value = busena
+
+    def irasyti(self, eilute: int, stulpelis: str, reiksme) -> None:
+        """Pakeičia vieną langelį (taisymas valdymo lange)."""
+        self._r(stulpelis, eilute).value = reiksme
+
+    def nuimti_spalva(self, eilute: int) -> None:
+        """Kad robotas eilutę padarytų dar kartą (pvz. pakeitus akumuliatorių)."""
+        paskutinis = max(column_index_from_string(self.n.STULP_NUMERIS),
+                         *(column_index_from_string(s) for s in self.n.STULP_KODAS))
+        for st in range(1, paskutinis + 1):
+            self.ws.cell(row=eilute, column=st).fill = PatternFill(fill_type=None)
+        self._r(self.n.STULP_BUSENA, eilute).value = None
 
     def issaugoti(self) -> None:
         self.wb.save(self.kelias)

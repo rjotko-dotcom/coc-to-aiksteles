@@ -40,53 +40,89 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
    pavadinkite **„Lipnus“** (*Settings → Printers & scanners → Add device*).
    Tada *Lipnus → Printing preferences* nustatykite lipnų popierių ir stalčių,
    lygiai taip, kaip dabar darote ranka. Robotas spausdins į jį.
-4. `nustatymai.py` faile pakeiskite `EXCEL_FAILAS` į savo Excel failo kelią.
+4. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
+   **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
+
+## Valdymo langas
+
+Dukart spustelėjus **`paleisti.bat`** atsidaro valdymo langas (juodo lango nėra).
+
+**Mašinos** – lentelė iš Excel:
+
+* **balta** – paruošta, robotas darys;
+* **geltona (!)** – darys, bet verta pažiūrėti (pvz. numeris ne ABC123 formos,
+  PDI data vėlesnė už tech. pradžią, data senesnė nei 90 d.);
+* **raudona (✖)** – robotas jos **nedarys**, kol nepataisysite: trūksta kodo dalies,
+  neaiški data, VIN su klaida, tas pats Midtronics kodas / VIN / numeris dviejose
+  eilutėse (ir su jau padaryta);
+* žalia / oranžinė – jau padaryta / blogas akumuliatorius (rodoma pažymėjus
+  „Rodyti ir jau padarytas“).
+
+**Dukart spustelėjus eilutę** galima pataisyti kodą, datas, numerį ar VIN. Lange
+iškart matosi, kas bus įvesta į eNEWS (pvz. „PDI 22/09/2026“), o pataisymas
+įrašomas į Excel. Dešinys pelės mygtukas → **„Daryti iš naujo“** nuima spalvą
+(pvz. pakeitus akumuliatorių ir įrašius naują kodą).
+
+Mygtukai:
+
+| Mygtukas | Ką daro |
+|---|---|
+| ✔ Tikrinti | patikrina duomenis **ir kompiuterį**: ar Excel uždarytas, ar yra Chrome, SumatraPDF, ar spausdintuvai su tokiais pavadinimais tikrai yra |
+| ▶ Pradėti | paleidžia robotą (pirma dar kartą patikrina) |
+| Tęsti ⏎ | kai robotas laukia jūsų (prisijungimas, „Žingsniais“ režimas, lipnus popierius) |
+| ■ Stabdyti | sustabdo; nebaigta mašina lieka nenuspalvinta ir bus daroma kitą kartą |
+| Diagnostika | išsaugo eNEWS puslapius, jei robotas kur nors neranda mygtuko |
+
+Apačioje **„Ką daro robotas“** – kiekvienas veiksmas realiu laiku, o lentelėje
+mėlynai pažymėta mašina, kurią daro dabar.
+
+**Nustatymai** – Excel stulpeliai, rida, datos formatas, SumatraPDF, spausdintuvai
+(išsirenkami iš sąrašo). **eNEWS užrašai** – mygtukų ir laukelių pavadinimai, pagal
+kuriuos robotas juos randa; jei Nissan ką nors pervadins, pakeisite čia, kodo liesti
+nereikia. Viskas išsaugoma `nustatymai.json`.
 
 ## Kasdien
 
-1. **Uždarykite Excel failą**, nes atidaryto robotas negali pakeisti.
-2. Dukart spustelėkite **`paleisti.bat`**.
-3. Atsidaro Chrome langas. Prisijunkite prie Nissan B2B (pirmą kartą, vėliau
-   prisijungimą jis atsimins) ir atsidarykite **ENEWS**.
-4. Juodame lange paspauskite **Enter**. Robotas pradeda dirbti, o jūs galite stebėti.
-5. Pabaigoje atsidarykite Excel: žalios eilutės padarytos, oranžinės turi blogą
-   akumuliatorių, raudonos turi kitą klaidą (priežastis parašyta stulpelyje N).
-   Klaidų ekrano nuotraukos yra aplanke `klaidos`.
+1. Excel'yje suveskite mašinas, **išsaugokite ir uždarykite**.
+2. `paleisti.bat` → **Perskaityti** → pataisykite raudonas eilutes → **▶ Pradėti**.
+3. Atsidariusiame Chrome prisijunkite prie Nissan B2B (pirmą kartą; vėliau
+   prisijungimą atsimins), atsidarykite **ENEWS** ir lange spauskite **Tęsti**.
+4. Toliau robotas dirba pats. Klaidų nuotraukos – aplanke `klaidos`.
 
-Prieš pradedant robotas pasidaro Excel atsarginę kopiją (`failas.atsargine-…xlsx`).
+### Pirmą kartą – po vieną
 
-### Pirmą kartą: bandykite po vieną
+Robotas parašytas pagal nuotraukas, tikrame eNEWS kai kas gali vadintis kitaip.
+Pirmą kartą pažymėkite **„Žingsniais“** ir **„Tik pažymėtos eilutės“**, lentelėje
+pažymėkite vieną mašiną ir spauskite **Pradėti**: prieš kiekvieną veiksmą robotas
+parašys, ką darys, ir lauks **Tęsti**.
 
-Robotas parašytas pagal nuotraukas, o tikrame eNEWS kai kurie mygtukai gali
-vadintis kiek kitaip. Todėl pirmą kartą paleiskite komandinėje eilutėje (atidarykite
-aplanką, adreso juostoje įrašykite `cmd` ir spauskite Enter):
+Jei kur nors užstringa – **Diagnostika**: Chrome'e eikite per eNEWS langus (VIN
+paieška, Akumuliatorius, PDI, Automobilis po „Update“, WBMR), kiekviename spauskite
+**Tęsti**, baigę – **Stabdyti**. Aplanką `diagnostika` suarchyvuokite ir atsiųskite.
 
-```
-paleisti.bat --vienas --zingsniais
-```
+### Apsaugos nuo klaidų
 
-`--zingsniais`: prieš kiekvieną veiksmą robotas parašo, ką darys, ir laukia
-Enter. Taip matysite, kur jis užstrigo.
-`--vienas`: apdoroja tik vieną mašiną.
+* prieš darbą – Excel atsarginė kopija (`failas.atsargine-…xlsx`);
+* eilutės su klaidomis ar pasikartojančiu kodu / VIN / numeriu nedaromos;
+* eNEWS tikrinama, ar atidaryta būtent ta mašina (VIN), ir ar testo rezultatas
+  – tos pačios mašinos;
+* po išsaugojimo tikrinama, ar eNEWS rodo įvestą numerį ir garantijos datą;
+* jau įvestas akumuliatoriaus kodas antrą kartą nevedamas (galima saugiai kartoti);
+* išsaugotas failas tikrinamas, ar tai tikrai PDF, prieš jį spausdinant.
 
-### Jei kur nors užstringa: diagnostika
+### Be lango
 
-```
-paleisti.bat --diagnostika
-```
-
-Atsidariusiame Chrome prisijunkite ir eikite per tuos eNEWS langus, kur robotas
-stringa (VIN paieška, Akumuliatorius, PDI, Automobilis po „Update“, WBMR).
-Kiekviename lange juodame lange spauskite **Enter**, pabaigoje įveskite `q`.
-Aplanką `diagnostika` suarchyvuokite ir atsiųskite, nes iš jo matosi tikri mygtukų
-pavadinimai ir robotą galima tiksliai pataisyti.
+`paleisti.bat --vienas --zingsniais` arba `paleisti.bat --diagnostika` – tas pats
+komandinėje eilutėje.
 
 ## Failai
 
 | Failas / aplankas | Kas tai |
 |---|---|
 | `paleisti.bat` | paleidimas (pirmą kartą pats įdiegia ko reikia) |
-| `nustatymai.py` | Excel kelias, stulpeliai, spausdintuvai, rida |
+| `langas.py` | valdymo langas |
+| `tikrinimas.py` | duomenų ir kompiuterio patikra |
+| `nustatymai.py` | numatytieji nustatymai (pakeisti – `nustatymai.json`) |
 | `robotas.py` | eNEWS žingsniai |
 | `excel_eiles.py` | Excel skaitymas ir spalvinimas |
 | `chrome_profilis/` | roboto Chrome profilis (prisijungimas), į git nededamas |

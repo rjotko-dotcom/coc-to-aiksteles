@@ -20,4 +20,5 @@ enews_robotas/spausdinti/
 enews_robotas/klaidos/
 enews_robotas/diagnostika/
 enews_robotas/robotas.log
+enews_robotas/nustatymai.json
 enews_robotas/.venv/
