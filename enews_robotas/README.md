@@ -32,8 +32,15 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 
 ## Pirmas paleidimas (vieną kartą)
 
+0. **Parsisiųskite robotą į darbo kompiuterį:** GitHub'e (prisijungę) atidarykite
+   `rjotko-dotcom/coc-to-aiksteles`, pasirinkite šaką `ccr-44a38a81-hew5zi`,
+   **Code → Download ZIP**, išarchyvuokite (pvz. į `Dokumentai\eNEWS`). Reikia tik
+   aplanko `enews_robotas`.
+
 1. Python jau turėtų būti įdiegtas (jo reikia ir CoC programai). Jei ne:
-   https://www.python.org/downloads/, diegiant pažymėkite **„Add python.exe to PATH“**.
+   https://www.python.org/downloads/, diegiant pažymėkite **„Add python.exe to PATH“**
+   (administratoriaus teisių nereikia). Jei Python nėra, `paleisti.bat` tai ir parašys.
+   Pirmas paleidimas iš interneto parsisiunčia bibliotekas (~1 min.).
 2. Įdiekite **SumatraPDF** (https://www.sumatrapdfreader.org). Su ja robotas
    spausdina be jokių langų. Be jos PDF failai tik išsaugomi aplanke `spausdinti`.
 3. **Lipnus popierius.** Windows'e tą patį spausdintuvą pridėkite dar kartą ir
