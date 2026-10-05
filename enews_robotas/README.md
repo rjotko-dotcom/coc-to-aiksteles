@@ -20,11 +20,11 @@ Robotas naudoja jūsų dabartinį failą tokį, koks jis yra:
 
 | Stulpelis | Kas | Pvz. |
 |---|---|---|
-| B | VIN | SJNJ12TD0U2373741 |
-| E, G, I | Midtronics kodo trys dalys | JRH36, 1Q9D77, TE204 |
+| B | VIN | TESTA000000000002 |
+| E, G, I | Midtronics kodo trys dalys | TST02, 1T2T02, T0002 |
 | K | PDI data (mėnuo.diena) | 09.22 |
 | L | Tech. pradžia / Warranty Start Date | 09.24 |
-| M | Valstybinis numeris | OAU289 |
+| M | Valstybinis numeris | AAA002 |
 | N | **robotas įrašo būseną** | Atlikta 2026-10-01 15:47 |
 
 Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
@@ -64,7 +64,7 @@ Valdymo lange pažymėkite **„BANDYMAS be B2B (namuose)“** ir spauskite **�
   mašinomis (viena jau padaryta, viena su blogu akumuliatoriumi, viena su trūkstamu kodu).
 * **Niekas nespausdinama** – žurnale parašoma, kas ir į kurį spausdintuvą būtų
   spausdinta, PDF išsaugomi aplanke `spausdinti`.
-* Klaidoms išbandyti: kodas, prasidedantis **BAD** (pvz. `BAD36-1Q9D77-TE204`) –
+* Klaidoms išbandyti: kodas, prasidedantis **BAD** (pvz. `BAD01-1T2T02-T0002`) –
   „Replace battery“ (oranžinė eilutė); tas pats kodas antrai mašinai – „already used“.
 * **„Nauja kopija“** – iš naujo nukopijuoja Excel ir galima bandyti dar kartą.
 

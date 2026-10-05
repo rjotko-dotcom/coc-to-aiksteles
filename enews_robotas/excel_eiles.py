@@ -192,8 +192,8 @@ def sukurti_sablona(kelias: str | Path, nust) -> Path:
         nust.STULP_NUMERIS: "Valst. nr.", nust.STULP_BUSENA: "Būsena (pildo robotas)",
     }
     pavyzdziai = [
-        ("SJNJ12TD0U2373741", "JRH36", "1Q9D77", "TE204", "09.22", "09.24", "OAU289"),
-        ("SJNJ12TD5U2387571", "JRJ36", "1Q1H77", "S3604", "09.24", "09.25", "AYT599"),
+        ("TESTA000000000002", "TST02", "1T2T02", "T0002", "09.22", "09.24", "AAA002"),
+        ("TESTA000000000003", "TST01", "1T1T01", "T0001", "09.24", "09.25", "AAA003"),
     ]
     tekstiniai = [nust.STULP_VIN, k1, k2, k3, nust.STULP_PDI_DATA, nust.STULP_GARANTIJA, nust.STULP_NUMERIS]
 

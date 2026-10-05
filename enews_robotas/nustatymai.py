@@ -12,7 +12,7 @@ JSON_FAILAS = Path(__file__).resolve().parent / "nustatymai.json"
 
 NUMATYTIEJI = {
     # --- Excel ---
-    "EXCEL_FAILAS": r"C:\Users\Rimvydas\Desktop\masinos.xlsx",
+    "EXCEL_FAILAS": str(Path.home() / "Desktop" / "masinos.xlsx"),
     "EXCEL_LAPAS": "",              # tuščias – pirmas lapas
     "STULP_VIN": "B",
     "STULP_KODAS": ["E", "G", "I"],  # Midtronics kodas: trys dalys

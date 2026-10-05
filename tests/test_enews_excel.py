@@ -32,9 +32,9 @@ def _sarasas(tmp_path):
     wb = openpyxl.Workbook()
     ws = wb.active
     eil = [
-        ("SJNJ12TD3U2389917", "JRJ36", "1Q1H77", "S3604", "09.24", "09.24", "OAU413"),
-        ("SJNJ12TD0U2373741", "JRH36", "1Q9D77", "TE204", "09.22", "09.24", "OAU289"),
-        ("SJNJ12TD3U2404660", "JRJ36", "", "TE504", "09.24", "09.25", "OAU572"),
+        ("TESTA000000000001", "TST01", "1T1T01", "T0001", "09.24", "09.24", "AAA001"),
+        ("TESTA000000000002", "TST02", "1T2T02", "T0002", "09.22", "09.24", "AAA002"),
+        ("TESTA000000000006", "TST01", "", "T0006", "09.24", "09.25", "AA062"),
     ]
     for i, (vin, a, b, c, pdi, te, nr) in enumerate(eil, start=1):
         ws[f"B{i}"], ws[f"E{i}"], ws[f"G{i}"], ws[f"I{i}"] = vin, a, b, c
@@ -52,8 +52,8 @@ def test_neapdorotos_praleidzia_nuspalvintas(tmp_path):
     masinos = s.neapdorotos(SIANDIEN)
     assert [m.eilute for m in masinos] == [2, 3]
     m = masinos[0]
-    assert m.kodas_tekstu == "JRH36-1Q9D77-TE204"
-    assert (m.pdi_data, m.garantija, m.numeris) == (dt.date(2026, 9, 22), dt.date(2026, 9, 24), "OAU289")
+    assert m.kodas_tekstu == "TST02-1T2T02-T0002"
+    assert (m.pdi_data, m.garantija, m.numeris) == (dt.date(2026, 9, 22), dt.date(2026, 9, 24), "AAA002")
     assert not m.klaidos
     assert masinos[1].klaidos == ["nepilnas Midtronics kodas"]
 
@@ -71,10 +71,10 @@ def test_pazymeti_issaugo_spalva_ir_busena(tmp_path):
 def test_tikrinimas_randa_dublikatus_ir_formatus(tmp_path):
     import tikrinimas
     s = Sarasas(_sarasas(tmp_path), nustatymai)
-    s.irasyti(3, "G", "1Q9D77")
-    s.irasyti(3, "E", "JRH36")
-    s.irasyti(3, "I", "TE204")    # tas pats kodas kaip 2 eil.
-    s.irasyti(2, "M", "OAU 28")   # ne ABC123
+    s.irasyti(3, "G", "1T2T02")
+    s.irasyti(3, "E", "TST02")
+    s.irasyti(3, "I", "T0002")    # tas pats kodas kaip 2 eil.
+    s.irasyti(2, "M", "AAA 00")   # ne ABC123
     s.irasyti(2, "K", "09.30")    # PDI vėliau nei tech. pradžia – normalu, nežymima
     pastabos = tikrinimas.duomenys(s.visos(SIANDIEN), SIANDIEN)
     tekstai = {(p.eilute, p.lygis, p.tekstas.split(" ")[0]) for p in pastabos}
@@ -88,7 +88,7 @@ def test_tikrinimas_randa_dublikatus_ir_formatus(tmp_path):
 def test_kodas_jau_panaudotas_padarytoje_eiluteje(tmp_path):
     import tikrinimas
     s = Sarasas(_sarasas(tmp_path), nustatymai)
-    for st, v in (("E", "JRJ36"), ("G", "1Q1H77"), ("I", "S3604")):  # kaip nuspalvintoje 1 eil.
+    for st, v in (("E", "TST01"), ("G", "1T1T01"), ("I", "T0001")):  # kaip nuspalvintoje 1 eil.
         s.irasyti(2, st, v)
     pastabos = tikrinimas.duomenys(s.visos(SIANDIEN), SIANDIEN)
     assert any(p.eilute == 2 and "kartojasi" in p.tekstas for p in pastabos)
@@ -97,7 +97,7 @@ def test_kodas_jau_panaudotas_padarytoje_eiluteje(tmp_path):
 
 def test_bloga_vin_rodoma_su_klaida(tmp_path):
     s = Sarasas(_sarasas(tmp_path), nustatymai)
-    s.irasyti(2, "B", "SJNJ12TDOU2373741")  # O vietoj 0
+    s.irasyti(2, "B", "TESTA0000000000O2")  # O vietoj 0
     m = next(m for m in s.visos(SIANDIEN) if m.eilute == 2)
     assert any("VIN" in k for k in m.klaidos)
 
@@ -135,7 +135,7 @@ def test_sablono_pavyzdys_perskaitomas(tmp_path, monkeypatch):
     monkeypatch.setattr(nustatymai, "EXCEL_LAPAS", "Pavyzdys")
     m = Sarasas(kelias, nustatymai).visos(SIANDIEN)
     assert [(x.vin, x.kodas_tekstu, x.numeris, x.pdi_data) for x in m][0] == (
-        "SJNJ12TD0U2373741", "JRH36-1Q9D77-TE204", "OAU289", dt.date(2026, 9, 22))
+        "TESTA000000000002", "TST02-1T2T02-T0002", "AAA002", dt.date(2026, 9, 22))
     assert not any(x.klaidos for x in m)
 
 

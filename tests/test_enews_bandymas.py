@@ -42,19 +42,19 @@ def test_visa_eiga(narsykle, tmp_path, monkeypatch):
     serveris, adresas = netikras_enews.paleisti()
     try:
         page = narsykle.new_context(accept_downloads=True).new_page()
-        geras = Masina(2, "SJNJ12TD0U2373741", ("JRH36", "1Q9D77", "TE204"),
-                       dt.date(2026, 9, 22), dt.date(2026, 9, 24), "OAU289")
+        geras = Masina(2, "TESTA000000000002", ("TST02", "1T2T02", "T0002"),
+                       dt.date(2026, 9, 22), dt.date(2026, 9, 24), "AAA002")
         robotas.apdoroti(page, adresas, geras)
         assert sorted(p.name for p in tmp_path.iterdir()) == [
-            "OAU289-SJNJ12TD0U2373741-1-sertifikatas.pdf", "OAU289-SJNJ12TD0U2373741-2-tp-planas.pdf"]
+            "AAA002-TESTA000000000002-1-sertifikatas.pdf", "AAA002-TESTA000000000002-2-tp-planas.pdf"]
 
-        blogas = Masina(3, "SJNJ12TD5U2387571", ("BAD36", "1Q9D77", "SA004"),
-                        dt.date(2026, 9, 22), dt.date(2026, 9, 22), "AYT599")
+        blogas = Masina(3, "TESTA000000000003", ("BAD01", "1T2T02", "T0003"),
+                        dt.date(2026, 9, 22), dt.date(2026, 9, 22), "AAA003")
         with pytest.raises(robotas.BlogasAkumas, match="Replace battery"):
             robotas.apdoroti(page, adresas, blogas)
 
-        panaudotas = Masina(4, "SJNJ12TD2U2378584", geras.kodas,
-                            dt.date(2026, 9, 22), dt.date(2026, 9, 22), "AYT592")
+        panaudotas = Masina(4, "TESTA000000000004", geras.kodas,
+                            dt.date(2026, 9, 22), dt.date(2026, 9, 22), "AAA004")
         with pytest.raises(robotas.BlogasAkumas, match="already used"):
             robotas.apdoroti(page, adresas, panaudotas)
     finally:
@@ -72,8 +72,8 @@ def test_perziura_nieko_neissaugo(narsykle, tmp_path, monkeypatch):
     serveris, adresas = netikras_enews.paleisti()
     try:
         page = narsykle.new_context(accept_downloads=True).new_page()
-        m = Masina(2, "SJNJ12TD0U2373741", ("JRH36", "1Q9D77", "TE204"),
-                   dt.date(2026, 9, 22), dt.date(2026, 9, 24), "OAU289")
+        m = Masina(2, "TESTA000000000002", ("TST02", "1T2T02", "T0002"),
+                   dt.date(2026, 9, 22), dt.date(2026, 9, 24), "AAA002")
         robotas.apdoroti(page, adresas, m)
         busena = page.evaluate("JSON.parse(localStorage.getItem('bandymas'))")[m.vin]
         assert busena["testai"] == [] and "pdi" not in busena and "reg" not in busena

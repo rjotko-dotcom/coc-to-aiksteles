@@ -2,7 +2,7 @@
 
 Kompiuteryje paleidžiamas mažas serveris su eNEWS kopija (pagal tikro eNEWS
 nuotraukas). Ji elgiasi kaip tikras eNEWS:
-  * kodas, prasidedantis „BAD“ (pvz. BAD36-1Q9D77-TE204) → „Replace battery“;
+  * kodas, prasidedantis „BAD“ (pvz. BAD01-1T2T02-T0002) → „Replace battery“;
   * kodas, jau panaudotas kitai mašinai → „test code already used“;
   * nepažymėjus visų PDI punktų ar neįvedus datos – PDI neišsaugomas;
   * Drukāt duoda PDF su mašinos duomenimis.
@@ -101,12 +101,12 @@ def sukurti_pavyzdi(kelias: Path) -> Path:
     ws = wb.active
     eilutes = [
         # VIN, kodas (3 dalys), PDI, tech. pradžia, numeris, jau padaryta?
-        ("SJNJ12TD3U2389917", "JRJ36", "1Q1H77", "S3604", "09.24", "09.24", "OAU413", True),
-        ("SJNJ12TD0U2373741", "JRH36", "1Q9D77", "TE204", "09.22", "09.24", "OAU289", False),
-        ("SJNJ12TD5U2387571", "BAD36", "1Q9D77", "SA004", "09.22", "09.22", "AYT599", False),  # blogas akumas
-        ("SJNJ12TD2U2378584", "JRK36", "1Q1578", "SA804", "09.22", "09.22", "AYT592", False),
-        ("SJNJ12TD6U2377406", "JRJ36", "", "T4204", "09.22", "09.23", "OAU052", False),      # trūksta kodo dalies
-        ("SJNJ12TD3U2404660", "JRJ36", "1Q1H77", "TE504", "09.28", "09.25", "OAU57", False),  # keistas numeris
+        ("TESTA000000000001", "TST01", "1T1T01", "T0001", "09.24", "09.24", "AAA001", True),
+        ("TESTA000000000002", "TST02", "1T2T02", "T0002", "09.22", "09.24", "AAA002", False),
+        ("TESTA000000000003", "BAD01", "1T2T02", "T0003", "09.22", "09.22", "AAA003", False),  # blogas akumas
+        ("TESTA000000000004", "TST04", "1T4T04", "T0004", "09.22", "09.22", "AAA004", False),
+        ("TESTA000000000005", "TST01", "", "T0005", "09.22", "09.23", "AAA005", False),      # trūksta kodo dalies
+        ("TESTA000000000006", "TST01", "1T1T01", "T0006", "09.28", "09.25", "AA06", False),  # keistas numeris
     ]
     for i, (vin, a, b, c, pdi, te, nr, padaryta) in enumerate(eilutes, start=1):
         ws[f"B{i}"], ws[f"D{i}"], ws[f"E{i}"], ws[f"F{i}"], ws[f"G{i}"] = vin, "-", a, "-", b
