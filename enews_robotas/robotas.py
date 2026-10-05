@@ -291,18 +291,41 @@ def nuotrauka(page: Page, vin: str) -> Path:
 
 # --- Žingsniai ---------------------------------------------------------------
 
+RODYKLE_DESINIAU_JS = """reg => {
+    const r = reg.getBoundingClientRect(), cy = r.top + r.height / 2;
+    let geriausias = null, atstumas = 1e9;
+    for (const el of document.querySelectorAll('a,button,img,input,svg,span,div,i,[onclick]')) {
+        if (el === reg || el.contains(reg)) continue;
+        if (el.tagName === 'INPUT' && !['image', 'submit', 'button'].includes(el.type)) continue;
+        const b = el.getBoundingClientRect();
+        if (b.width < 8 || b.height < 8 || b.width > 90 || b.height > 90) continue;
+        if (Math.abs(b.top + b.height / 2 - cy) > 25) continue;   // toje pačioje eilutėje
+        const dx = b.left - r.right;
+        if (dx < -2 || dx > 160) continue;                        // iškart dešiniau
+        // iš kelių vienas kitame esančių – imame išorinį (pvz. <a>, o ne jo <img>)
+        if (dx < atstumas - 1 || (Math.abs(dx - atstumas) <= 1 && geriausias && el.contains(geriausias))) {
+            geriausias = el; atstumas = dx;
+        }
+    }
+    return geriausias;
+}"""
+
+
 def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
     zingsnis(f"VIN paieška {vin}")
     page.goto(pradzia)
     laukti_ramybes(page)
     laukas = rasti(page, [lauka_po("kebulo_numeris", "1")], "VIN paieškos laukas")
     irasyti(laukas, vin, "VIN paieška")
-    try:
-        rasti(page, [po(su_tekstu("reg_numeris"),
-                        "*[self::input[@type='image' or @type='submit' or @type='button']"
-                        " or self::button or self::a or self::img]")],
-              "paieškos rodyklė", laukti=3).click()
-    except Klaida:
+    # Paieškos rodyklė ▶ – tai, kas ekrane yra tiesiai dešiniau REG. NUMERIS laukelio
+    # (eNEWS ji nėra paprastas mygtukas, o „pirmas mygtukas po užrašu“ būtų
+    # „Skaityti visus pranešimus“ žemiau).
+    reg = rasti(page, [lauka_po("reg_numeris", "1")], "REG. NUMERIS laukas")
+    rodykle = reg.evaluate_handle(RODYKLE_DESINIAU_JS).as_element()
+    if rodykle is not None:
+        rodykle.click()
+    else:
+        log.info("     (rodyklės nerasta – spaudžiamas Enter)")
         laukas.press("Enter")
     laukti_ramybes(page)
 
