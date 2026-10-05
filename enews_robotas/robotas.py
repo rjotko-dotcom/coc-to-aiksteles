@@ -63,7 +63,12 @@ class Valdymas:
         self.stabdyti = threading.Event()
 
     def klausti(self, tekstas: str) -> None:
-        input(f"     {tekstas} [Enter] ")
+        # input() laukiame atskiroje gijoje, o čia tuo metu aptarnaujame Chrome
+        # (kitaip nauji skirtukai, pvz. ENEWS, lieka „Loading…“).
+        ivesta = threading.Event()
+        threading.Thread(target=lambda: (input(f"     {tekstas} [Enter] "), ivesta.set()), daemon=True).start()
+        while not ivesta.is_set():
+            snausti(0.2)
 
     def busena(self, m: Masina, tekstas: str) -> None:
         """Pranešimas, kad eilutės būsena pasikeitė (langas atnaujina lentelę)."""
@@ -74,6 +79,25 @@ class Valdymas:
             raise Sustabdyta()
         if self.zingsniais:
             self.klausti(f"Toliau: {tekstas}")
+
+
+KONTEKSTAS = None  # atidaryta naršyklė (kol robotas dirba)
+
+
+def snausti(sek: float) -> None:
+    """Palaukti, bet tuo metu aptarnauti Chrome. Playwright įvykius (naujus
+    skirtukus, atsisiuntimus, pranešimus) apdoroja tik kol kviečiamas jis pats –
+    paprastas time.sleep() palieka, pvz., naujai atidarytą ENEWS skirtuką
+    amžinai „Loading… about:blank“."""
+    if KONTEKSTAS is not None:
+        for p in list(KONTEKSTAS.pages):
+            try:
+                if not p.is_closed():
+                    p.wait_for_timeout(sek * 1000)
+                    return
+            except Exception:
+                pass
+    time.sleep(sek)
 
 
 V = Valdymas()
@@ -95,7 +119,7 @@ def svarbus_mygtukas(page: Page, raktas: str, laukti: float | None = None) -> bo
     except Exception:
         pass
     log.info("     (peržiūra) rastas „%s“ – NESPAUSTA", T1(raktas))
-    time.sleep(1.5)
+    snausti(1.5)
     return False
 
 
@@ -137,7 +161,7 @@ def rasti(page: Page, selektoriai: list[str], kas: str, laukti: float | None = N
                     pass
         if time.time() > pabaiga:
             raise Klaida(f"nerasta: {kas}")
-        time.sleep(0.3)
+        snausti(0.3)
 
 
 def rasti_visus(page: Page, selektorius: str, kiek: int, kas: str) -> list[Locator]:
@@ -153,7 +177,7 @@ def rasti_visus(page: Page, selektorius: str, kiek: int, kas: str) -> list[Locat
                 pass
         if time.time() > pabaiga:
             raise Klaida(f"nerasta: {kas}")
-        time.sleep(0.3)
+        snausti(0.3)
 
 
 def mygtuko_selektoriai(tekstai: list[str]) -> list[str]:
@@ -228,7 +252,7 @@ def irasyti(laukas: Locator, tekstas: str, kas: str) -> None:
     while not laukas.is_enabled():
         if time.time() > pabaiga:
             raise Klaida(f"laukas {kas} neaktyvus")
-        time.sleep(0.3)
+        snausti(0.3)
     try:
         if laukas.get_attribute("readonly") is not None:
             raise ValueError("tik skaitomas")
@@ -337,7 +361,7 @@ def akumuliatorius(page: Page, m: Masina) -> None:
         tekstas = puslapio_tekstas(page)
         if antraste in tekstas:
             break
-        time.sleep(0.5)
+        snausti(0.5)
     rezultatas = next((e.strip() for e in tekstas.splitlines() if antraste in e), "")
     if geras in rezultatas:
         if m.vin not in tekstas:
@@ -366,7 +390,7 @@ def pdi(page: Page, m: Masina) -> None:
             break
         if T1("veiksmas") in puslapio_tekstas(page):
             break
-        time.sleep(0.5)
+        snausti(0.5)
 
     zingsnis(f"PDI data {m.pdi_data:%Y-%m-%d}")
     irasyti(rasti(forma, [po(su_tekstu("pdi_data", tiksliai=True), "input[(@type='text' or not(@type))]")],
@@ -427,7 +451,7 @@ def garantija(page: Page, m: Masina) -> None:
             if m.numeris not in tekstas:
                 raise Klaida("po išsaugojimo nesimato valst. numerio – patikrinkite Automobilis skirtuką")
             raise Klaida(f"po išsaugojimo nesimato garantijos datos {data}")
-        time.sleep(0.5)
+        snausti(0.5)
 
 
 # --- Failai ir spausdinimas ---------------------------------------------------
@@ -470,7 +494,7 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
         while time.time() < pradzia + 60 and "dl" not in ivykiai:
             if time.time() > pradzia + 6 and ("pg" in ivykiai or page.url != url_pries):
                 break  # langas atsidarė ir nieko nesiuntė – skaitome jį patį
-            time.sleep(0.3)
+            snausti(0.3)
     finally:
         page.remove_listener("download", atsiuntimas)
         ctx.remove_listener("page", langas)
@@ -565,16 +589,20 @@ def paruosti_profili() -> None:
 
 
 def atidaryti_narsykle(pw):
+    global KONTEKSTAS
     paruosti_profili()
-    return pw.chromium.launch_persistent_context(
+    KONTEKSTAS = pw.chromium.launch_persistent_context(
         str(PROFILIS), channel="chrome", headless=False, accept_downloads=True,
         no_viewport=True, args=["--start-maximized"],
     )
+    return KONTEKSTAS
 
 
 def uzdaryti_narsykle(ctx) -> None:
     """Uždaro Chrome; jei jis jau uždarytas (pvz. ranka) – tai ne klaida ir
     neturi uždengti tikrosios priežasties, kodėl robotas sustojo."""
+    global KONTEKSTAS
+    KONTEKSTAS = None
     try:
         ctx.close()
     except Exception:

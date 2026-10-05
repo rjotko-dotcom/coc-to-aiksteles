@@ -32,9 +32,10 @@ class LangoValdymas(robotas.Valdymas):
     def klausti(self, tekstas: str) -> None:
         self.testi.clear()
         self.eile.put(("klausimas", tekstas))
-        while not self.testi.wait(0.2):
+        while not self.testi.is_set():
             if self.stabdyti.is_set():
                 raise robotas.Sustabdyta()
+            robotas.snausti(0.2)  # kol laukiame – aptarnaujame Chrome (nauji skirtukai ir pan.)
         self.eile.put(("klausimas", ""))
 
     def busena(self, m: Masina, tekstas: str) -> None:
