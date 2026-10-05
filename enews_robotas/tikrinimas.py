@@ -128,13 +128,9 @@ def aplinka(N, profilis: Path, excel: str | None = None, bandymas: bool = False)
             if vardas and vardas not in sarasas:
                 p.append(Pastaba(KLAIDA, f"{pav} spausdintuvas „{vardas}“ nerastas. Yra: "
                                          + ", ".join(sarasas)))
-        if N.SPAUSDINTUVAS_LIPNUS in sarasas and sys.platform == "win32":
-            try:
-                import spausdinimas
-                tipai = spausdinimas.popieriaus_tipai(N.SPAUSDINTUVAS_LIPNUS)
-                if tipai and spausdinimas._rasti_tipa(tipai, N.LIPNUS_POPIERIUS) is None:
-                    p.append(Pastaba(KLAIDA, f"spausdintuvas neturi popieriaus tipo „{N.LIPNUS_POPIERIUS}“. "
-                                             "Yra: " + ", ".join(tipai)))
-            except Exception as e:  # noqa: BLE001
-                p.append(Pastaba(PERSPEJIMAS, f"nepavyko patikrinti popieriaus tipų: {e}"))
+        if "lipnus" in N.SPAUSDINIMO_PLANAS.lower():
+            import spausdinimas
+            if spausdinimas.busena("lipnus") == "nenustatyta":
+                p.append(Pastaba(KLAIDA, "lipnaus spausdinimo nuostatos nenustatytos – Nustatymai → "
+                                         "„Nustatyti lipnų spausdinimą…“ (Labels, 2-Sided: None)"))
     return p

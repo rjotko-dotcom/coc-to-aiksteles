@@ -139,10 +139,10 @@ def test_sablono_pavyzdys_perskaitomas(tmp_path, monkeypatch):
     assert not any(x.klaidos for x in m)
 
 
-def test_spausdinimo_planas_ir_popieriaus_tipas():
+def test_spausdinimo_planas_ir_isdestymas():
     import spausdinimas
     assert spausdinimas.planas() == [(1, "paprastas"), (1, "lipnus"), (2, "lipnus")]
-    tipai = {"Auto Select": 1, "Plain-1": 257, "Labels": 263, "Tab Paper": 264}
-    assert spausdinimas._rasti_tipa(tipai, "labels") == 263
-    assert spausdinimas._rasti_tipa(tipai, "Label") == 263
-    assert spausdinimas._rasti_tipa(tipai, "Glossy") is None
+    # A4 600 dpi, 100 taškų neprintinamas kraštas: puslapis sumažinamas iki spausdinamo ploto, centruotas
+    x0, y0, x1, y1 = spausdinimas.isdestymas((4960, 7016), (4760, 6816), (100, 100), (595, 842), (600, 600))
+    assert (x1 - x0) <= 4760 and (y1 - y0) <= 6816 and x0 >= 0 and y0 >= 0
+    assert abs((x1 - x0) / (y1 - y0) - 595 / 842) < 0.01

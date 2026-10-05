@@ -1,27 +1,39 @@
-"""Spausdinimas be jokios papildomos programos: paprastas (spalvotai) ir lipnus (Labels, vienpusis).
+"""Spausdinimas be papildomų programų: paprastas (spalvotai) ir lipnus.
 
-PDF puslapiai nupiešiami (pypdfium2 – tas pats PDF variklis kaip Chrome) ir siunčiami
-tiesiai į Windows spausdintuvą. Nuostatos nurodomos tik šiam spausdinimui – taip pat,
-kaip Preferences lange vienam kartui: lipniam – popieriaus tipas „Labels“ ir 2-Sided
-Printing → None; paprastam – spalvotai. Jūsų įprastos spausdintuvo nuostatos nekeičiamos.
+Lipniam (ir, jei norite, paprastam) spausdinimui nuostatos nustatomos VIENĄ KARTĄ
+tame pačiame spausdintuvo Preferences lange, kurį naudojate ranka (pvz. SHARP:
+2-Sided Printing → None, Paper Source → Labels → OK). Robotas tas nuostatas
+įsimena (failas aplanke „spausdintuvo_nuostatos“) ir kiekvieną kartą spausdina
+lygiai su jomis. Jūsų įprastos spausdintuvo nuostatos nekeičiamos.
+
+PDF puslapiai nupiešiami (pypdfium2 – tas pats PDF variklis kaip Chrome) ir
+siunčiami tiesiai į Windows spausdintuvą.
 """
 
 from __future__ import annotations
 
+import ctypes
+import datetime as dt
+import json
 import logging
+import struct
 import subprocess
 import sys
+from ctypes import wintypes
 from pathlib import Path
 
 import nustatymai as N
 
 log = logging.getLogger("robotas")
 
-DC_MEDIATYPENAMES, DC_MEDIATYPES = 34, 35
-DM_COLOR, DM_DUPLEX, DM_MEDIATYPE = 0x800, 0x1000, 0x200000
-DM_IN_BUFFER, DM_OUT_BUFFER = 8, 2
-DMDUP_SIMPLEX, DMCOLOR_MONO, DMCOLOR_COLOR = 1, 1, 2
-# GetDeviceCaps
+ARCH = Path(__file__).resolve().parent
+NUOSTATOS = ARCH / "spausdintuvo_nuostatos"
+
+DM_OUT_BUFFER, DM_IN_PROMPT, DM_IN_BUFFER = 2, 4, 8
+IDOK = 1
+DM_COLOR = 0x800
+DMCOLOR_COLOR = 2
+FIELDS_POSLINKIS, COLOR_POSLINKIS = 72, 92  # DEVMODEW: dmFields, dmColor
 HORZRES, VERTRES, LOGPIXELSX, LOGPIXELSY = 8, 10, 88, 90
 PHYSICALWIDTH, PHYSICALHEIGHT, PHYSICALOFFSETX, PHYSICALOFFSETY = 110, 111, 112, 113
 
@@ -39,67 +51,132 @@ def _biblioteka(modulis: str, paketas: str):
         return importlib.import_module(modulis)
 
 
-def popieriaus_tipai(spausdintuvas: str) -> dict[str, int]:
-    """Spausdintuvo popieriaus tipai: {"Labels": 263, "Plain-1": 257, …}."""
-    import ctypes
-    w = _biblioteka("win32print", "pywin32")
-    h = w.OpenPrinter(spausdintuvas)
+# --- Windows funkcijos (ctypes – be papildomų bibliotekų) -------------------------
+
+def _winspool():
+    w = ctypes.WinDLL("winspool.drv")
+    w.OpenPrinterW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(wintypes.HANDLE), ctypes.c_void_p]
+    w.OpenPrinterW.restype = wintypes.BOOL
+    w.ClosePrinter.argtypes = [wintypes.HANDLE]
+    w.DocumentPropertiesW.argtypes = [wintypes.HWND, wintypes.HANDLE, wintypes.LPCWSTR,
+                                      ctypes.c_void_p, ctypes.c_void_p, wintypes.DWORD]
+    w.DocumentPropertiesW.restype = ctypes.c_long
+    w.GetDefaultPrinterW.argtypes = [wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+    return w
+
+
+def _gdi():
+    g = ctypes.WinDLL("gdi32")
+    g.CreateDCW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.c_void_p]
+    g.CreateDCW.restype = wintypes.HDC
+    g.DeleteDC.argtypes = [wintypes.HDC]
+    g.GetDeviceCaps.argtypes = [wintypes.HDC, ctypes.c_int]
+    g.StartDocW.argtypes = [wintypes.HDC, ctypes.c_void_p]
+    for f in ("StartPage", "EndPage", "EndDoc"):
+        getattr(g, f).argtypes = [wintypes.HDC]
+    return g
+
+
+class _DOCINFOW(ctypes.Structure):
+    _fields_ = [("cbSize", ctypes.c_int), ("lpszDocName", wintypes.LPCWSTR), ("lpszOutput", wintypes.LPCWSTR),
+                ("lpszDatatype", wintypes.LPCWSTR), ("fwType", wintypes.DWORD)]
+
+
+def numatytasis_spausdintuvas() -> str:
+    w = _winspool()
+    n = wintypes.DWORD(0)
+    w.GetDefaultPrinterW(None, ctypes.byref(n))
+    buf = ctypes.create_unicode_buffer(n.value or 1)
+    w.GetDefaultPrinterW(buf, ctypes.byref(n))
+    return buf.value
+
+
+def _devmode(spausdintuvas: str, ivestis: bytes | None = None, langas: int = 0,
+             rodyti_langa: bool = False) -> bytes | None:
+    """Spausdintuvo DEVMODE (nuostatų blokas). ivestis – pradinės nuostatos;
+    rodyti_langa – atidaryti Preferences langą (grąžina None, jei paspausta Cancel)."""
+    w = _winspool()
+    h = wintypes.HANDLE()
+    if not w.OpenPrinterW(spausdintuvas, ctypes.byref(h), None):
+        raise RuntimeError(f"nepavyko atidaryti spausdintuvo „{spausdintuvas}“")
     try:
-        prievadas = w.GetPrinter(h, 2)["pPortName"]
+        dydis = w.DocumentPropertiesW(None, h, spausdintuvas, None, None, 0)
+        if dydis <= 0:
+            raise RuntimeError(f"spausdintuvas „{spausdintuvas}“ neatsako")
+        isvestis = ctypes.create_string_buffer(dydis)
+        rezimas = DM_OUT_BUFFER
+        ivesties_buf = None
+        if ivestis:
+            ivesties_buf = ctypes.create_string_buffer(ivestis, max(len(ivestis), dydis))
+            rezimas |= DM_IN_BUFFER
+        if rodyti_langa:
+            rezimas |= DM_IN_PROMPT
+        rez = w.DocumentPropertiesW(langas or None, h, spausdintuvas, isvestis, ivesties_buf, rezimas)
+        if rez < 0:
+            raise RuntimeError("spausdintuvo nuostatų klaida")
+        if rodyti_langa and rez != IDOK:
+            return None
+        return isvestis.raw
     finally:
         w.ClosePrinter(h)
-    f = ctypes.WinDLL("winspool.drv").DeviceCapabilitiesW
-    f.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_ushort, ctypes.c_void_p, ctypes.c_void_p]
-    f.restype = ctypes.c_int
-    n = f(spausdintuvas, prievadas, DC_MEDIATYPENAMES, None, None)
-    if n <= 0:
-        return {}
-    vardai = ctypes.create_unicode_buffer(64 * n)
-    f(spausdintuvas, prievadas, DC_MEDIATYPENAMES, ctypes.cast(vardai, ctypes.c_void_p), None)
-    numeriai = (ctypes.c_uint32 * n)()
-    f(spausdintuvas, prievadas, DC_MEDIATYPES, ctypes.cast(numeriai, ctypes.c_void_p), None)
-    return {vardai[i * 64:(i + 1) * 64].split("\0")[0].strip(): numeriai[i] for i in range(n)}
 
 
-def _rasti_tipa(tipai: dict[str, int], pavadinimas: str) -> int | None:
-    p = pavadinimas.strip().lower()
-    for vardas, nr in tipai.items():
-        if vardas.lower() == p:
-            return nr
-    for vardas, nr in tipai.items():
-        if p in vardas.lower():
-            return nr
-    return None
+# --- Įsimintos nuostatos ---------------------------------------------------------------
+
+def _failas(rusis: str) -> Path:
+    return NUOSTATOS / f"{rusis}.devmode"
 
 
-def _nuostatos(w, spausdintuvas: str, lipnus: bool):
-    """DEVMODE šiam spausdinimui: jūsų numatytosios + lipniam Labels ir vienpusis,
-    paprastam – spalvotai."""
-    h = w.OpenPrinter(spausdintuvas)
-    try:
-        try:
-            dm = w.GetPrinter(h, 9)["pDevMode"]  # šio vartotojo numatytosios (Preferences)
-        except Exception:
-            dm = None
-        dm = dm or w.GetPrinter(h, 2)["pDevMode"]
-        if lipnus:
-            nr = _rasti_tipa(popieriaus_tipai(spausdintuvas), N.LIPNUS_POPIERIUS)
-            if nr is None:
-                raise RuntimeError(f"spausdintuvas „{spausdintuvas}“ neturi popieriaus tipo „{N.LIPNUS_POPIERIUS}“")
-            dm.MediaType = nr
-            dm.Fields |= DM_MEDIATYPE
-            dm.Duplex = DMDUP_SIMPLEX
-            dm.Fields |= DM_DUPLEX
-        elif N.PAPRASTAS_SPALVOTAI:
-            dm.Color = DMCOLOR_COLOR
-            dm.Fields |= DM_COLOR
-        # Tvarkyklė sujungia pakeitimus su savo vidinėmis nuostatomis (kaip paspaudus OK).
-        rezultatas = w.GetPrinter(h, 2)["pDevMode"]
-        w.DocumentProperties(0, h, spausdintuvas, rezultatas, dm, DM_IN_BUFFER | DM_OUT_BUFFER)
-        return rezultatas
-    finally:
-        w.ClosePrinter(h)
+def busena(rusis: str) -> str:
+    """Tekstas nustatymų langui: ar nuostatos įsimintos."""
+    meta = NUOSTATOS / f"{rusis}.json"
+    if not _failas(rusis).is_file() or not meta.is_file():
+        return "nenustatyta"
+    m = json.loads(meta.read_text(encoding="utf-8"))
+    return f"✔ nustatyta {m.get('kada', '')} ({m.get('spausdintuvas', '')})"
 
+
+def nustatyti_langu(rusis: str, langas: int = 0) -> bool:
+    """Atidaro spausdintuvo Preferences langą; paspaudus OK – nuostatos įsimenamos.
+    Grąžina False, jei paspausta Cancel."""
+    spausdintuvas = _spausdintuvas(rusis)
+    esamos = _failas(rusis).read_bytes() if _failas(rusis).is_file() else None
+    nauja = _devmode(spausdintuvas, esamos, langas, rodyti_langa=True)
+    if nauja is None:
+        return False
+    NUOSTATOS.mkdir(exist_ok=True)
+    _failas(rusis).write_bytes(nauja)
+    (NUOSTATOS / f"{rusis}.json").write_text(json.dumps(
+        {"spausdintuvas": spausdintuvas, "kada": f"{dt.datetime.now():%Y-%m-%d %H:%M}"}), encoding="utf-8")
+    return True
+
+
+def _spausdintuvas(rusis: str) -> str:
+    vardas = N.SPAUSDINTUVAS_LIPNUS if rusis == "lipnus" else N.SPAUSDINTUVAS_PAPRASTAS
+    return vardas or numatytasis_spausdintuvas()
+
+
+def _nuostatos_spausdinimui(rusis: str, spausdintuvas: str) -> bytes:
+    if _failas(rusis).is_file():
+        meta = json.loads((NUOSTATOS / f"{rusis}.json").read_text(encoding="utf-8"))
+        if meta.get("spausdintuvas") != spausdintuvas:
+            raise RuntimeError(f"{rusis} nuostatos įsimintos kitam spausdintuvui ({meta.get('spausdintuvas')}) – "
+                               "Nustatymuose paspauskite „Nustatyti…“ dar kartą")
+        # pratekame per tvarkyklę – jei ji atnaujinta, nuostatos suderinamos
+        return _devmode(spausdintuvas, _failas(rusis).read_bytes())
+    if rusis == "lipnus":
+        raise RuntimeError("lipnaus spausdinimo nuostatos dar nenustatytos – Nustatymuose paspauskite "
+                           "„Nustatyti lipnų spausdinimą…“ ir Preferences lange pasirinkite Labels ir 2-Sided: None")
+    dm = bytearray(_devmode(spausdintuvas))
+    if N.PAPRASTAS_SPALVOTAI and len(dm) > COLOR_POSLINKIS + 2:
+        laukai = struct.unpack_from("<I", dm, FIELDS_POSLINKIS)[0] | DM_COLOR
+        struct.pack_into("<I", dm, FIELDS_POSLINKIS, laukai)
+        struct.pack_into("<h", dm, COLOR_POSLINKIS, DMCOLOR_COLOR)
+        return _devmode(spausdintuvas, bytes(dm))
+    return bytes(dm)
+
+
+# --- Spausdinimas -----------------------------------------------------------------------------
 
 def isdestymas(lapas_px: tuple[int, int], spausdinama_px: tuple[int, int], poslinkis: tuple[int, int],
                puslapis_pt: tuple[float, float], dpi: tuple[int, int]) -> tuple[int, int, int, int]:
@@ -109,7 +186,6 @@ def isdestymas(lapas_px: tuple[int, int], spausdinama_px: tuple[int, int], posli
     aukstis = puslapis_pt[1] / 72 * dpi[1]
     mastelis = min(1.0, spausdinama_px[0] / plotis, spausdinama_px[1] / aukstis)
     plotis, aukstis = plotis * mastelis, aukstis * mastelis
-    # centruojame fizinio lapo atžvilgiu, koordinatės – nuo spausdinamo ploto kampo
     x0 = (lapas_px[0] - plotis) / 2 - poslinkis[0]
     y0 = (lapas_px[1] - aukstis) / 2 - poslinkis[1]
     x0 = min(max(x0, 0), spausdinama_px[0] - plotis)
@@ -118,41 +194,39 @@ def isdestymas(lapas_px: tuple[int, int], spausdinama_px: tuple[int, int], posli
 
 
 def spausdinti(failas: Path, rusis: str) -> None:
-    """rusis: „paprastas“ (spalvotai, įprastas popierius) arba „lipnus“ (Labels, vienpusis)."""
-    lipnus = rusis == "lipnus"
-    spausdintuvas = N.SPAUSDINTUVAS_LIPNUS if lipnus else N.SPAUSDINTUVAS_PAPRASTAS
-    w = _biblioteka("win32print", "pywin32")
-    win32gui = _biblioteka("win32gui", "pywin32")
+    """rusis: „paprastas“ arba „lipnus“ – su įsimintomis (arba numatytosiomis) nuostatomis."""
     pdfium = _biblioteka("pypdfium2", "pypdfium2")
     ImageWin = _biblioteka("PIL.ImageWin", "pillow")
-    if not spausdintuvas:
-        spausdintuvas = w.GetDefaultPrinter()
-
-    devmode = _nuostatos(w, spausdintuvas, lipnus)
-    hdc = win32gui.CreateDC("WINSPOOL", spausdintuvas, devmode)
+    spausdintuvas = _spausdintuvas(rusis)
+    devmode = ctypes.create_string_buffer(_nuostatos_spausdinimui(rusis, spausdintuvas))
+    g = _gdi()
+    hdc = g.CreateDCW("WINSPOOL", spausdintuvas, None, devmode)
+    if not hdc:
+        raise RuntimeError(f"nepavyko prisijungti prie spausdintuvo „{spausdintuvas}“")
     try:
-        dpi = (w.GetDeviceCaps(hdc, LOGPIXELSX), w.GetDeviceCaps(hdc, LOGPIXELSY))
-        lapas = (w.GetDeviceCaps(hdc, PHYSICALWIDTH), w.GetDeviceCaps(hdc, PHYSICALHEIGHT))
-        plotas = (w.GetDeviceCaps(hdc, HORZRES), w.GetDeviceCaps(hdc, VERTRES))
-        poslinkis = (w.GetDeviceCaps(hdc, PHYSICALOFFSETX), w.GetDeviceCaps(hdc, PHYSICALOFFSETY))
+        dpi = (g.GetDeviceCaps(hdc, LOGPIXELSX), g.GetDeviceCaps(hdc, LOGPIXELSY))
+        lapas = (g.GetDeviceCaps(hdc, PHYSICALWIDTH), g.GetDeviceCaps(hdc, PHYSICALHEIGHT))
+        plotas = (g.GetDeviceCaps(hdc, HORZRES), g.GetDeviceCaps(hdc, VERTRES))
+        poslinkis = (g.GetDeviceCaps(hdc, PHYSICALOFFSETX), g.GetDeviceCaps(hdc, PHYSICALOFFSETY))
         pdf = pdfium.PdfDocument(str(failas))
-        w.StartDoc(hdc, (f"eNEWS {failas.stem}", None, None, 0))
+        info = _DOCINFOW(ctypes.sizeof(_DOCINFOW), f"eNEWS {failas.stem}", None, None, 0)
+        if g.StartDocW(hdc, ctypes.byref(info)) <= 0:
+            raise RuntimeError("spausdintuvas nepriėmė darbo")
         try:
             for i in range(len(pdf)):
                 puslapis = pdf[i]
                 dydis = puslapis.get_size()
                 vieta = isdestymas(lapas, plotas, poslinkis, dydis, dpi)
-                # piešiame tokia raiška, kokia bus spausdinama (ne daugiau 300 dpi – užtenka)
-                mastelis = min((vieta[2] - vieta[0]) / dydis[0], 300 / 72)
+                mastelis = min((vieta[2] - vieta[0]) / dydis[0], 300 / 72)  # ne daugiau 300 dpi
                 vaizdas = puslapis.render(scale=mastelis).to_pil().convert("RGB")
-                w.StartPage(hdc)
+                g.StartPage(hdc)
                 ImageWin.Dib(vaizdas).draw(hdc, vieta)
-                w.EndPage(hdc)
+                g.EndPage(hdc)
         finally:
-            w.EndDoc(hdc)
+            g.EndDoc(hdc)
             pdf.close()
     finally:
-        win32gui.DeleteDC(hdc)
+        g.DeleteDC(hdc)
     log.info("     atspausdinta %s (%s, %s)", failas.name, rusis, spausdintuvas)
 
 

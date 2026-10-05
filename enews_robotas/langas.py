@@ -577,8 +577,6 @@ class Langas(tk.Tk):
         eilute(sp, 0, "SPAUSDINTUVAS_PAPRASTAS", "Paprasto popieriaus spausdintuvas", 40, reiksmes=[""] + spausd,
                pastaba="tuščias – numatytasis")
         eilute(sp, 1, "SPAUSDINTUVAS_LIPNUS", "Lipnaus popieriaus spausdintuvas", 40, reiksmes=spausd)
-        eilute(sp, 2, "LIPNUS_POPIERIUS", "Lipnaus popieriaus tipas", 20,
-               pastaba="Preferences → Paper Source (pvz. Labels)")
         eilute(sp, 3, "SPAUSDINIMO_PLANAS", "Ką kaip spausdinti", 40,
                pastaba="1 – sertifikatas, 2 – TP planas; pvz. 1:paprastas, 1:lipnus, 2:lipnus")
         self.spalvotai = tk.BooleanVar(value=bool(N.PAPRASTAS_SPALVOTAI))
@@ -587,8 +585,20 @@ class Langas(tk.Tk):
         self.klausti_lipnu = tk.BooleanVar(value=bool(N.KLAUSTI_PRIES_LIPNU))
         ttk.Checkbutton(sp, text="Prieš lipnų spausdinimą sustoti ir paprašyti įdėti lipnų popierių",
                         variable=self.klausti_lipnu).grid(row=5, column=0, columnspan=4, sticky="w", pady=2)
+        self.nuostatu_busena: dict[str, tk.StringVar] = {}
+        for r, (rusis, tekstas) in enumerate((
+                ("lipnus", "Nustatyti lipnų spausdinimą…"),
+                ("paprastas", "Nustatyti paprastą spausdinimą… (nebūtina)")), start=6):
+            ttk.Button(sp, text=tekstas, command=lambda r_=rusis: self.nustatyti_spausdinima(r_)).grid(
+                row=r, column=0, sticky="w", pady=2)
+            v = tk.StringVar(value=self._spausdinimo_busena(rusis))
+            self.nuostatu_busena[rusis] = v
+            ttk.Label(sp, textvariable=v).grid(row=r, column=1, columnspan=3, sticky="w", padx=6)
+        ttk.Label(sp, foreground="#666", text="Atsidarys spausdintuvo Preferences langas – lipniam pasirinkite "
+                  "2-Sided Printing: None ir Paper Source: Labels, tada OK. Robotas įsimins.").grid(
+            row=8, column=0, columnspan=4, sticky="w")
         bandym = ttk.Frame(sp)
-        bandym.grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        bandym.grid(row=9, column=0, columnspan=4, sticky="w", pady=(6, 0))
         ttk.Label(bandym, text="Bandomasis lapas:").pack(side="left")
         ttk.Button(bandym, text="Paprastas", command=lambda: self.bandomasis_spausdinimas("paprastas")).pack(
             side="left", padx=4)
@@ -602,6 +612,31 @@ class Langas(tk.Tk):
         ttk.Button(m, text="Patikrinti", command=lambda: (self.issaugoti_nustatymus(), self.tikrinti(),
                                                          self.knyga.select(0))).pack(side="left", padx=6)
 
+    @staticmethod
+    def _spausdinimo_busena(rusis: str) -> str:
+        try:
+            import spausdinimas
+            b = spausdinimas.busena(rusis)
+        except Exception:  # noqa: BLE001
+            return ""
+        if b == "nenustatyta":
+            return "✖ dar nenustatyta" if rusis == "lipnus" else "spausdintuvo numatytosios + spalvotai"
+        return b
+
+    def nustatyti_spausdinima(self, rusis: str):
+        self.issaugoti_nustatymus()
+        import spausdinimas
+        try:
+            langas = int(self.wm_frame(), 16)
+        except Exception:  # noqa: BLE001
+            langas = 0
+        try:
+            if spausdinimas.nustatyti_langu(rusis, langas):
+                self.log(f"✔ {rusis} spausdinimo nuostatos įsimintos.")
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror(PAVADINIMAS, f"Nepavyko atidaryti spausdintuvo nuostatų:\n{e}")
+        self.nuostatu_busena[rusis].set(self._spausdinimo_busena(rusis))
+
     def bandomasis_spausdinimas(self, rusis: str):
         if self.gija and self.gija.is_alive():
             messagebox.showwarning(PAVADINIMAS, "Robotas dirba – pabandykite jam baigus.")
@@ -614,7 +649,7 @@ class Langas(tk.Tk):
         kelias.parent.mkdir(exist_ok=True)
         kelias.write_bytes(netikras_enews.pdf([f"BANDOMASIS LAPAS - {rusis.upper()}", "",
                                                f"Spausdintuvas: {N.SPAUSDINTUVAS_LIPNUS if rusis == 'lipnus' else N.SPAUSDINTUVAS_PAPRASTAS}",
-                                               f"Popierius: {N.LIPNUS_POPIERIUS if rusis == 'lipnus' else 'paprastas'}",
+                                               f"Popierius: {'lipnus' if rusis == 'lipnus' else 'paprastas'}",
                                                f"{dt.datetime.now():%Y-%m-%d %H:%M}"]))
 
         def darbas():
