@@ -538,6 +538,15 @@ def atidaryti_narsykle(pw):
     )
 
 
+def uzdaryti_narsykle(ctx) -> None:
+    """Uždaro Chrome; jei jis jau uždarytas (pvz. ranka) – tai ne klaida ir
+    neturi uždengti tikrosios priežasties, kodėl robotas sustojo."""
+    try:
+        ctx.close()
+    except Exception:
+        pass
+
+
 def atidaryti_enews(ctx, adresas: str | None = None) -> tuple[Page, str]:
     page = ctx.pages[0] if ctx.pages else ctx.new_page()
     if adresas:  # bandymas – iškart netikras eNEWS
@@ -602,6 +611,9 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
                     atideta += 1
                     log.warning("  ✖ akumuliatorius: %s", e)
                 except Exception as e:  # noqa: BLE001 – viena mašina neturi sustabdyti visų
+                    if page.is_closed():
+                        log.error("Chrome langas uždarytas – robotas sustoja (%d eil. nebaigta).", m.eilute)
+                        break
                     kelias = nuotrauka(page, m.vin)
                     tekstas = f"Klaida: {e}".splitlines()[0][:250]
                     sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, tekstas)
@@ -617,7 +629,7 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
             log.info("Baigta. Atlikta: %d, atidėta: %d.", atlikta, atideta)
             V.klausti("Baigta – naršyklė bus uždaryta")
         finally:
-            ctx.close()
+            uzdaryti_narsykle(ctx)
             if serveris:
                 serveris.shutdown()
     return atlikta, atideta
@@ -649,7 +661,7 @@ def diagnostika() -> None:
                             pass
                     log.info("išsaugota %02d (%s)", nr, p.url[:80])
         finally:
-            ctx.close()
+            uzdaryti_narsykle(ctx)
     log.info("Suarchyvuokite aplanką %s ir atsiųskite.", DIAGNOSTIKA)
 
 
