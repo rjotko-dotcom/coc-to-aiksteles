@@ -126,3 +126,14 @@ def test_ascii_dalis():
     assert robotas.ascii_dalis("Išsaugoti ir uždaryti") == "saugoti ir u"
     assert robotas.ascii_dalis("Techninės priežiūros planas") == "ros planas"
     assert robotas.ascii_dalis("Validate") == "Validate"
+
+
+def test_sablono_pavyzdys_perskaitomas(tmp_path, monkeypatch):
+    from excel_eiles import sukurti_sablona
+    kelias = sukurti_sablona(tmp_path / "s.xlsx", nustatymai)
+    assert Sarasas(kelias, nustatymai).visos() == []          # pirmas lapas tuščias
+    monkeypatch.setattr(nustatymai, "EXCEL_LAPAS", "Pavyzdys")
+    m = Sarasas(kelias, nustatymai).visos(SIANDIEN)
+    assert [(x.vin, x.kodas_tekstu, x.numeris, x.pdi_data) for x in m][0] == (
+        "SJNJ12TD0U2373741", "JRH36-1Q9D77-TE204", "OAU289", dt.date(2026, 9, 22))
+    assert not any(x.klaidos for x in m)

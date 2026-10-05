@@ -16,7 +16,7 @@ import nustatymai as N
 import robotas
 import netikras_enews
 import tikrinimas
-from excel_eiles import Masina, Sarasas, menuo_diena, uzrakintas
+from excel_eiles import Masina, Sarasas, menuo_diena, sukurti_sablona, uzrakintas
 
 PAVADINIMAS = "eNEWS robotas"
 
@@ -109,6 +109,18 @@ class Langas(tk.Tk):
             self.perskaityti()
 
     def atidaryti_excel(self):
+        kelias = Path(self.aktyvus_excel())
+        if not kelias.is_file():
+            if not messagebox.askyesno(PAVADINIMAS, f"Failo {kelias} nėra.\n\nSukurti tuščią Excel šabloną "
+                                                    "šioje vietoje? (Jei jau turite savo failą – spauskite "
+                                                    "„Ne“ ir „Pasirinkti…“.)"):
+                return
+            try:
+                sukurti_sablona(kelias, N)
+            except OSError as e:
+                messagebox.showerror(PAVADINIMAS, f"Nepavyko sukurti: {e}")
+                return
+            self.log(f"Sukurtas šablonas {kelias}. Antrame lape „Pavyzdys“ – kaip pildyti.")
         if sys.platform == "win32":
             os.startfile(self.aktyvus_excel())  # noqa: S606
         messagebox.showinfo(PAVADINIMAS, "Pataisę Excel'yje, jį išsaugokite ir UŽDARYKITE, "

@@ -176,3 +176,54 @@ def uzrakintas(kelias: str | Path) -> bool:
             return False
     except PermissionError:
         return True
+
+
+def sukurti_sablona(kelias: str | Path, nust) -> Path:
+    """Tuščias Excel šablonas su antraštėmis tose vietose, kur robotas skaito.
+    Antrame lape „Pavyzdys“ – kaip užpildyti (robotas skaito tik pirmą lapą)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+    from openpyxl.utils import get_column_letter
+
+    k1, k2, k3 = nust.STULP_KODAS
+    antrastes = {
+        nust.STULP_VIN: "VIN", k1: "Kodas 1", k2: "Kodas 2", k3: "Kodas 3",
+        nust.STULP_PDI_DATA: "PDI data (MM.DD)", nust.STULP_GARANTIJA: "Tech. pradžia (MM.DD)",
+        nust.STULP_NUMERIS: "Valst. nr.", nust.STULP_BUSENA: "Būsena (pildo robotas)",
+    }
+    pavyzdziai = [
+        ("SJNJ12TD0U2373741", "JRH36", "1Q9D77", "TE204", "09.22", "09.24", "OAU289"),
+        ("SJNJ12TD5U2387571", "JRJ36", "1Q1H77", "S3604", "09.24", "09.25", "AYT599"),
+    ]
+    tekstiniai = [nust.STULP_VIN, k1, k2, k3, nust.STULP_PDI_DATA, nust.STULP_GARANTIJA, nust.STULP_NUMERIS]
+
+    wb = Workbook()
+    for lapas, eilutes in ((wb.active, []), (wb.create_sheet("Pavyzdys"), pavyzdziai)):
+        if not eilutes:
+            lapas.title = "Mašinos"
+        for st, tekstas in antrastes.items():
+            c = lapas[f"{st}1"]
+            c.value = tekstas
+            c.font = Font(bold=True)
+            c.alignment = Alignment(wrap_text=True, horizontal="center")
+        for i in range(2, 300):  # tekstinis formatas, kad Excel nepaverstų 09.10 į 9.1
+            for st in tekstiniai:
+                lapas[f"{st}{i}"].number_format = "@"
+        for i, (vin, a, b, c, pdi, te, nr) in enumerate(eilutes, start=2):
+            for st, v in ((nust.STULP_VIN, vin), (k1, a), (k2, b), (k3, c),
+                          (nust.STULP_PDI_DATA, pdi), (nust.STULP_GARANTIJA, te), (nust.STULP_NUMERIS, nr)):
+                lapas[f"{st}{i}"] = v
+        for n in range(1, 15):
+            lapas.column_dimensions[get_column_letter(n)].width = 4
+        lapas.column_dimensions[nust.STULP_VIN].width = 22
+        for st in (k1, k2, k3, nust.STULP_NUMERIS):
+            lapas.column_dimensions[st].width = 10
+        for st in (nust.STULP_PDI_DATA, nust.STULP_GARANTIJA):
+            lapas.column_dimensions[st].width = 13
+        lapas.column_dimensions[nust.STULP_BUSENA].width = 40
+        lapas.row_dimensions[1].height = 30
+        lapas.freeze_panes = "A2"
+    kelias = Path(kelias)
+    kelias.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(kelias)
+    return kelias
