@@ -543,15 +543,26 @@ class Langas(tk.Tk):
         sp = ttk.LabelFrame(f, text="Spausdinimas", padding=8)
         sp.pack(fill="x", pady=4)
         spausd = tikrinimas.spausdintuvai() or []
-        eilute(sp, 0, "SUMATRA", "SumatraPDF programa", 60, rinktis="exe")
-        eilute(sp, 1, "SPAUSDINTUVAS_PAPRASTAS", "Paprastas popierius", 40, reiksmes=[""] + spausd,
+        eilute(sp, 0, "SPAUSDINTUVAS_PAPRASTAS", "Paprasto popieriaus spausdintuvas", 40, reiksmes=[""] + spausd,
                pastaba="tuščias – numatytasis")
-        eilute(sp, 2, "NUSTATYMAI_PAPRASTAS", "  papildomai", 20, pastaba="pvz. bin=1")
-        eilute(sp, 3, "SPAUSDINTUVAS_LIPNUS", "Lipnus popierius", 40, reiksmes=spausd)
-        eilute(sp, 4, "NUSTATYMAI_LIPNUS", "  papildomai", 20, pastaba="pvz. bin=2")
+        eilute(sp, 1, "SPAUSDINTUVAS_LIPNUS", "Lipnaus popieriaus spausdintuvas", 40, reiksmes=spausd)
+        eilute(sp, 2, "LIPNUS_POPIERIUS", "Lipnaus popieriaus tipas", 20,
+               pastaba="Preferences → Paper Source (pvz. Labels)")
+        eilute(sp, 3, "SPAUSDINIMO_PLANAS", "Ką kaip spausdinti", 40,
+               pastaba="1 – sertifikatas, 2 – TP planas; pvz. 1:paprastas, 1:lipnus, 2:lipnus")
+        self.spalvotai = tk.BooleanVar(value=bool(N.PAPRASTAS_SPALVOTAI))
+        ttk.Checkbutton(sp, text="Paprastą spausdinti spalvotai", variable=self.spalvotai).grid(
+            row=4, column=0, columnspan=2, sticky="w", pady=2)
         self.klausti_lipnu = tk.BooleanVar(value=bool(N.KLAUSTI_PRIES_LIPNU))
         ttk.Checkbutton(sp, text="Prieš lipnų spausdinimą sustoti ir paprašyti įdėti lipnų popierių",
-                        variable=self.klausti_lipnu).grid(row=5, column=0, columnspan=4, sticky="w", pady=4)
+                        variable=self.klausti_lipnu).grid(row=5, column=0, columnspan=4, sticky="w", pady=2)
+        bandym = ttk.Frame(sp)
+        bandym.grid(row=6, column=0, columnspan=4, sticky="w", pady=(6, 0))
+        ttk.Label(bandym, text="Bandomasis lapas:").pack(side="left")
+        ttk.Button(bandym, text="Paprastas", command=lambda: self.bandomasis_spausdinimas("paprastas")).pack(
+            side="left", padx=4)
+        ttk.Button(bandym, text="Lipnus", command=lambda: self.bandomasis_spausdinimas("lipnus")).pack(
+            side="left", padx=4)
 
         m = ttk.Frame(f)
         m.pack(fill="x", pady=8)
@@ -559,6 +570,31 @@ class Langas(tk.Tk):
                    command=self.issaugoti_nustatymus).pack(side="left")
         ttk.Button(m, text="Patikrinti", command=lambda: (self.issaugoti_nustatymus(), self.tikrinti(),
                                                          self.knyga.select(0))).pack(side="left", padx=6)
+
+    def bandomasis_spausdinimas(self, rusis: str):
+        if self.gija and self.gija.is_alive():
+            messagebox.showwarning(PAVADINIMAS, "Robotas dirba – pabandykite jam baigus.")
+            return
+        self.issaugoti_nustatymus()
+        if rusis == "lipnus" and not messagebox.askyesno(
+                PAVADINIMAS, "Bus atspausdintas vienas lapas ant LIPNAUS popieriaus (Labels). Tęsti?"):
+            return
+        kelias = robotas.SPAUSDINTI / f"bandomasis-{rusis}.pdf"
+        kelias.parent.mkdir(exist_ok=True)
+        kelias.write_bytes(netikras_enews.pdf([f"BANDOMASIS LAPAS - {rusis.upper()}", "",
+                                               f"Spausdintuvas: {N.SPAUSDINTUVAS_LIPNUS if rusis == 'lipnus' else N.SPAUSDINTUVAS_PAPRASTAS}",
+                                               f"Popierius: {N.LIPNUS_POPIERIUS if rusis == 'lipnus' else 'paprastas'}",
+                                               f"{dt.datetime.now():%Y-%m-%d %H:%M}"]))
+
+        def darbas():
+            import spausdinimas
+            try:
+                spausdinimas.spausdinti(kelias, rusis)
+                self.eile.put(("log", f"✔ Bandomasis lapas ({rusis}) nusiųstas spausdintuvui."))
+            except Exception as e:  # noqa: BLE001
+                self.eile.put(("log", f"✖ Nepavyko atspausdinti ({rusis}): {e}"))
+        self.log(f"Spausdinamas bandomasis lapas ({rusis})…")
+        threading.Thread(target=darbas, daemon=True).start()
 
     @staticmethod
     def _i_teksta(v) -> str:
@@ -587,6 +623,11 @@ class Langas(tk.Tk):
             else:
                 nauji[k] = t
         nauji["KLAUSTI_PRIES_LIPNU"] = self.klausti_lipnu.get()
+        nauji["PAPRASTAS_SPALVOTAI"] = self.spalvotai.get()
+        import re
+        if not re.fullmatch(r"\s*[12]\s*:\s*(paprastas|lipnus)\s*(,\s*[12]\s*:\s*(paprastas|lipnus)\s*)*",
+                            nauji["SPAUSDINIMO_PLANAS"].lower()):
+            raise ValueError("„Ką kaip spausdinti“ turi būti pvz.: 1:paprastas, 1:lipnus, 2:lipnus")
         nauji["EXCEL_FAILAS"] = self.excel_kelias.get()
         nauji["TEKSTAI"] = {k: v.get().strip() for k, v in self.tekstu_kint.items()}
         try:

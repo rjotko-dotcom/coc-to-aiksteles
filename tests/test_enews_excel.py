@@ -137,3 +137,12 @@ def test_sablono_pavyzdys_perskaitomas(tmp_path, monkeypatch):
     assert [(x.vin, x.kodas_tekstu, x.numeris, x.pdi_data) for x in m][0] == (
         "SJNJ12TD0U2373741", "JRH36-1Q9D77-TE204", "OAU289", dt.date(2026, 9, 22))
     assert not any(x.klaidos for x in m)
+
+
+def test_spausdinimo_planas_ir_popieriaus_tipas():
+    import spausdinimas
+    assert spausdinimas.planas() == [(1, "paprastas"), (1, "lipnus"), (2, "lipnus")]
+    tipai = {"Auto Select": 1, "Plain-1": 257, "Labels": 263, "Tab Paper": 264}
+    assert spausdinimas._rasti_tipa(tipai, "labels") == 263
+    assert spausdinimas._rasti_tipa(tipai, "Label") == 263
+    assert spausdinimas._rasti_tipa(tipai, "Glossy") is None

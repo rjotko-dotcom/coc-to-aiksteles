@@ -606,28 +606,22 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
     return kelias
 
 
-def spausdinti(failas: Path, lipnus: bool) -> None:
-    from tikrinimas import rasti_sumatra
+def spausdinti(failas: Path, rusis: str) -> None:
+    """rusis: „paprastas“ (spalvotai) arba „lipnus“ (Labels, vienpusis) – žr. spausdinimas.py."""
+    lipnus = rusis == "lipnus"
     spausdintuvas = N.SPAUSDINTUVAS_LIPNUS if lipnus else N.SPAUSDINTUVAS_PAPRASTAS
-    nust = N.NUSTATYMAI_LIPNUS if lipnus else N.NUSTATYMAI_PAPRASTAS
-    rusis = "lipnus" if lipnus else "paprastas"
     if BANDYMAS:
         zingsnis(f"(bandymas) būtų spausdinama {failas.name} ({rusis}, "
                  f"{spausdintuvas or 'numatytasis'}) – failas aplanke spausdinti")
         return
-    sumatra = rasti_sumatra(N.SUMATRA)
-    if sumatra is None:
-        log.warning("     SumatraPDF nerastas – %s (%s) atsispausdinkite patys", failas.name, rusis)
-        return
     zingsnis(f"spausdinti {failas.name} ({rusis})")
     if lipnus and N.KLAUSTI_PRIES_LIPNU:
         V.klausti("Įdėkite LIPNŲ popierių")
-    komanda = [str(sumatra)]
-    komanda += ["-print-to", spausdintuvas] if spausdintuvas else ["-print-to-default"]
-    if nust:
-        komanda += ["-print-settings", nust]
-    komanda += ["-silent", str(failas)]
-    subprocess.run(komanda, check=True, timeout=180)
+    import spausdinimas
+    try:
+        spausdinimas.spausdinti(failas, rusis)
+    except Exception as e:  # noqa: BLE001
+        raise Klaida(f"nepavyko atspausdinti {failas.name} ({rusis}): {e}") from e
 
 
 def wbmr(page: Page, m: Masina) -> None:
@@ -660,9 +654,11 @@ def wbmr(page: Page, m: Masina) -> None:
     if antras.read_bytes() == pirmas.read_bytes():
         raise Klaida("antras failas toks pat kaip pirmas – paspaustas ne to skirtuko Drukāt")
 
-    spausdinti(pirmas, lipnus=False)
-    spausdinti(pirmas, lipnus=True)
-    spausdinti(antras, lipnus=True)
+    import spausdinimas
+    failai = {1: pirmas, 2: antras}
+    for nr, rusis in spausdinimas.planas():
+        if nr in failai:
+            spausdinti(failai[nr], rusis)
 
 
 PRADZIA = ""  # eNEWS pradžios puslapis (VIN paieška)

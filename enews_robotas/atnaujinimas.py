@@ -15,7 +15,7 @@ FAILAI = [
     "robotas.py", "langas.py", "tikrinimas.py", "excel_eiles.py", "nustatymai.py",
     "netikras_enews.py", "atnaujinimas.py", "requirements.txt", "paleisti.bat", "README.md",
     "sablonas.xlsx", "bandymas/enews/hp_new.html", "bandymas/enews/pdi.html",
-    "bandymas/enews/pranesimai.html",
+    "bandymas/enews/pranesimai.html", "spausdinimas.py",
 ]
 
 
@@ -39,6 +39,11 @@ def atnaujinti() -> list[str]:
         kelias.parent.mkdir(parents=True, exist_ok=True)
         kelias.write_bytes(turinys)
         pakeisti.append(f)
+    if "requirements.txt" in pakeisti:  # naujos bibliotekos (pvz. spausdinimui)
+        import subprocess
+        import sys
+        subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+                        "-r", str(ARCH / "requirements.txt")], check=False, capture_output=True)
     return pakeisti
 
 

@@ -32,8 +32,12 @@ NUMATYTIEJI = {
 
     # --- Spausdinimas ---
     "SUMATRA": r"C:\Program Files\SumatraPDF\SumatraPDF.exe",
-    "SPAUSDINTUVAS_PAPRASTAS": "",  # tuščias – numatytasis Windows spausdintuvas
-    "SPAUSDINTUVAS_LIPNUS": "Lipnus",
+    "SPAUSDINTUVAS_PAPRASTAS": "SHARP MX-3051 PCL6",  # tuščias – numatytasis Windows spausdintuvas
+    "SPAUSDINTUVAS_LIPNUS": "SHARP MX-3051 PCL6",
+    "LIPNUS_POPIERIUS": "Labels",   # Preferences → Paper Source → popieriaus tipas
+    "PAPRASTAS_SPALVOTAI": True,
+    # Kurį failą kaip spausdinti: 1 – garantijos sertifikatas, 2 – techninės priežiūros planas.
+    "SPAUSDINIMO_PLANAS": "1:paprastas, 1:lipnus, 2:lipnus",
     "NUSTATYMAI_PAPRASTAS": "",     # SumatraPDF -print-settings, pvz. "bin=2"
     "NUSTATYMAI_LIPNUS": "",
     "KLAUSTI_PRIES_LIPNU": False,

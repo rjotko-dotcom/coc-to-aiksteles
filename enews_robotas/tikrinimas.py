@@ -121,22 +121,20 @@ def aplinka(N, profilis: Path, excel: str | None = None, bandymas: bool = False)
 
     if bandymas:  # spausdinti nereikės
         return p
-    sumatra = rasti_sumatra(N.SUMATRA)
-    if sumatra is None:
-        p.append(Pastaba(PERSPEJIMAS, "nerastas SumatraPDF – PDF bus tik išsaugoti aplanke „spausdinti“, "
-                                      "spausdinsite patys"))
-    elif str(sumatra) != N.SUMATRA:
-        p.append(Pastaba(PERSPEJIMAS, f"SumatraPDF rastas kitur: {sumatra} (pataisykite nustatymuose)"))
-
-    if sumatra is not None:
-        sarasas = spausdintuvai()
-        if sarasas is not None:
-            for pav, vardas in (("paprasto popieriaus", N.SPAUSDINTUVAS_PAPRASTAS),
-                                ("lipnaus popieriaus", N.SPAUSDINTUVAS_LIPNUS)):
-                if vardas and vardas not in sarasas:
-                    p.append(Pastaba(KLAIDA, f"{pav} spausdintuvas „{vardas}“ nerastas. Yra: "
-                                             + ", ".join(sarasas)))
-            if N.SPAUSDINTUVAS_LIPNUS and N.SPAUSDINTUVAS_LIPNUS == N.SPAUSDINTUVAS_PAPRASTAS:
-                p.append(Pastaba(PERSPEJIMAS, "paprastas ir lipnus spausdintuvas tas pats – "
-                                              "ar nustatymuose (bin=…) skiriasi stalčiai?"))
+    sarasas = spausdintuvai()
+    if sarasas is not None:
+        for pav, vardas in (("paprasto popieriaus", N.SPAUSDINTUVAS_PAPRASTAS),
+                            ("lipnaus popieriaus", N.SPAUSDINTUVAS_LIPNUS)):
+            if vardas and vardas not in sarasas:
+                p.append(Pastaba(KLAIDA, f"{pav} spausdintuvas „{vardas}“ nerastas. Yra: "
+                                         + ", ".join(sarasas)))
+        if N.SPAUSDINTUVAS_LIPNUS in sarasas and sys.platform == "win32":
+            try:
+                import spausdinimas
+                tipai = spausdinimas.popieriaus_tipai(N.SPAUSDINTUVAS_LIPNUS)
+                if tipai and spausdinimas._rasti_tipa(tipai, N.LIPNUS_POPIERIUS) is None:
+                    p.append(Pastaba(KLAIDA, f"spausdintuvas neturi popieriaus tipo „{N.LIPNUS_POPIERIUS}“. "
+                                             "Yra: " + ", ".join(tipai)))
+            except Exception as e:  # noqa: BLE001
+                p.append(Pastaba(PERSPEJIMAS, f"nepavyko patikrinti popieriaus tipų: {e}"))
     return p
