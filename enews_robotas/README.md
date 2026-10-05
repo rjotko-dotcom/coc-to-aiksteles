@@ -119,6 +119,18 @@ nereikia. Viskas išsaugoma `nustatymai.json`.
    prisijungimą atsimins), atsidarykite **ENEWS** ir lange spauskite **Tęsti**.
 4. Toliau robotas dirba pats. Klaidų nuotraukos – aplanke `klaidos`.
 
+### Saugiai tikrame B2B: PERŽIŪRA
+
+Pažymėjus **„PERŽIŪRA tikrame B2B (nieko neišsaugo)“** robotas eina per tikrą eNEWS,
+įveda VIN, atidaro skirtukus, pildo laukus, bet mygtukų, kurie ką nors **įrašo**
+(Validate, Išsaugoti ir uždaryti, Confirm, Save, Drukāt), **nespaudžia** – tik apveda
+juos raudonai. PDI langas uždaromas neišsaugojus, Excel nežymimas, niekas nespausdinama.
+Todėl galima naudoti ir jau padarytas mašinas. Jei peržiūra praeina visas mašinas –
+robotas tikrame eNEWS viską randa.
+
+Be peržiūros ir be bandymo robotas prieš pradėdamas dar paklausia „Robotas dirbs
+TIKRAME eNEWS… Tęsti?“.
+
 ### Pirmą kartą – po vieną
 
 Robotas parašytas pagal nuotraukas, tikrame eNEWS kai kas gali vadintis kitaip.

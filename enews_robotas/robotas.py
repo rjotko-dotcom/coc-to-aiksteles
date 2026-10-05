@@ -78,6 +78,25 @@ class Valdymas:
 
 V = Valdymas()
 BANDYMAS = False  # True – netikras eNEWS, niekas nespausdinama
+PERZIURA = False  # True – tikras eNEWS, bet niekas neišsaugoma (žr. svarbus_mygtukas)
+
+
+def svarbus_mygtukas(page: Page, raktas: str, laukti: float | None = None) -> bool:
+    """Mygtukas, kuris eNEWS ką nors ĮRAŠO (Validate, Išsaugoti, Confirm, Save, Drukāt).
+    Peržiūros režime jis tik surandamas ir parodomas (raudonu rėmeliu), bet
+    nespaudžiamas. Grąžina True, jei paspausta."""
+    if not PERZIURA:
+        spausti(page, raktas, laukti)
+        return True
+    mygtukas = rasti(page, mygtuko_selektoriai(T(raktas)), " / ".join(T(raktas)), laukti)
+    try:
+        mygtukas.scroll_into_view_if_needed(timeout=3000)
+        mygtukas.evaluate("el => { el.style.outline = '4px solid red'; el.style.outlineOffset = '2px'; }")
+    except Exception:
+        pass
+    log.info("     (peržiūra) rastas „%s“ – NESPAUSTA", T1(raktas))
+    time.sleep(1.5)
+    return False
 
 
 def zingsnis(tekstas: str) -> None:
@@ -306,7 +325,8 @@ def akumuliatorius(page: Page, m: Masina) -> None:
                          3, "3 kodo laukeliai")
     for laukas, dalis in zip(laukai, m.kodas):
         irasyti(laukas, dalis, "kodo laukelis")
-    spausti(page, "validate")
+    if not svarbus_mygtukas(page, "validate"):
+        return
 
     # Laukiame rezultato puslapio („Test Result: …“) ir tik tada vertiname, kad
     # nesupainiotume su ankstesnių testų lentele.
@@ -358,7 +378,10 @@ def pdi(page: Page, m: Masina) -> None:
           "VEIKSMAS varnelė").check()
 
     zingsnis(T1("pdi_saugoti"))
-    spausti(forma, "pdi_saugoti")
+    if not svarbus_mygtukas(forma, "pdi_saugoti"):
+        if forma is not page:
+            forma.close()
+        return
     if forma is not page and not forma.is_closed():
         try:
             forma.wait_for_event("close", timeout=N.LAUKTI_SEK * 1000)
@@ -382,7 +405,12 @@ def garantija(page: Page, m: Masina) -> None:
     irasyti(rasti(page, [lauka_po("rida")], "Rida pristatant"), str(N.RIDA), "Rida pristatant")
 
     zingsnis("Confirm")
-    spausti(page, "confirm")
+    if not svarbus_mygtukas(page, "confirm"):
+        try:
+            svarbus_mygtukas(page, "save", laukti=3)
+        except Klaida:
+            log.info("     (atskiro Save mygtuko nesimato – gal atsiranda po Confirm)")
+        return
     zingsnis("Save")
     try:
         spausti(page, "save", laukti=8)
@@ -495,6 +523,12 @@ def wbmr(page: Page, m: Masina) -> None:
     zingsnis("WBMR skirtukas")
     spausti(page, "wbmr")
     zingsnis("Drukāt (garantijos sertifikatas)")
+    if PERZIURA:
+        svarbus_mygtukas(page, "drukat")
+        zingsnis(T1("tp_planas"))
+        spausti(page, "tp_planas")
+        svarbus_mygtukas(page, "drukat")
+        return
     pirmas = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-1-sertifikatas.pdf")
 
     zingsnis(T1("tp_planas"))
@@ -572,17 +606,21 @@ def atidaryti_enews(ctx, adresas: str | None = None) -> tuple[Page, str]:
 
 
 def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
-            bandymas: bool = False) -> tuple[int, int]:
+            bandymas: bool = False, perziura: bool = False) -> tuple[int, int]:
     """Pagrindinis ciklas. Grąžina (atlikta, atidėta).
     bandymas=True – netikras eNEWS šiame kompiuteryje, niekas nespausdinama."""
-    global BANDYMAS
-    BANDYMAS = bandymas
+    global BANDYMAS, PERZIURA
+    BANDYMAS, PERZIURA = bandymas, perziura and not bandymas
+    if PERZIURA:
+        log.info("PERŽIŪRA: tikras eNEWS, bet nieko neišsaugoma, nespausdinama ir Excel nežymimas.")
+        sarasas.pazymeti = lambda *a, **k: None  # Excel'yje nieko nekeičiame
+        sarasas.issaugoti = lambda *a, **k: None
     serveris = adresas = None
     if bandymas:
         import netikras_enews
         serveris, adresas = netikras_enews.paleisti()
         log.info("BANDYMAS: netikras eNEWS %s, Excel kopija %s", adresas, sarasas.kelias.name)
-    else:
+    elif not PERZIURA:
         log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
     atlikta = atideta = 0
     with sync_playwright() as pw:
@@ -597,7 +635,8 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
                 V.busena(m, "dirbama…")
                 try:
                     apdoroti(page, pradzia, m)
-                    tekstas = f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M}"
+                    tekstas = ("Peržiūra: visi laukai ir mygtukai rasti" if PERZIURA
+                               else f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M}")
                     sarasas.pazymeti(m.eilute, N.SPALVA_ATLIKTA, tekstas)
                     atlikta += 1
                     log.info("  ✔ atlikta")
@@ -678,6 +717,8 @@ def main() -> None:
     ap.add_argument("--vienas", action="store_true", help="apdoroti tik vieną mašiną")
     ap.add_argument("--zingsniais", action="store_true", help="sustoti prieš kiekvieną veiksmą")
     ap.add_argument("--diagnostika", action="store_true", help="tik išsaugoti puslapių HTML")
+    ap.add_argument("--perziura", action="store_true",
+                    help="tikras eNEWS, bet niekas neišsaugoma (patikrinti, ar robotas viską randa)")
     ap.add_argument("--bandymas", action="store_true",
                     help="be B2B: netikras eNEWS, Excel kopija, niekas nespausdinama")
     args = ap.parse_args()
@@ -705,7 +746,7 @@ def main() -> None:
     if not masinos:
         sys.exit("Nėra ką daryti (visos eilutės nuspalvintos arba su klaidomis).")
     log.info("Bus daroma mašinų: %d", len(masinos))
-    vykdyti(sarasas, masinos, vienas=args.vienas, bandymas=args.bandymas)
+    vykdyti(sarasas, masinos, vienas=args.vienas, bandymas=args.bandymas, perziura=args.perziura)
 
 
 if __name__ == "__main__":

@@ -59,3 +59,24 @@ def test_visa_eiga(narsykle, tmp_path, monkeypatch):
             robotas.apdoroti(page, adresas, panaudotas)
     finally:
         serveris.shutdown()
+
+
+def test_perziura_nieko_neissaugo(narsykle, tmp_path, monkeypatch):
+    """Peržiūroje robotas pereina visus žingsnius, bet eNEWS lieka nepakeistas."""
+    import robotas
+    from excel_eiles import Masina
+    monkeypatch.setattr(robotas, "SPAUSDINTI", tmp_path)
+    monkeypatch.setattr(robotas, "PERZIURA", True)
+    monkeypatch.setattr(robotas.N, "LAUKTI_SEK", 8)
+    monkeypatch.setattr(robotas.time, "sleep", lambda s: None)
+    serveris, adresas = netikras_enews.paleisti()
+    try:
+        page = narsykle.new_context(accept_downloads=True).new_page()
+        m = Masina(2, "SJNJ12TD0U2373741", ("JRH36", "1Q9D77", "TE204"),
+                   dt.date(2026, 9, 22), dt.date(2026, 9, 24), "OAU289")
+        robotas.apdoroti(page, adresas, m)
+        busena = page.evaluate("JSON.parse(localStorage.getItem('bandymas'))")[m.vin]
+        assert busena["testai"] == [] and "pdi" not in busena and "reg" not in busena
+        assert list(tmp_path.iterdir()) == []   # nieko neparsisiųsta / nespausdinta
+    finally:
+        serveris.shutdown()

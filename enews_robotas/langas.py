@@ -147,6 +147,7 @@ class Langas(tk.Tk):
         self.zingsniais = tk.BooleanVar(value=False)
         self.tik_pazymetos = tk.BooleanVar(value=False)
         self.bandymas = tk.BooleanVar(value=False)
+        self.perziura = tk.BooleanVar(value=False)
         self.rodyti_visas = tk.BooleanVar(value=False)
         ttk.Checkbutton(varneles, text="Žingsniais (laukti „Tęsti“ prieš kiekvieną veiksmą)",
                         variable=self.zingsniais).pack(side="left", padx=(0, 12))
@@ -155,6 +156,8 @@ class Langas(tk.Tk):
                         command=self.rodyti).pack(side="left", padx=12)
         ttk.Checkbutton(varneles, text="BANDYMAS be B2B (namuose)", variable=self.bandymas,
                         command=self.perjungti_bandyma).pack(side="left", padx=12)
+        ttk.Checkbutton(varneles, text="PERŽIŪRA tikrame B2B (nieko neišsaugo)", variable=self.perziura,
+                        command=self.perjungti_perziura).pack(side="left", padx=12)
 
         self.klausimas = tk.StringVar(value="")
         ttk.Label(f, textvariable=self.klausimas, style="Klausimas.TLabel").pack(fill="x", pady=(0, 4))
@@ -216,6 +219,7 @@ class Langas(tk.Tk):
             self.bandymas.set(not self.bandymas.get())
             return
         if self.bandymas.get():
+            self.perziura.set(False)
             kopija = netikras_enews.paruosti_excel(self.excel_kelias.get())
             self.log(f"BANDYMAS be B2B: netikras eNEWS, dirbama su Excel kopija {kopija.name} "
                      "(tikras failas nepaliečiamas), niekas nespausdinama.")
@@ -224,6 +228,17 @@ class Langas(tk.Tk):
             self.bandymo_juosta.pack_forget()
             self.log("Bandymas išjungtas – dirbama su tikru Excel ir tikru eNEWS.")
         self.perskaityti()
+
+    def perjungti_perziura(self):
+        if self.perziura.get():
+            if self.bandymas.get():
+                self.bandymas.set(False)
+                self.perjungti_bandyma()
+            self.log("PERŽIŪRA: robotas eis per tikrą eNEWS ir pildys laukus, bet mygtukų, kurie "
+                     "įrašo (Validate, Išsaugoti, Confirm, Save, Drukāt), NESPAUS – tik apves raudonai. "
+                     "Excel nežymimas, niekas nespausdinama. Galima naudoti ir jau padarytas mašinas.")
+        else:
+            self.log("Peržiūra išjungta – robotas dirbs iš tikrųjų.")
 
     def nauja_bandymo_kopija(self):
         if self.gija and self.gija.is_alive():
@@ -377,12 +392,16 @@ class Langas(tk.Tk):
         if blok and not messagebox.askyesno(
                 PAVADINIMAS, f"{len(blok)} eil. su klaidomis bus praleistos. Daryti likusias {len(darbo)}?"):
             return
+        if not self.bandymas.get() and not self.perziura.get() and not messagebox.askyesno(
+                PAVADINIMAS, f"Robotas dirbs TIKRAME eNEWS: {len(darbo)} mašin. bus įvesta ir atspausdinta.\n\n"
+                             "Tęsti?\n\n(Jei norite tik pasitikrinti – pažymėkite „PERŽIŪRA“.)"):
+            return
         sarasas = Sarasas(self.aktyvus_excel(), N)
         self.valdymas.stabdyti.clear()
         self.valdymas.zingsniais = self.zingsniais.get()
         self._dirba(True)
         self.log(f"▶ Pradedama: {len(darbo)} mašinų.")
-        self.gija = threading.Thread(target=self._vykdyti, args=(robotas.vykdyti, sarasas, darbo, False, self.bandymas.get()),
+        self.gija = threading.Thread(target=self._vykdyti, args=(robotas.vykdyti, sarasas, darbo, False, self.bandymas.get(), self.perziura.get()),
                                      daemon=True)
         self.gija.start()
 
@@ -468,7 +487,7 @@ class Langas(tk.Tk):
                 elif rusis == "busena":
                     eil, tekstas = duom
                     if self.medis.exists(str(eil)):
-                        zyma = ("dirbama" if tekstas.endswith("…") else "atlikta" if tekstas.startswith("Atlikta")
+                        zyma = ("dirbama" if tekstas.endswith("…") else "atlikta" if tekstas.startswith(("Atlikta", "Peržiūra"))
                                 else "akumas" if tekstas.startswith("Akumuliatorius") else
                                 "" if tekstas.startswith("sustabdyta") else "klaida")
                         self.medis.item(str(eil), tags=(zyma,))
