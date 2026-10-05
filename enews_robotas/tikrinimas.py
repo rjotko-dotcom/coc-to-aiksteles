@@ -41,8 +41,6 @@ def duomenys(masinos: list[Masina], siandien: dt.date | None = None) -> list[Pas
                 pastabos.append(Pastaba(KLAIDA, f"keista kodo dalis „{dalis}“", m.eilute))
         if m.numeris and not NUMERIS_RE.match(m.numeris):
             pastabos.append(Pastaba(PERSPEJIMAS, f"numeris „{m.numeris}“ ne ABC123 formos", m.eilute))
-        if m.pdi_data and m.garantija and m.pdi_data > m.garantija:
-            pastabos.append(Pastaba(PERSPEJIMAS, "PDI data vėlesnė už tech. pradžią", m.eilute))
         for pav, data in (("PDI", m.pdi_data), ("tech. pradžios", m.garantija)):
             if data and (siandien - data).days > 90:
                 pastabos.append(Pastaba(PERSPEJIMAS, f"{pav} data senesnė nei 90 d.", m.eilute))

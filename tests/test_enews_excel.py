@@ -75,13 +75,13 @@ def test_tikrinimas_randa_dublikatus_ir_formatus(tmp_path):
     s.irasyti(3, "E", "JRH36")
     s.irasyti(3, "I", "TE204")    # tas pats kodas kaip 2 eil.
     s.irasyti(2, "M", "OAU 28")   # ne ABC123
-    s.irasyti(2, "K", "09.30")    # PDI vėliau nei tech. pradžia
+    s.irasyti(2, "K", "09.30")    # PDI vėliau nei tech. pradžia – normalu, nežymima
     pastabos = tikrinimas.duomenys(s.visos(SIANDIEN), SIANDIEN)
     tekstai = {(p.eilute, p.lygis, p.tekstas.split(" ")[0]) for p in pastabos}
     assert (2, tikrinimas.KLAIDA, "Midtronics") in tekstai
     assert (3, tikrinimas.KLAIDA, "Midtronics") in tekstai
     assert (2, tikrinimas.PERSPEJIMAS, "numeris") in tekstai
-    assert (2, tikrinimas.PERSPEJIMAS, "PDI") in tekstai
+    assert (2, tikrinimas.PERSPEJIMAS, "PDI") not in tekstai
     assert tikrinimas.blokuojamos_eilutes(pastabos) == {2, 3}
 
 

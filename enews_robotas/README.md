@@ -81,7 +81,7 @@ Dukart spustelėjus **`paleisti.bat`** atsidaro valdymo langas (juodo lango nėr
 
 * **balta** – paruošta, robotas darys;
 * **geltona (!)** – darys, bet verta pažiūrėti (pvz. numeris ne ABC123 formos,
-  PDI data vėlesnė už tech. pradžią, data senesnė nei 90 d.);
+  data senesnė nei 90 d.);
 * **raudona (✖)** – robotas jos **nedarys**, kol nepataisysite: trūksta kodo dalies,
   neaiški data, VIN su klaida, tas pats Midtronics kodas / VIN / numeris dviejose
   eilutėse (ir su jau padaryta);
