@@ -124,7 +124,7 @@ class Langas(tk.Tk):
         mygt.pack(fill="x", pady=(0, 6))
         self.b_tikrinti = ttk.Button(mygt, text="✔ Tikrinti", command=self.tikrinti)
         self.b_pradeti = ttk.Button(mygt, text="▶ Pradėti", style="Didelis.TButton", command=self.pradeti)
-        self.b_testi = ttk.Button(mygt, text="Tęsti ⏎", style="Didelis.TButton", command=self.testi, state="disabled")
+        self.b_testi = ttk.Button(mygt, text="Tęsti ▶", style="Didelis.TButton", command=self.testi, state="disabled")
         self.b_stabdyti = ttk.Button(mygt, text="■ Stabdyti", command=self.stabdyti, state="disabled")
         for b in (self.b_tikrinti, self.b_pradeti, self.b_testi, self.b_stabdyti):
             b.pack(side="left", padx=(0, 6))
@@ -223,8 +223,9 @@ class Langas(tk.Tk):
         kelias = self.aktyvus_excel()
         self.masinos, self.pastabos = [], []
         if not Path(kelias).is_file():
-            self.suvestine.set(f"Nerastas Excel failas: {kelias} – pasirinkite jį viršuje.")
             self.rodyti()
+            self.suvestine.set(f"✖ Nerastas Excel failas: {kelias} – spauskite „Pasirinkti…“ viršuje.")
+            self.log(f"✖ Nerastas Excel failas {kelias}. Spauskite „Pasirinkti…“ ir nurodykite savo failą.")
             return
         try:
             self.masinos = Sarasas(kelias, N).visos()
