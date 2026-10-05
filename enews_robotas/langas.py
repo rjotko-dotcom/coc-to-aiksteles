@@ -192,6 +192,7 @@ class Langas(tk.Tk):
         meniu = tk.Menu(self, tearoff=0)
         meniu.add_command(label="Taisyti…", command=self.taisyti)
         meniu.add_command(label="Daryti iš naujo (nuimti spalvą)", command=self.is_naujo)
+        meniu.add_command(label="Atspausdinti dar kartą (failai jau aplanke)", command=self.spausdinti_is_naujo)
         self.medis.bind("<Button-3>", lambda e: (self.medis.selection_set(self.medis.identify_row(e.y)),
                                                  meniu.tk_popup(e.x_root, e.y_root)))
         dalys.add(lent, weight=3)
@@ -357,6 +358,36 @@ class Langas(tk.Tk):
             s.nuimti_spalva(int(iid))
         s.issaugoti()
         self.perskaityti()
+
+    def spausdinti_is_naujo(self):
+        """Atspausdina pažymėtų mašinų jau išsaugotus PDF (pvz. kai sustota ties spausdinimu)."""
+        if self.gija and self.gija.is_alive():
+            messagebox.showwarning(PAVADINIMAS, "Robotas dirba – pabandykite jam baigus.")
+            return
+        import spausdinimas
+        darbai = []
+        for iid in self.medis.selection():
+            m = next((x for x in self.masinos if str(x.eilute) == iid), None)
+            if m is None:
+                continue
+            failai = {1: sorted(robotas.SPAUSDINTI.glob(f"*{m.vin}-1-*.pdf")),
+                      2: sorted(robotas.SPAUSDINTI.glob(f"*{m.vin}-2-*.pdf"))}
+            if not failai[1] or not failai[2]:
+                self.log(f"✖ {m.eilute} eil. ({m.numeris}): aplanke „spausdinti“ nėra abiejų failų")
+                continue
+            darbai += [(failai[nr][-1], rusis) for nr, rusis in spausdinimas.planas()]
+        if not darbai or not messagebox.askyesno(
+                PAVADINIMAS, f"Atspausdinti {len(darbai)} lap. (pagal planą {N.SPAUSDINIMO_PLANAS})?"):
+            return
+
+        def darbas():
+            for failas, rusis in darbai:
+                try:
+                    spausdinimas.spausdinti(failas, rusis)
+                    self.eile.put(("log", f"✔ atspausdinta {failas.name} ({rusis})"))
+                except Exception as e:  # noqa: BLE001
+                    self.eile.put(("log", f"✖ nepavyko {failas.name} ({rusis}): {e}"))
+        threading.Thread(target=darbas, daemon=True).start()
 
     def irasyti_pataisyma(self, m: Masina, reiksmes: dict[str, str]):
         s = Sarasas(self.aktyvus_excel(), N)
