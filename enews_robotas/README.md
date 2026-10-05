@@ -41,13 +41,14 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
    https://www.python.org/downloads/, diegiant pažymėkite **„Add python.exe to PATH“**
    (administratoriaus teisių nereikia). Jei Python nėra, `paleisti.bat` tai ir parašys.
    Pirmas paleidimas iš interneto parsisiunčia bibliotekas (~1 min.).
-2. Įdiekite **SumatraPDF** (https://www.sumatrapdfreader.org). Su ja robotas
-   spausdina be jokių langų. Be jos PDF failai tik išsaugomi aplanke `spausdinti`.
-3. **Lipnus popierius.** Windows'e tą patį spausdintuvą pridėkite dar kartą ir
-   pavadinkite **„Lipnus“** (*Settings → Printers & scanners → Add device*).
-   Tada *Lipnus → Printing preferences* nustatykite lipnų popierių ir stalčių,
-   lygiai taip, kaip dabar darote ranka. Robotas spausdins į jį.
-4. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
+2. **Spausdinimas** veikia be papildomų programų: robotas pats siunčia PDF į
+   spausdintuvą. Skirtuke **Nustatymai → Spausdinimas** pasirinkite spausdintuvą
+   (pvz. SHARP MX-3051 PCL6) ir lipnaus popieriaus tipą (**Labels**). Lipniam
+   spausdinama vienpusiai, paprastam – spalvotai; numatytasis planas
+   `1:paprastas, 1:lipnus, 2:lipnus` (1 – garantijos sertifikatas, 2 – TP planas).
+   Jūsų įprastos spausdintuvo nuostatos nekeičiamos. Mygtukai **Bandomasis lapas**
+   leidžia patikrinti be eNEWS.
+3. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
    **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
 
 ## Išbandyti namuose, be B2B
@@ -97,7 +98,7 @@ Mygtukai:
 
 | Mygtukas | Ką daro |
 |---|---|
-| ✔ Tikrinti | patikrina duomenis **ir kompiuterį**: ar Excel uždarytas, ar yra Chrome, SumatraPDF, ar spausdintuvai su tokiais pavadinimais tikrai yra |
+| ✔ Tikrinti | patikrina duomenis **ir kompiuterį**: ar Excel uždarytas, ar yra Chrome, ar spausdintuvai ir popieriaus tipas Labels su tokiais pavadinimais tikrai yra |
 | ▶ Pradėti | paleidžia robotą (pirma dar kartą patikrina) |
 | Tęsti ⏎ | kai robotas laukia jūsų (prisijungimas, „Žingsniais“ režimas, lipnus popierius) |
 | ■ Stabdyti | sustabdo; nebaigta mašina lieka nenuspalvinta ir bus daroma kitą kartą |
@@ -106,7 +107,7 @@ Mygtukai:
 Apačioje **„Ką daro robotas“** – kiekvienas veiksmas realiu laiku, o lentelėje
 mėlynai pažymėta mašina, kurią daro dabar.
 
-**Nustatymai** – Excel stulpeliai, rida, datos formatas, SumatraPDF, spausdintuvai
+**Nustatymai** – Excel stulpeliai, rida, datos formatas, spausdintuvai, popieriaus tipas, ką kaip spausdinti
 (išsirenkami iš sąrašo). **eNEWS užrašai** – mygtukų ir laukelių pavadinimai, pagal
 kuriuos robotas juos randa; jei Nissan ką nors pervadins, pakeisite čia, kodo liesti
 nereikia. Viskas išsaugoma `nustatymai.json`.

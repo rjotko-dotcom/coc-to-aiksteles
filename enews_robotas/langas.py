@@ -318,7 +318,7 @@ class Langas(tk.Tk):
         blok = tikrinimas.blokuojamos_eilutes(self.pastabos)
         darbo = [m for m in self.masinos if not m.nuspalvinta and m.eilute not in blok]
         if not aplinka:
-            self.log("✔ Kompiuteris paruoštas (Excel, Chrome, SumatraPDF, spausdintuvai).", "gerai")
+            self.log("✔ Kompiuteris paruoštas (Excel, Chrome, spausdintuvai).", "gerai")
         self.log(f"Excel: paruoštų mašinų {len(darbo)}, su klaidomis {len(blok)}.",
                  "gerai" if darbo and not blok else None)
         return not any(p.lygis == tikrinimas.KLAIDA for p in aplinka) and bool(darbo)
@@ -755,7 +755,7 @@ PAGALBA = """KAIP NAUDOTIS
      • geltonos (!) – robotas darys, bet verta pažiūrėti (pvz. numeris ne ABC123 formos);
      • baltos – paruoštos.
    Dukart spustelėjus eilutę galima pataisyti kodą, datas ar numerį – pakeitimas įrašomas į Excel.
-3. „✔ Tikrinti“ – patikrina ir kompiuterį: ar uždarytas Excel, ar yra Chrome, SumatraPDF ir
+3. „✔ Tikrinti“ – patikrina ir kompiuterį: ar uždarytas Excel, ar yra Chrome ir
    spausdintuvai („Lipnus“).
 4. „▶ Pradėti“. Atsidarys Chrome – prisijunkite prie Nissan B2B, atsidarykite ENEWS ir
    spauskite „Tęsti“. Toliau robotas dirba pats; lentelėje matosi, kurią mašiną daro, apačioje –
