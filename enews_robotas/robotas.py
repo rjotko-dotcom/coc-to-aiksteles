@@ -483,62 +483,85 @@ def garantija(page: Page, m: Masina) -> None:
 
 # --- Failai ir spausdinimas ---------------------------------------------------
 
-def _issaugoti_is_lango(langas: Page, kelias: Path) -> None:
-    """Išsaugo lange atidarytą PDF (Chrome PDF peržiūra arba blob: adresas)."""
-    try:
-        langas.wait_for_load_state(timeout=N.LAUKTI_SEK * 1000)
-    except PWTimeout:
-        pass
+def _pdf_is_lango(langas: Page) -> bytes | None:
+    """PDF turinys, jei lange atidarytas PDF (Chrome peržiūra, blob: ar tiesioginė
+    nuoroda); kitaip None."""
     url = langas.url
-    if url.startswith("blob:"):
-        b64 = langas.evaluate("""async u => { const b = await (await fetch(u)).arrayBuffer();
-            let s = ''; const a = new Uint8Array(b);
-            for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
-            return btoa(s); }""", url)
-        kelias.write_bytes(base64.b64decode(b64))
-        return
-    atsakas = langas.context.request.get(url)
-    if "pdf" not in atsakas.headers.get("content-type", "") and not atsakas.body().startswith(b"%PDF"):
-        raise Klaida(f"Drukāt atidarė ne PDF ({url[:80]}) – atspausdinkite ranka")
-    kelias.write_bytes(atsakas.body())
+    if not url or url.startswith(("about:", "chrome")):
+        return None
+    try:
+        if url.startswith("blob:"):
+            b64 = langas.evaluate("""async u => { const b = await (await fetch(u)).arrayBuffer();
+                let s = ''; const a = new Uint8Array(b);
+                for (let i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+                return btoa(s); }""", url)
+            turinys = base64.b64decode(b64)
+        else:
+            turinys = langas.context.request.get(url).body()
+    except Exception:
+        return None
+    return turinys if turinys[:5].startswith(b"%PDF") else None
 
 
 def gauti_faila(page: Page, kelias: Path) -> Path:
-    """Paspaudžia „Drukāt“ ir išsaugo atsiradusį PDF: atsisiuntimą, naują langą
-    arba tame pačiame skirtuke atidarytą failą."""
-    ivykiai: dict = {}
+    """Paspaudžia „Drukāt“ ir išsaugo atsiradusį PDF: atsisiuntimą, naujame lange
+    ar tame pačiame skirtuke atidarytą PDF. Laukia iki 60 s – kol tikrai bus PDF."""
+    atsiuntimai: list = []
+    langai: list[Page] = []
     ctx = page.context
-    def atsiuntimas(d): ivykiai.setdefault("dl", d)
+    def atsiuntimas(d): atsiuntimai.append(d)
     def langas(p):
-        ivykiai.setdefault("pg", p)
+        langai.append(p)
         p.on("download", atsiuntimas)
     page.on("download", atsiuntimas)
     ctx.on("page", langas)
     url_pries = page.url
     pradzia = time.time()
+    turinys: bytes | None = None
+    patikrinta: set[str] = set()
     try:
         spausti(page, "drukat")
-        while time.time() < pradzia + 60 and "dl" not in ivykiai:
-            if time.time() > pradzia + 6 and ("pg" in ivykiai or page.url != url_pries):
-                break  # langas atsidarė ir nieko nesiuntė – skaitome jį patį
+        while time.time() < pradzia + 60:
+            if atsiuntimai:
+                break
+            if time.time() > pradzia + 3:  # atsisiuntimui duodame pirmenybę
+                for p in [*langai, page]:
+                    if p.is_closed() or (p is page and p.url == url_pries) or p.url in patikrinta:
+                        continue
+                    patikrinta.add(p.url)
+                    turinys = _pdf_is_lango(p)
+                    if turinys:
+                        break
+                if turinys:
+                    break
             snausti(0.3)
     finally:
         page.remove_listener("download", atsiuntimas)
         ctx.remove_listener("page", langas)
 
-    if "dl" in ivykiai:
-        ivykiai["dl"].save_as(str(kelias))
-        if "pg" in ivykiai and not ivykiai["pg"].is_closed():
-            ivykiai["pg"].close()
-    elif "pg" in ivykiai:
-        _issaugoti_is_lango(ivykiai["pg"], kelias)
-        ivykiai["pg"].close()
-    elif page.url != url_pries:
-        _issaugoti_is_lango(page, kelias)
+    if atsiuntimai:
+        atsiuntimai[0].save_as(str(kelias))
+        log.info("     failas atsisiųstas (%s)", atsiuntimai[0].suggested_filename)
+    elif turinys:
+        kelias.write_bytes(turinys)
+        log.info("     failas paimtas iš atsidariusio lango")
+    else:
+        atsidare = ", ".join(p.url[:90] for p in langai if not p.is_closed()) or "nieko"
+        if page.url != url_pries:
+            atsidare += f"; eNEWS puslapis pasikeitė į {page.url[:90]}"
+        raise Klaida(f"paspaudus Drukāt per 60 s PDF neatsirado. Atsidarė: {atsidare}")
+
+    # PDF langus uždarome, eNEWS skirtukas lieka.
+    for p in langai:
+        if not p.is_closed():
+            try:
+                p.close()
+            except Exception:
+                pass
+    if page.url != url_pries and not page.is_closed():
         page.go_back()
         laukti_ramybes(page)
-    else:
-        raise Klaida("paspaudus Drukāt failas neatsirado")
+    page.bring_to_front()
     if not kelias.read_bytes()[:5].startswith(b"%PDF"):
         raise Klaida(f"{kelias.name} nėra PDF")
     log.info("     išsaugota %s", kelias.name)
@@ -583,9 +606,21 @@ def wbmr(page: Page, m: Masina) -> None:
     pirmas = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-1-sertifikatas.pdf")
 
     zingsnis(T1("tp_planas"))
-    spausti(page, "tp_planas")
+    pries = puslapio_tekstas(page)
+    try:
+        spausti(page, "tp_planas", laukti=8)
+    except Klaida:  # po pirmo failo puslapis galėjo persikrauti – grįžtame į WBMR
+        log.info("     grįžtama į WBMR")
+        spausti(page, "wbmr")
+        spausti(page, "tp_planas")
+    # Laukiame, kol skirtukas tikrai persijungs – kitaip Drukāt duotų vėl sertifikatą.
+    pabaiga = time.time() + N.LAUKTI_SEK
+    while puslapio_tekstas(page) == pries and time.time() < pabaiga:
+        snausti(0.3)
     zingsnis("Drukāt (techninės priežiūros planas)")
     antras = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-2-tp-planas.pdf")
+    if antras.read_bytes() == pirmas.read_bytes():
+        raise Klaida("antras failas toks pat kaip pirmas – paspaustas ne to skirtuko Drukāt")
 
     spausdinti(pirmas, lipnus=False)
     spausdinti(pirmas, lipnus=True)

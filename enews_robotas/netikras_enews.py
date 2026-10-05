@@ -59,6 +59,8 @@ class Tvarkytojas(SimpleHTTPRequestHandler):
                            f"Sukurta: {dt.datetime.now():%Y-%m-%d %H:%M}"])
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
+            if q.get("tipas") != "sert":  # antras failas – kaip atsisiuntimas (abu būdai išbandomi)
+                self.send_header("Content-Disposition", f'attachment; filename="TP_{q.get("vin", "")}.pdf"')
             self.send_header("Content-Length", str(len(turinys)))
             self.end_headers()
             self.wfile.write(turinys)
