@@ -146,3 +146,19 @@ def test_spausdinimo_planas_ir_isdestymas():
     x0, y0, x1, y1 = spausdinimas.isdestymas((4960, 7016), (4760, 6816), (100, 100), (595, 842), (600, 600))
     assert (x1 - x0) <= 4760 and (y1 - y0) <= 6816 and x0 >= 0 and y0 >= 0
     assert abs((x1 - x0) / (y1 - y0) - 595 / 842) < 0.01
+
+
+def test_suvestine_ir_senu_failu_trynimas(tmp_path, monkeypatch):
+    pytest.importorskip("playwright")
+    import os
+    import time
+    import robotas
+    from excel_eiles import Masina
+    m = Masina(3, "TESTA000000000003", ("BAD01", "1T2T02", "T0003"), None, None, "AAA003")
+    t = robotas.suvestine([(m, "atlikta", "Atlikta", 125), (m, "akumas", "Akumuliatorius: Replace battery", 30)])
+    assert "Atlikta: 1, atidėta: 1" in t and "2:05" in t and "AAA003" in t
+    monkeypatch.setattr(robotas, "SPAUSDINTI", tmp_path)
+    senas, naujas = tmp_path / "senas.pdf", tmp_path / "naujas.pdf"
+    senas.write_bytes(b"x"); naujas.write_bytes(b"x")
+    os.utime(senas, (time.time() - 40 * 86400,) * 2)
+    assert robotas.valyti_senus(30) == 1 and not senas.exists() and naujas.exists()

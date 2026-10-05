@@ -87,6 +87,7 @@ def paleisti() -> tuple[ThreadingHTTPServer, str]:
 def paruosti_excel(tikras: str | Path) -> Path:
     """Bandymui – tikro Excel kopija (tikras failas nepaliečiamas), o jei jo nėra – pavyzdys."""
     kopija = ARCH / "bandymui.xlsx"
+    (ARCH / "eiga.json").unlink(missing_ok=True)  # nauja kopija – ir bandymo eiga iš naujo
     if Path(tikras).is_file():
         shutil.copy2(tikras, kopija)
     else:

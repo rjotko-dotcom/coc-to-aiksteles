@@ -41,6 +41,10 @@ class LangoValdymas(robotas.Valdymas):
     def busena(self, m: Masina, tekstas: str) -> None:
         self.eile.put(("busena", (m.eilute, tekstas)))
 
+    def ataskaita(self, tekstas: str) -> None:
+        robotas.log.info(tekstas)
+        self.eile.put(("ataskaita", tekstas))
+
 
 class EilesZurnalas(logging.Handler):
     def __init__(self, eile: queue.Queue):
@@ -87,6 +91,7 @@ class Langas(tk.Tk):
 
         self.after(100, self._skaityti_eile)
         self.after(200, self.perskaityti)
+        self.after(400, self._valyti_senus)
 
     # --- Viršus ---------------------------------------------------------------
 
@@ -99,6 +104,19 @@ class Langas(tk.Tk):
         ttk.Button(f, text="Pasirinkti…", command=self.pasirinkti_excel).pack(side="left")
         ttk.Button(f, text="Perskaityti", command=self.perskaityti).pack(side="left", padx=4)
         ttk.Button(f, text="Atidaryti Excel", command=self.atidaryti_excel).pack(side="left")
+
+    def _valyti_senus(self):
+        try:
+            kiek = robotas.valyti_senus(int(N.SAUGOTI_DIENU))
+        except Exception:  # noqa: BLE001
+            return
+        if kiek:
+            self.log(f"Ištrinta senų failų (senesnių nei {N.SAUGOTI_DIENU} d.): {kiek}")
+
+    def eiga(self):
+        import eiga
+        aplankas = netikras_enews.ARCH if self.bandymas.get() else robotas.ARCH
+        return eiga.Eiga(aplankas / "eiga.json")
 
     def pasirinkti_excel(self):
         kelias = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx *.xlsm"), ("Visi", "*.*")])
@@ -287,6 +305,7 @@ class Langas(tk.Tk):
         for p in self.pastabos:
             pagal_eil.setdefault(p.eilute, []).append(p)
         darbo = blok = persp = 0
+        eiga_ = self.eiga()
         for m in self.masinos:
             past = pagal_eil.get(m.eilute, [])
             if m.nuspalvinta and not self.rodyti_visas.get():
@@ -298,6 +317,10 @@ class Langas(tk.Tk):
                 persp += zyma == "perspejimas"
             tekstas = m.busena if m.nuspalvinta else "; ".join(
                 ("✖ " if p.lygis == tikrinimas.KLAIDA else "! ") + p.tekstas for p in past)
+            if not m.nuspalvinta:
+                padaryta = eiga_.santrauka(m.vin)
+                if padaryta:
+                    tekstas = "; ".join(x for x in (tekstas, padaryta + " – bus tęsiama") if x)
             self.medis.insert("", "end", iid=str(m.eilute), tags=(zyma,), values=(
                 m.eilute, m.vin, " - ".join(m.kodas),
                 m.pdi_data.strftime("%m.%d") if m.pdi_data else "?",
@@ -354,8 +377,12 @@ class Langas(tk.Tk):
         if not messagebox.askyesno(PAVADINIMAS, f"Nuimti spalvą nuo {len(sel)} eil.? Robotas jas darys iš naujo."):
             return
         s = Sarasas(self.aktyvus_excel(), N)
+        e = self.eiga()
         for iid in sel:
             s.nuimti_spalva(int(iid))
+            m = next((x for x in self.masinos if str(x.eilute) == iid), None)
+            if m:
+                e.isvalyti(m.vin)  # „iš naujo“ – visi žingsniai, ne tik trūkstami
         s.issaugoti()
         self.perskaityti()
 
@@ -525,6 +552,10 @@ class Langas(tk.Tk):
                         self.medis.item(str(eil), tags=(zyma,))
                         self.medis.set(str(eil), "busena", tekstas)
                         self.medis.see(str(eil))
+                elif rusis == "ataskaita":
+                    self.bell()
+                    self.lift()
+                    messagebox.showinfo(PAVADINIMAS, duom)
                 elif rusis == "baigta":
                     self._dirba(False)
                     self.perskaityti()
@@ -570,6 +601,8 @@ class Langas(tk.Tk):
         eilute(en, 1, "RIDA", "Rida pristatant", 8)
         eilute(en, 2, "DATOS_FORMATAS", "Datos formatas eNEWS", 12, pastaba="%d/%m/%Y → 22/09/2026")
         eilute(en, 3, "LAUKTI_SEK", "Kiek laukti mygtuko (s)", 8, pastaba="jei eNEWS lėtas – padidinkite")
+        eilute(en, 4, "SAUGOTI_DIENU", "Kiek dienų saugoti PDF ir klaidų nuotraukas", 8,
+               pastaba="senesni ištrinami paleidus robotą; 0 – netrinti")
 
         sp = ttk.LabelFrame(f, text="Spausdinimas", padding=8)
         sp.pack(fill="x", pady=4)
@@ -680,7 +713,9 @@ class Langas(tk.Tk):
                 if len(dalys) != 3:
                     raise ValueError("Midtronics kodui reikia 3 stulpelių, pvz. E, G, I")
                 nauji[k] = dalys
-            elif k == "LAUKTI_SEK":
+            elif k in ("LAUKTI_SEK", "SAUGOTI_DIENU"):
+                if not t.isdigit():
+                    raise ValueError(f"Turi būti skaičius: {t!r}")
                 nauji[k] = int(t)
             elif k.startswith("STULP_"):
                 if not t.isalpha():

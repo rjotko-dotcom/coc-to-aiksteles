@@ -29,6 +29,7 @@ NUMATYTIEJI = {
     "RIDA": "5",
     "DATOS_FORMATAS": "%d/%m/%Y",   # 22/09/2026
     "LAUKTI_SEK": 20,
+    "SAUGOTI_DIENU": 30,            # po tiek dienų trinami seni PDF ir klaidų nuotraukos (0 – netrinti)
 
     # --- Spausdinimas ---
     "SUMATRA": r"C:\Program Files\SumatraPDF\SumatraPDF.exe",

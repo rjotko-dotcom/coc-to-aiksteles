@@ -15,7 +15,7 @@ FAILAI = [
     "robotas.py", "langas.py", "tikrinimas.py", "excel_eiles.py", "nustatymai.py",
     "netikras_enews.py", "atnaujinimas.py", "requirements.txt", "paleisti.bat", "README.md",
     "sablonas.xlsx", "bandymas/enews/hp_new.html", "bandymas/enews/pdi.html",
-    "bandymas/enews/pranesimai.html", "spausdinimas.py",
+    "bandymas/enews/pranesimai.html", "spausdinimas.py", "eiga.py",
 ]
 
 

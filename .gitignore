@@ -25,3 +25,8 @@ enews_robotas/.venv/
 enews_robotas/bandymas/bandymui.xlsx
 enews_robotas/irankiai/
 enews_robotas/spausdintuvo_nuostatos/
+enews_robotas/eiga.json
+enews_robotas/eiga.tmp
+enews_robotas/bandymas/eiga.json
+enews_robotas/bandymas/eiga.tmp
+enews_robotas/robotas.senas.log

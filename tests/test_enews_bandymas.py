@@ -80,3 +80,37 @@ def test_perziura_nieko_neissaugo(narsykle, tmp_path, monkeypatch):
         assert list(tmp_path.iterdir()) == []   # nieko neparsisiųsta / nespausdinta
     finally:
         serveris.shutdown()
+
+
+def test_tesiama_nuo_ten_kur_baigta(narsykle, tmp_path, monkeypatch):
+    """Antrą kartą ta pati mašina eNEWS nebeliečiama – viskas jau padaryta (eiga.json)."""
+    import eiga
+    import robotas
+    from excel_eiles import Masina
+    monkeypatch.setattr(robotas, "SPAUSDINTI", tmp_path)
+    monkeypatch.setattr(robotas, "BANDYMAS", True)
+    monkeypatch.setattr(robotas, "EIGA", eiga.Eiga(tmp_path / "eiga.json"))
+    monkeypatch.setattr(robotas.N, "LAUKTI_SEK", 8)
+    serveris, adresas = netikras_enews.paleisti()
+    try:
+        m = Masina(2, "TESTA000000000002", ("TST02", "1T2T02", "T0002"),
+                   dt.date(2026, 9, 22), dt.date(2026, 9, 24), "AAA002")
+        robotas.apdoroti(narsykle.new_context().new_page(), adresas, m)
+        assert all(robotas.EIGA.padaryta(m.vin, z) for z in ("akumuliatorius", "pdi", "garantija", "failai"))
+        kitas = narsykle.new_context().new_page()
+        robotas.apdoroti(kitas, adresas, m)
+        assert kitas.url == "about:blank"   # eNEWS net neatidarytas
+    finally:
+        serveris.shutdown()
+
+
+def test_atsijungimas_atpazistamas(narsykle, monkeypatch):
+    import robotas
+    monkeypatch.setattr(robotas.N, "LAUKTI_SEK", 2)
+    serveris, adresas = netikras_enews.paleisti()
+    try:
+        page = narsykle.new_page()
+        with pytest.raises(robotas.Atsijungta):
+            robotas.ieskoti_vin(page, adresas.replace("enews/hp_new.html", "login.html"), "TESTA000000000002")
+    finally:
+        serveris.shutdown()

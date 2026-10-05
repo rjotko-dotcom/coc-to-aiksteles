@@ -143,6 +143,36 @@ Jei kur nors užstringa – **Diagnostika**: Chrome'e eikite per eNEWS langus (V
 paieška, Akumuliatorius, PDI, Automobilis po „Update“, WBMR), kiekviename spauskite
 **Tęsti**, baigę – **Stabdyti**. Aplanką `diagnostika` suarchyvuokite ir atsiųskite.
 
+### Jei sustoja – tęsiama nuo ten, kur baigta
+
+Robotas įsimena (`eiga.json`), kurie kiekvienos mašinos žingsniai jau padaryti:
+akumuliatorius, PDI, garantija, failai, kiekvienas atspausdintas lapas. Jei mašina
+sustojo (klaida, „Stabdyti“, atsijungimas), kitą kartą daroma **tik tai, ko trūksta** –
+niekas neįvedama ir neatspausdinama du kartus. Lentelėje tokia eilutė rodo
+„jau padaryta: … – bus tęsiama“. Dešinys pelės mygtukas → **„Daryti iš naujo“**
+pamiršta įsimintus žingsnius (tada daroma viskas).
+
+### Jei B2B atjungia
+
+Jei baigiasi B2B sesija ar užsidaro Chrome, robotas nepažymi likusių mašinų klaidomis,
+o sustoja ir paprašo prisijungti iš naujo („Tęsti“) – tada tęsia nuo tos pačios mašinos.
+
+### Ataskaita
+
+Pabaigoje robotas skambteli ir parodo suvestinę: kiek atlikta, kiek atidėta ir kodėl,
+kiek vidutiniškai užtruko viena mašina. Kiekvienos mašinos laikas įrašomas ir Excel
+būsenoje („Atlikta … (2:13)“).
+
+### Seni failai
+
+PDF (`spausdinti`) ir klaidų nuotraukos (`klaidos`), senesni nei 30 dienų, ištrinami
+paleidus robotą (Nustatymai → „Kiek dienų saugoti…“, 0 – netrinti).
+
+### Be DI
+
+Robotas – paprasta Python programa: spaudžia mygtukus pagal taisykles. Jis nenaudoja
+jokio dirbtinio intelekto, jokių DI paslaugų ar žetonų ir niekur nesiunčia jūsų duomenų.
+
 ### Apsaugos nuo klaidų
 
 * prieš darbą – Excel atsarginė kopija (`failas.atsargine-…xlsx`);
@@ -168,6 +198,8 @@ komandinėje eilutėje.
 | `nustatymai.py` | numatytieji nustatymai (pakeisti – `nustatymai.json`) |
 | `robotas.py` | eNEWS žingsniai |
 | `excel_eiles.py` | Excel skaitymas ir spalvinimas |
+| `eiga.py` | kurie žingsniai jau padaryti (tęsimui) |
+| `spausdinimas.py` | spausdinimas (paprastas / lipnus) |
 | `netikras_enews.py`, `bandymas/` | netikras eNEWS bandymui be B2B |
 | `chrome_profilis/` | roboto Chrome profilis (prisijungimas), į git nededamas |
 | `spausdinti/` | išsaugoti PDF |

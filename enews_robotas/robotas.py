@@ -51,6 +51,10 @@ class BlogasAkumas(Exception):
     """Akumuliatoriaus testas ne „Good battery“ – eilutė pažymima oranžine."""
 
 
+class Atsijungta(Exception):
+    """B2B sesija baigėsi arba Chrome langas uždarytas – reikia prisijungti iš naujo."""
+
+
 class Sustabdyta(Exception):
     """Naudotojas paspaudė „Stabdyti“."""
 
@@ -69,6 +73,10 @@ class Valdymas:
         threading.Thread(target=lambda: (input(f"     {tekstas} [Enter] "), ivesta.set()), daemon=True).start()
         while not ivesta.is_set():
             snausti(0.2)
+
+    def ataskaita(self, tekstas: str) -> None:
+        """Darbo pabaigos suvestinė (langas parodo ją atskirai ir skambteli)."""
+        log.info(tekstas)
 
     def busena(self, m: Masina, tekstas: str) -> None:
         """Pranešimas, kad eilutės būsena pasikeitė (langas atnaujina lentelę)."""
@@ -315,9 +323,18 @@ RODYKLE_DESINIAU_JS = """reg => {
 
 def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
     zingsnis(f"VIN paieška {vin}")
+    if page.is_closed():
+        raise Atsijungta("eNEWS langas uždarytas")
     page.goto(pradzia)
     laukti_ramybes(page)
-    laukas = rasti(page, [lauka_po("kebulo_numeris", "1")], "VIN paieškos laukas")
+    try:
+        laukas = rasti(page, [lauka_po("kebulo_numeris", "1")], "VIN paieškos laukas")
+    except Klaida:
+        # Jei vietoj eNEWS – prisijungimo puslapis ar kitas adresas, tai atsijungimas, ne mašinos klaida.
+        url = page.url.lower()
+        if "enews" not in url or any(z in url for z in ("login", "logon", "signin", "auth", "sso")):
+            raise Atsijungta(f"vietoj eNEWS atsidarė {page.url[:80]}")
+        raise
     irasyti(laukas, vin, "VIN paieška")
     # Paieškos rodyklė ▶ – tai, kas ekrane yra tiesiai dešiniau REG. NUMERIS laukelio
     # (eNEWS ji nėra paprastas mygtukas, o „pirmas mygtukas po užrašu“ būtų
@@ -397,7 +414,7 @@ def akumuliatorius(page: Page, m: Masina) -> None:
     if not rezultatas:
         rezultatas = next((e.strip() for e in tekstas.splitlines()
                            if any(z in e for z in ("rror", "used", "nvalid"))), "")
-    raise BlogasAkumas(rezultatas or f"ne „{geras}“")
+    raise BlogasAkumas(" ".join(rezultatas.split()) or f"ne „{geras}“")
 
 
 def pdi(page: Page, m: Masina) -> None:
@@ -624,7 +641,13 @@ def spausdinti(failas: Path, rusis: str) -> None:
         raise Klaida(f"nepavyko atspausdinti {failas.name} ({rusis}): {e}") from e
 
 
+def failu_keliai(m: Masina) -> tuple[Path, Path]:
+    return (SPAUSDINTI / f"{m.numeris}-{m.vin}-1-sertifikatas.pdf",
+            SPAUSDINTI / f"{m.numeris}-{m.vin}-2-tp-planas.pdf")
+
+
 def wbmr(page: Page, m: Masina) -> None:
+    """WBMR: parsisiunčia abu failus (sertifikatą ir techninės priežiūros planą)."""
     SPAUSDINTI.mkdir(exist_ok=True)
     zingsnis("WBMR skirtukas")
     spausti(page, "wbmr")
@@ -635,7 +658,8 @@ def wbmr(page: Page, m: Masina) -> None:
         spausti(page, "tp_planas")
         svarbus_mygtukas(page, "drukat")
         return
-    pirmas = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-1-sertifikatas.pdf")
+    kelias1, kelias2 = failu_keliai(m)
+    pirmas = gauti_faila(page, kelias1)
 
     zingsnis(T1("tp_planas"))
     pries = puslapio_tekstas(page)
@@ -650,28 +674,65 @@ def wbmr(page: Page, m: Masina) -> None:
     while puslapio_tekstas(page) == pries and time.time() < pabaiga:
         snausti(0.3)
     zingsnis("Drukāt (techninės priežiūros planas)")
-    antras = gauti_faila(page, SPAUSDINTI / f"{m.numeris}-{m.vin}-2-tp-planas.pdf")
+    antras = gauti_faila(page, kelias2)
     if antras.read_bytes() == pirmas.read_bytes():
+        antras.unlink()
         raise Klaida("antras failas toks pat kaip pirmas – paspaustas ne to skirtuko Drukāt")
 
+
+def spausdinti_masinai(m: Masina) -> None:
+    """Spausdina pagal planą; jau atspausdinti lapai (pagal eigą) praleidžiami."""
     import spausdinimas
-    failai = {1: pirmas, 2: antras}
-    for nr, rusis in spausdinimas.planas():
-        if nr in failai:
-            spausdinti(failai[nr], rusis)
+    failai = dict(zip((1, 2), failu_keliai(m)))
+    for i, (nr, rusis) in enumerate(spausdinimas.planas()):
+        if nr not in failai:
+            continue
+        raktas = f"spausdinta:{i}"
+        if jau(m, raktas):
+            log.info("     %s (%s) jau atspausdinta – praleidžiama", failai[nr].name, rusis)
+            continue
+        spausdinti(failai[nr], rusis)
+        if not BANDYMAS:
+            pazymeti(m, raktas)
 
 
 PRADZIA = ""  # eNEWS pradžios puslapis (VIN paieška)
 
 
+EIGA = None  # eiga.Eiga – kurie žingsniai jau padaryti (None – neįsimenama, pvz. peržiūroje)
+
+
+def jau(m: Masina, zingsnis_: str) -> bool:
+    return EIGA is not None and EIGA.padaryta(m.vin, zingsnis_)
+
+
+def pazymeti(m: Masina, zingsnis_: str, reiksme=None) -> None:
+    if EIGA is not None:
+        EIGA.pazymeti(m.vin, zingsnis_, reiksme)
+
+
 def apdoroti(page: Page, pradzia: str, m: Masina) -> None:
+    """Viena mašina. Jau padaryti žingsniai (eiga.json) praleidžiami, todėl po sustojimo
+    tęsiama nuo ten, kur baigta."""
     global PRADZIA
     PRADZIA = pradzia
-    ieskoti_vin(page, pradzia, m.vin)
-    akumuliatorius(page, m)
-    pdi(page, m)
-    garantija(page, m)
-    wbmr(page, m)
+    zingsniai = [("akumuliatorius", akumuliatorius), ("pdi", pdi), ("garantija", garantija)]
+    failai_yra = jau(m, "failai") and all(k.is_file() for k in failu_keliai(m))
+    if not (all(jau(m, z) for z, _ in zingsniai) and failai_yra):
+        ieskoti_vin(page, pradzia, m.vin)
+        for z, funkcija in zingsniai:
+            if jau(m, z):
+                log.info("     %s jau padarytas – praleidžiama", z)
+                continue
+            funkcija(page, m)
+            pazymeti(m, z)
+        if not failai_yra:
+            wbmr(page, m)
+            pazymeti(m, "failai")
+    else:
+        log.info("     eNEWS jau viskas padaryta – liko tik spausdinti")
+    if not PERZIURA:
+        spausdinti_masinai(m)
 
 
 # --- Naršyklė ----------------------------------------------------------------
@@ -711,16 +772,19 @@ def uzdaryti_narsykle(ctx) -> None:
         pass
 
 
-def atidaryti_enews(ctx, adresas: str | None = None) -> tuple[Page, str]:
-    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+def atidaryti_enews(ctx, adresas: str | None = None, klausti: bool = True) -> tuple[Page, str]:
+    gyvi = [p for p in ctx.pages if not p.is_closed()]
+    page = gyvi[0] if gyvi else ctx.new_page()
     if adresas:  # bandymas – iškart netikras eNEWS
         page.goto(adresas)
     elif not page.url.startswith("http"):
         page.goto(N.PORTALO_ADRESAS)
     while True:
-        V.klausti("BANDYMAS: atsidarė netikras eNEWS – spauskite „Tęsti“" if adresas else
-                  "Prisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite „Tęsti“")
-        enews = [p for p in ctx.pages if "enews" in p.url.lower()]
+        if klausti:
+            V.klausti("BANDYMAS: atsidarė netikras eNEWS – spauskite „Tęsti“" if adresas else
+                      "Prisijunkite prie Nissan B2B, atsidarykite ENEWS ir spauskite „Tęsti“")
+        klausti = True
+        enews = [p for p in ctx.pages if not p.is_closed() and "enews" in p.url.lower()]
         if enews:
             break
         log.warning("Neradau atidaryto eNEWS skirtuko – atsidarykite jį.")
@@ -729,18 +793,34 @@ def atidaryti_enews(ctx, adresas: str | None = None) -> tuple[Page, str]:
 
     def dialogas(d):
         log.info("     eNEWS pranešimas: %s", d.message)
-        d.accept()
+        try:
+            d.accept()
+        except Exception:  # jau patvirtintas kitos tvarkyklės (po prisijungimo iš naujo)
+            pass
     page.on("dialog", dialogas)
     ctx.on("page", lambda p: p.on("dialog", dialogas))
     return page, page.url
+
+
+def _gyvas(ctx) -> bool:
+    try:
+        return any(not p.is_closed() for p in ctx.pages)
+    except Exception:
+        return False
+
+
+def _trukme(sek: float) -> str:
+    return f"{int(sek // 60)}:{int(sek % 60):02d}"
 
 
 def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
             bandymas: bool = False, perziura: bool = False) -> tuple[int, int]:
     """Pagrindinis ciklas. Grąžina (atlikta, atidėta).
     bandymas=True – netikras eNEWS šiame kompiuteryje, niekas nespausdinama."""
-    global BANDYMAS, PERZIURA
+    global BANDYMAS, PERZIURA, EIGA
+    import eiga
     BANDYMAS, PERZIURA = bandymas, perziura and not bandymas
+    EIGA = None if PERZIURA else eiga.Eiga((netikro_aplankas() if bandymas else ARCH) / "eiga.json")
     if PERZIURA:
         log.info("PERŽIŪRA: tikras eNEWS, bet nieko neišsaugoma, nespausdinama ir Excel nežymimas.")
         sarasas.pazymeti = lambda *a, **k: None  # Excel'yje nieko nekeičiame
@@ -752,7 +832,7 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
         log.info("BANDYMAS: netikras eNEWS %s, Excel kopija %s", adresas, sarasas.kelias.name)
     elif not PERZIURA:
         log.info("Atsarginė kopija: %s", sarasas.atsargine_kopija().name)
-    atlikta = atideta = 0
+    rezultatai: list[tuple[Masina, str, str, float]] = []  # (mašina, rūšis, tekstas, trukmė)
     with sync_playwright() as pw:
         ctx = atidaryti_narsykle(pw)
         try:
@@ -763,45 +843,103 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
                     break
                 log.info("=== %d eil. %s (%s) ===", m.eilute, m.vin, m.numeris)
                 V.busena(m, "dirbama…")
-                try:
-                    apdoroti(page, pradzia, m)
-                    tekstas = ("Peržiūra: visi laukai ir mygtukai rasti" if PERZIURA
-                               else f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M}")
-                    sarasas.pazymeti(m.eilute, N.SPALVA_ATLIKTA, tekstas)
-                    atlikta += 1
-                    log.info("  ✔ atlikta")
-                except Sustabdyta:
-                    tekstas = "sustabdyta (nebaigta)"
-                    log.info("Sustabdyta – ši mašina nebaigta, bus daroma kitą kartą.")
-                except BlogasAkumas as e:
-                    tekstas = f"Akumuliatorius: {e}"
-                    sarasas.pazymeti(m.eilute, N.SPALVA_AKUMAS, tekstas)
-                    nuotrauka(page, m.vin)
-                    atideta += 1
-                    log.warning("  ✖ akumuliatorius: %s", e)
-                except Exception as e:  # noqa: BLE001 – viena mašina neturi sustabdyti visų
-                    if page.is_closed():
-                        log.error("Chrome langas uždarytas – robotas sustoja (%d eil. nebaigta).", m.eilute)
-                        break
-                    kelias = nuotrauka(page, m.vin)
-                    tekstas = f"Klaida: {e}".splitlines()[0][:250]
-                    sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, tekstas)
-                    atideta += 1
-                    log.error("  ✖ %s (nuotrauka klaidos/%s)", tekstas, kelias.name)
+                pradzia_laikas = time.time()
+                rusis = ""
+                for bandymas_nr in (1, 2):  # po atsijungimo – dar kartą tą pačią mašiną
+                    try:
+                        apdoroti(page, pradzia, m)
+                        rusis = "atlikta"
+                        tekstas = ("Peržiūra: visi laukai ir mygtukai rasti" if PERZIURA else
+                                   f"Atlikta {dt.datetime.now():%Y-%m-%d %H:%M} "
+                                   f"({_trukme(time.time() - pradzia_laikas)})")
+                        sarasas.pazymeti(m.eilute, N.SPALVA_ATLIKTA, tekstas)
+                        log.info("  ✔ atlikta per %s", _trukme(time.time() - pradzia_laikas))
+                    except Sustabdyta:
+                        rusis, tekstas = "sustabdyta", "sustabdyta (nebaigta – bus tęsiama)"
+                        log.info("Sustabdyta – ši mašina nebaigta, kitą kartą bus tęsiama.")
+                    except BlogasAkumas as e:
+                        rusis, tekstas = "akumas", f"Akumuliatorius: {e}"
+                        sarasas.pazymeti(m.eilute, N.SPALVA_AKUMAS, tekstas)
+                        nuotrauka(page, m.vin)
+                        log.warning("  ✖ akumuliatorius: %s", e)
+                    except Exception as e:  # noqa: BLE001 – viena mašina neturi sustabdyti visų
+                        atsijungta = isinstance(e, Atsijungta) or page.is_closed() or not _gyvas(ctx)
+                        if atsijungta and bandymas_nr == 1 and not V.stabdyti.is_set():
+                            log.warning("  B2B atsijungė (%s) – laukiama, kol prisijungsite iš naujo", e)
+                            if not _gyvas(ctx):  # visas Chrome užsidarė – atidarome naują
+                                uzdaryti_narsykle(ctx)
+                                ctx = atidaryti_narsykle(pw)
+                            V.klausti("B2B atsijungė. Prisijunkite iš naujo, atsidarykite ENEWS ir spauskite "
+                                      "„Tęsti“ – robotas tęs nuo tos pačios mašinos")
+                            page, pradzia = atidaryti_enews(ctx, adresas, klausti=False)
+                            continue
+                        rusis = "klaida"
+                        kelias = nuotrauka(page, m.vin) if not page.is_closed() else None
+                        tekstas = f"Klaida: {e}".splitlines()[0][:250]
+                        sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, tekstas)
+                        log.error("  ✖ %s%s", tekstas, f" (nuotrauka klaidos/{kelias.name})" if kelias else "")
+                    break
                 V.busena(m, tekstas)
+                rezultatai.append((m, rusis, tekstas, time.time() - pradzia_laikas))
                 try:
                     sarasas.issaugoti()
                 except PermissionError:
                     log.error("  Excel failas atidarytas – uždarykite jį, būsena įrašoma po kitos mašinos")
                 if vienas or V.stabdyti.is_set():
                     break
-            log.info("Baigta. Atlikta: %d, atidėta: %d.", atlikta, atideta)
+            V.ataskaita(suvestine(rezultatai))
             V.klausti("Baigta – naršyklė bus uždaryta")
         finally:
             uzdaryti_narsykle(ctx)
             if serveris:
                 serveris.shutdown()
-    return atlikta, atideta
+    return (sum(1 for r in rezultatai if r[1] == "atlikta"),
+            sum(1 for r in rezultatai if r[1] in ("akumas", "klaida")))
+
+
+def suvestine(rezultatai) -> str:
+    atlikta = [r for r in rezultatai if r[1] == "atlikta"]
+    eil = [f"Baigta. Atlikta: {len(atlikta)}, atidėta: "
+           f"{sum(1 for r in rezultatai if r[1] in ('akumas', 'klaida'))}."]
+    if atlikta:
+        vid = sum(r[3] for r in atlikta) / len(atlikta)
+        eil.append(f"Vidutiniškai vienai mašinai: {_trukme(vid)} (iš viso {_trukme(sum(r[3] for r in rezultatai))}).")
+    for m, rusis, tekstas, _ in rezultatai:
+        if rusis != "atlikta":
+            zenklas = {"akumas": "🟧", "klaida": "🟥", "sustabdyta": "⏸"}.get(rusis, "•")
+            eil.append(f"{zenklas} {m.eilute} eil. {m.numeris}: {tekstas}")
+    return "\n".join(eil)
+
+
+def netikro_aplankas() -> Path:
+    import netikras_enews
+    return netikras_enews.ARCH
+
+
+def valyti_senus(dienu: int) -> int:
+    """Ištrina senesnius nei `dienu` failus iš spausdinti/klaidos/diagnostika ir per
+    didelį žurnalą. Grąžina ištrintų failų skaičių."""
+    if not dienu or dienu <= 0:
+        return 0
+    riba = time.time() - dienu * 86400
+    kiek = 0
+    for aplankas in (SPAUSDINTI, KLAIDOS, DIAGNOSTIKA):
+        if not aplankas.is_dir():
+            continue
+        for f in aplankas.iterdir():
+            try:
+                if f.is_file() and f.stat().st_mtime < riba:
+                    f.unlink()
+                    kiek += 1
+            except OSError:
+                pass
+    zurnalas = ARCH / "robotas.log"
+    try:
+        if zurnalas.is_file() and zurnalas.stat().st_size > 5_000_000:
+            zurnalas.replace(ARCH / "robotas.senas.log")
+    except OSError:
+        pass
+    return kiek
 
 
 def diagnostika() -> None:
@@ -844,6 +982,7 @@ def nustatyti_zurnala(*papildomi: logging.Handler) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="eNEWS robotas (be lango)")
     ap.add_argument("excel", nargs="?", default=N.EXCEL_FAILAS)
+    valyti_senus(int(N.SAUGOTI_DIENU))
     ap.add_argument("--vienas", action="store_true", help="apdoroti tik vieną mašiną")
     ap.add_argument("--zingsniais", action="store_true", help="sustoti prieš kiekvieną veiksmą")
     ap.add_argument("--diagnostika", action="store_true", help="tik išsaugoti puslapių HTML")
