@@ -508,13 +508,41 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
     ar tame pačiame skirtuke atidarytą PDF. Laukia iki 60 s – kol tikrai bus PDF."""
     atsiuntimai: list = []
     langai: list[Page] = []
+    pagauta: list[bytes] = []
     ctx = page.context
     def atsiuntimas(d): atsiuntimai.append(d)
     def langas(p):
         langai.append(p)
         p.on("download", atsiuntimas)
+
+    def marsrutas(route):
+        """PDF pagaunamas iš eNEWS atsakymo dar prieš Chrome: Chrome gauna „204 – nieko“,
+        todėl nei siunčia, nei atidaro failo (eNEWS puslapis lieka vietoje). Taip
+        apeinamas Chrome atsisiuntimas/peržiūra, kuri kai kur uždaro naršyklę."""
+        if route.request.resource_type != "document":
+            route.fallback()
+            return
+        try:
+            ats = route.fetch(max_redirects=0)
+        except Exception:
+            route.fallback()
+            return
+        if ats.status in (401, 407):  # Windows/proxy prisijungimas – tegul daro pats Chrome
+            route.continue_()
+            return
+        try:
+            turinys_ = ats.body()
+        except Exception:
+            turinys_ = b""
+        if "pdf" in ats.headers.get("content-type", "").lower() or turinys_[:5].startswith(b"%PDF"):
+            pagauta.append(turinys_)
+            route.fulfill(status=204, body="")
+        else:
+            route.fulfill(response=ats)
+
     page.on("download", atsiuntimas)
     ctx.on("page", langas)
+    ctx.route("**/*", marsrutas)
     url_pries = page.url
     pradzia = time.time()
     turinys: bytes | None = None
@@ -522,6 +550,9 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
     try:
         spausti(page, "drukat")
         while time.time() < pradzia + 60:
+            if pagauta and pagauta[0][:5].startswith(b"%PDF"):
+                turinys = pagauta[0]
+                break
             if atsiuntimai:
                 break
             if time.time() > pradzia + 3:  # atsisiuntimui duodame pirmenybę
@@ -536,10 +567,17 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
                     break
             snausti(0.3)
     finally:
+        try:
+            ctx.unroute("**/*", marsrutas)
+        except Exception:
+            pass
         page.remove_listener("download", atsiuntimas)
         ctx.remove_listener("page", langas)
 
-    if atsiuntimai:
+    if turinys is not None and pagauta and turinys is pagauta[0]:
+        kelias.write_bytes(turinys)
+        log.info("     PDF pagautas iš eNEWS atsakymo")
+    elif atsiuntimai:
         atsiuntimai[0].save_as(str(kelias))
         log.info("     failas atsisiųstas (%s)", atsiuntimai[0].suggested_filename)
     elif turinys:
@@ -650,7 +688,8 @@ def paruosti_profili() -> None:
         duom = json.loads(nust.read_text(encoding="utf-8")) if nust.exists() else {}
     except ValueError:
         duom = {}
-    duom.setdefault("plugins", {})["always_open_pdf_externally"] = True
+    # PDF pagaunamas pačio roboto (žr. gauti_faila), Chrome atsisiuntimo nereikia.
+    duom.setdefault("plugins", {})["always_open_pdf_externally"] = False
     duom.setdefault("download", {})["prompt_for_download"] = False
     nust.write_text(json.dumps(duom), encoding="utf-8")
 
