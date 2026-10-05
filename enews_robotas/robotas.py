@@ -235,11 +235,13 @@ def po(elementas: str, tikslas: str, pirmas: bool = True) -> str:
 def su_tekstu(raktas: str, kelintas: str = "1", tiksliai: bool = False) -> str:
     """Teksto mazgas su užrašu (ne visas elementas – taip „po juo“ reiškia tikrai
     po šiuo užrašu, net jei keli užrašai viename langelyje)."""
-    t = T1(raktas)
     matomas = "not(ancestor::script) and not(ancestor::style) and not(ancestor::title)"
+    # Visos galimybės iš nustatymų („VEIKIMAS | VEIKSMAS“) – tinka bet kuri.
     if tiksliai:
-        return f"(//text()[{matomas} and normalize-space(.)='{t}'])[{kelintas}]"
-    return f"(//text()[{matomas} and contains(normalize-space(.),'{ascii_dalis(t)}')])[{kelintas}]"
+        salyga = " or ".join(f"normalize-space(.)='{t}'" for t in T(raktas))
+    else:
+        salyga = " or ".join(f"contains(normalize-space(.),'{ascii_dalis(t)}')" for t in T(raktas))
+    return f"(//text()[{matomas} and ({salyga})])[{kelintas}]"
 
 
 def lauka_po(raktas: str, kelintas: str = "last()") -> str:
@@ -411,7 +413,7 @@ def pdi(page: Page, m: Masina) -> None:
             forma = page.context.pages[-1]
             laukti_ramybes(forma)
             break
-        if T1("veiksmas") in puslapio_tekstas(page):
+        if any(t in puslapio_tekstas(page) for t in T("veiksmas")):
             break
         snausti(0.5)
 
@@ -428,6 +430,8 @@ def pdi(page: Page, m: Masina) -> None:
     if not svarbus_mygtukas(forma, "pdi_saugoti"):
         if forma is not page:
             forma.close()
+        else:  # forma tame pačiame skirtuke – grįžtame atidarę mašiną iš naujo (neišsaugota)
+            ieskoti_vin(page, PRADZIA, m.vin)
         return
     if forma is not page and not forma.is_closed():
         try:
@@ -588,7 +592,12 @@ def wbmr(page: Page, m: Masina) -> None:
     spausdinti(antras, lipnus=True)
 
 
+PRADZIA = ""  # eNEWS pradžios puslapis (VIN paieška)
+
+
 def apdoroti(page: Page, pradzia: str, m: Masina) -> None:
+    global PRADZIA
+    PRADZIA = pradzia
     ieskoti_vin(page, pradzia, m.vin)
     akumuliatorius(page, m)
     pdi(page, m)

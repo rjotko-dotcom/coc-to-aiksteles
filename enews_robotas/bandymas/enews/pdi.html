@@ -7,7 +7,7 @@
 <h3>NAUJO AUTOMOBILIO APŽIŪRA PRIEŠ PRISTATYMĄ</h3>
 <table><tr><td>Data:</td><td><input type=text id=data readonly size=12> 📅</td></tr>
 <tr><td>Kliento vardas, pavardė:</td><td><input type=text></td></tr></table>
-<table class="t"><tr><th style="width:40px">Nr. <input type=checkbox id=visi onchange="document.querySelectorAll('.p').forEach(c => c.checked = this.checked)"></th><th>VEIKSMAS</th></tr>
+<table class="t"><tr><th style="width:40px">Nr. <input type=checkbox id=visi onchange="document.querySelectorAll('.p').forEach(c => c.checked = this.checked)"></th><th>VEIKIMAS</th></tr>
 <tr><td colspan=2><b>BENDROJI INFORMACIJA</b></td></tr>
 <tr><td>1 <input type=checkbox class=p checked></td><td>With ignition switch OFF install transit fuse</td></tr>
 <tr><td>2 <input type=checkbox class=p checked></td><td>Automobilio apsauginių įtaisų montavimas</td></tr>
@@ -24,6 +24,9 @@ function saugoti(){
   const d = document.getElementById('data').value.trim();
   if (!/^\d{2}\/\d{2}\/\d{4}$/.test(d)) { document.getElementById('klaida').textContent = 'Įveskite datą'; return; }
   if ([...document.querySelectorAll('.p')].some(c => !c.checked)) { document.getElementById('klaida').textContent = 'Pažymėkite visus punktus'; return; }
-  window.opener.pdiIssaugotas(d); window.close();
+  const vin = new URLSearchParams(location.search).get('vin');
+  const db = JSON.parse(localStorage.getItem('bandymas') || '{}'); db[vin].pdi = d;
+  localStorage.setItem('bandymas', JSON.stringify(db));
+  setTimeout(() => location.href = 'hp_new.html?vin=' + vin, 400);
 }
 </script></body></html>

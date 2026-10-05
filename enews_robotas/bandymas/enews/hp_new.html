@@ -166,7 +166,11 @@ function patvirtintiTesta(){ veliau(() => { if (window._testas.geras) { m().test
   data: new Date().toLocaleDateString('lt-LT')}); issaugoti(); } skirtukas('akum'); }); }
 function atgalITesta(){ skirtukas('akum'); }
 
-function atidarytiPdi(){ window.open('pdi.html?vin=' + vin, 'pdi', 'width=900,height=700'); }
+function atidarytiPdi(){ veliau(() => location.href = 'pdi.html?vin=' + vin); }  // kaip tikras eNEWS – tame pačiame skirtuke
+// Grįžus iš PDI (hp_new.html?vin=…) – iškart ta pati mašina, Automobilis skirtukas.
+(() => { const q = new URLSearchParams(location.search).get('vin');
+  if (q && DB[q]) { vin = q; $('pradzia').style.display = 'none'; $('masina').style.display = '';
+    uzdarytiModala(); galva(); skirtukas('auto'); } })();
 window.pdiIssaugotas = (data) => { m().pdi = data; issaugoti(); if ($('t-auto').style.display === '') $('a-pdi').textContent = data; };
 
 function redaguoti(){ veliau(() => { ['a-reg','a-wsd','a-rida'].forEach(k => $(k).disabled = false); $('a-mygt').style.display = ''; }); }

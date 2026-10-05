@@ -54,7 +54,7 @@ NUMATYTIEJI = {
         "automobilis": "Automobilis",
         "pdi": "PDI",
         "pdi_data": "Data:",
-        "veiksmas": "VEIKSMAS",
+        "veiksmas": "VEIKIMAS | VEIKSMAS",
         "pdi_saugoti": "Išsaugoti ir uždaryti",
         "update": "Update",
         "warranty": "Warranty Start Date:",
