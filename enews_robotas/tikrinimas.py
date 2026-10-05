@@ -86,15 +86,33 @@ def spausdintuvai() -> list[str] | None:
     return [e.strip() for e in rez.stdout.splitlines() if e.strip()]
 
 
+def _kandidatai(*dalinis: str) -> list[Path]:
+    saknys = [os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+              os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+              os.environ.get("LOCALAPPDATA", "")]
+    return [Path(s) / d for s in saknys if s for d in dalinis]
+
+
+NARSYKLES = {  # tvarka – pirmenybė, kai pasirinkta „auto“
+    "chrome": _kandidatai("Google/Chrome/Application/chrome.exe") + [Path("/usr/bin/google-chrome")],
+    "brave": _kandidatai("BraveSoftware/Brave-Browser/Application/brave.exe") + [Path("/usr/bin/brave-browser")],
+    "edge": _kandidatai("Microsoft/Edge/Application/msedge.exe") + [Path("/usr/bin/microsoft-edge")],
+}
+
+
+def rasti_narsykle(pageidaujama: str = "auto") -> tuple[str, Path] | None:
+    """(pavadinimas, kelias) – pasirinkta naršyklė, o „auto“ – pirma rasta: Chrome, Brave, Edge."""
+    vardai = list(NARSYKLES) if pageidaujama in ("", "auto") else [pageidaujama]
+    for vardas in vardai:
+        kelias = next((k for k in NARSYKLES.get(vardas, []) if k.exists()), None)
+        if kelias:
+            return vardas, kelias
+    return None
+
+
 def rasti_chrome() -> Path | None:
-    kandidatai = [
-        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files")) / "Google/Chrome/Application/chrome.exe",
-        Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)")) / "Google/Chrome/Application/chrome.exe",
-        Path(os.environ.get("LOCALAPPDATA", "")) / "Google/Chrome/Application/chrome.exe",
-        Path("/usr/bin/google-chrome"),
-        Path("/Applications/Google Chrome.app"),
-    ]
-    return next((k for k in kandidatai if k.exists()), None)
+    rasta = rasti_narsykle("chrome")
+    return rasta[1] if rasta else None
 
 
 def rasti_sumatra(nurodytas: str) -> Path | None:
@@ -114,8 +132,9 @@ def aplinka(N, profilis: Path, excel: str | None = None, bandymas: bool = False)
     elif uzrakintas(excel):
         p.append(Pastaba(KLAIDA, "Excel failas atidarytas – uždarykite jį (kitaip robotas negali žymėti eilučių)"))
 
-    if rasti_chrome() is None:
-        p.append(Pastaba(KLAIDA, "nerastas Google Chrome"))
+    if rasti_narsykle(getattr(N, "NARSYKLE", "auto")) is None:
+        p.append(Pastaba(KLAIDA, "nerasta naršyklė " + ("(Chrome, Brave ar Edge)" if N.NARSYKLE in ("", "auto")
+                                                          else f"„{N.NARSYKLE}“") + " – įdiekite arba pakeiskite nustatymuose"))
     if (profilis / "SingletonLock").exists() or (profilis / "lockfile").exists():
         p.append(Pastaba(PERSPEJIMAS, "roboto Chrome langas gal dar atidarytas – uždarykite jį"))
 

@@ -51,6 +51,14 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 3. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
    **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
 
+## Naršyklė: Chrome, Brave ar Edge
+
+Nustatymai → **Naršyklė**: `auto` (Chrome, jei nėra – Brave, tada Edge), `chrome`, `brave`
+arba `edge`. Kiekviena naršyklė turi savo roboto profilį, todėl pakeitus naršyklę prie
+B2B reikės prisijungti vieną kartą iš naujo. **Brave:** jei B2B ar eNEWS kas nors
+neveikia (neatsidaro langai, mygtukai), roboto Brave lange paspauskite liūto ženkliuką
+adreso juostoje ir išjunkite **Shields** svetainei `eu.nissan.biz` – Brave tai įsimins.
+
 ## Išbandyti namuose, be B2B
 
 Valdymo lange pažymėkite **„BANDYMAS be B2B (namuose)“** ir spauskite **▶ Pradėti**.

@@ -751,12 +751,27 @@ def paruosti_profili() -> None:
     nust.write_text(json.dumps(duom), encoding="utf-8")
 
 
+def profilio_aplankas(vardas: str) -> Path:
+    """Kiekvienai naršyklei – atskiras roboto profilis (prisijungimas įsimenamas jame)."""
+    return ARCH / ("chrome_profilis" if vardas == "chrome" else f"{vardas}_profilis")
+
+
 def atidaryti_narsykle(pw):
-    global KONTEKSTAS
+    """Atidaro roboto naršyklę: Chrome, Brave ar Edge (Nustatymai → Naršyklė)."""
+    global KONTEKSTAS, PROFILIS
+    from tikrinimas import rasti_narsykle
+    rasta = rasti_narsykle(N.NARSYKLE)
+    if rasta is None:
+        raise Klaida(f"nerasta naršyklė ({N.NARSYKLE}) – įdiekite Chrome, Brave ar Edge")
+    vardas, kelias = rasta
+    PROFILIS = profilio_aplankas(vardas)
     paruosti_profili()
+    paleidimas = {"chrome": {"channel": "chrome"}, "edge": {"channel": "msedge"}}.get(
+        vardas, {"executable_path": str(kelias)})
+    log.info("Naršyklė: %s", vardas)
     KONTEKSTAS = pw.chromium.launch_persistent_context(
-        str(PROFILIS), channel="chrome", headless=False, accept_downloads=True,
-        no_viewport=True, args=["--start-maximized"],
+        str(PROFILIS), headless=False, accept_downloads=True,
+        no_viewport=True, args=["--start-maximized"], **paleidimas,
     )
     return KONTEKSTAS
 

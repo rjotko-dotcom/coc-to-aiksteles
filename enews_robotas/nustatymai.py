@@ -26,6 +26,7 @@ NUMATYTIEJI = {
 
     # --- eNEWS ---
     "PORTALO_ADRESAS": "https://eu.nissan.biz/wps/myportal/b2bdealerportal",
+    "NARSYKLE": "auto",             # auto | chrome | brave | edge
     "RIDA": "5",
     "DATOS_FORMATAS": "%d/%m/%Y",   # 22/09/2026
     "LAUKTI_SEK": 20,

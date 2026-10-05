@@ -162,3 +162,14 @@ def test_suvestine_ir_senu_failu_trynimas(tmp_path, monkeypatch):
     senas.write_bytes(b"x"); naujas.write_bytes(b"x")
     os.utime(senas, (time.time() - 40 * 86400,) * 2)
     assert robotas.valyti_senus(30) == 1 and not senas.exists() and naujas.exists()
+
+
+def test_narsykles_pasirinkimas(tmp_path, monkeypatch):
+    import tikrinimas
+    brave = tmp_path / "brave.exe"
+    brave.write_bytes(b"")
+    monkeypatch.setattr(tikrinimas, "NARSYKLES", {"chrome": [tmp_path / "nera.exe"], "brave": [brave],
+                                                  "edge": [tmp_path / "nera2.exe"]})
+    assert tikrinimas.rasti_narsykle("auto") == ("brave", brave)    # Chrome nėra – imamas Brave
+    assert tikrinimas.rasti_narsykle("brave") == ("brave", brave)
+    assert tikrinimas.rasti_narsykle("edge") is None

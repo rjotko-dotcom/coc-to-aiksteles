@@ -599,6 +599,8 @@ class Langas(tk.Tk):
         en.pack(fill="x", pady=4)
         eilute(en, 0, "PORTALO_ADRESAS", "B2B adresas", 60)
         eilute(en, 1, "RIDA", "Rida pristatant", 8)
+        eilute(en, 5, "NARSYKLE", "Naršyklė", 12, reiksmes=["auto", "chrome", "brave", "edge"],
+               pastaba="auto – Chrome, jei nėra – Brave, tada Edge")
         eilute(en, 2, "DATOS_FORMATAS", "Datos formatas eNEWS", 12, pastaba="%d/%m/%Y → 22/09/2026")
         eilute(en, 3, "LAUKTI_SEK", "Kiek laukti mygtuko (s)", 8, pastaba="jei eNEWS lėtas – padidinkite")
         eilute(en, 4, "SAUGOTI_DIENU", "Kiek dienų saugoti PDF ir klaidų nuotraukas", 8,
@@ -725,6 +727,9 @@ class Langas(tk.Tk):
                 nauji[k] = t
         nauji["KLAUSTI_PRIES_LIPNU"] = self.klausti_lipnu.get()
         nauji["PAPRASTAS_SPALVOTAI"] = self.spalvotai.get()
+        nauji["NARSYKLE"] = nauji["NARSYKLE"].strip().lower() or "auto"
+        if nauji["NARSYKLE"] not in ("auto", "chrome", "brave", "edge"):
+            raise ValueError("Naršyklė turi būti: auto, chrome, brave arba edge")
         import re
         if not re.fullmatch(r"\s*[12]\s*:\s*(paprastas|lipnus)\s*(,\s*[12]\s*:\s*(paprastas|lipnus)\s*)*",
                             nauji["SPAUSDINIMO_PLANAS"].lower()):
