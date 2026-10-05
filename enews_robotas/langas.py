@@ -141,6 +141,7 @@ class Langas(tk.Tk):
         for b in (self.b_tikrinti, self.b_pradeti, self.b_testi, self.b_stabdyti):
             b.pack(side="left", padx=(0, 6))
         ttk.Button(mygt, text="Diagnostika", command=self.diagnostika).pack(side="right")
+        ttk.Button(mygt, text="⟳ Atnaujinti robotą", command=self.atnaujinti).pack(side="right", padx=6)
         varneles = ttk.Frame(f)
         varneles.pack(fill="x", pady=(0, 4))
         self.zingsniais = tk.BooleanVar(value=False)
@@ -384,6 +385,29 @@ class Langas(tk.Tk):
         self.gija = threading.Thread(target=self._vykdyti, args=(robotas.vykdyti, sarasas, darbo, False, self.bandymas.get()),
                                      daemon=True)
         self.gija.start()
+
+    def atnaujinti(self):
+        if self.gija and self.gija.is_alive():
+            messagebox.showwarning(PAVADINIMAS, "Robotas dirba – atnaujinsite jam baigus.")
+            return
+        import atnaujinimas
+        self.log("Atnaujinama iš GitHub…")
+        self.update_idletasks()
+        try:
+            pakeisti = atnaujinimas.atnaujinti()
+        except Exception as e:  # noqa: BLE001
+            self.log(f"✖ Nepavyko atnaujinti: {e}")
+            messagebox.showerror(PAVADINIMAS, f"Nepavyko atnaujinti (gal nėra interneto?):\n{e}")
+            return
+        if not pakeisti:
+            self.log("✔ Jau naujausia versija.")
+            messagebox.showinfo(PAVADINIMAS, "Jau naujausia versija.")
+            return
+        self.log("✔ Atnaujinta: " + ", ".join(pakeisti))
+        if messagebox.askyesno(PAVADINIMAS, "Robotas atnaujintas. Paleisti iš naujo dabar?"):
+            import subprocess
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve())], cwd=str(Path(__file__).parent))
+            self.destroy()
 
     def diagnostika(self):
         if self.gija and self.gija.is_alive():
