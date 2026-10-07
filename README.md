@@ -96,6 +96,10 @@ neleidžia įkelti modulių ir neįdiegia programos.)
 
 ### Kaip veikia atpažinimas naršyklėje
 
+Atpažinimas vyksta foniniame procese (`web/js/ocr-worker.js`), todėl skaitant
+lapus langas nestringa. Jei foninio proceso paleisti nepavyksta, skaitoma kaip
+anksčiau – pačiame lange.
+
 * **pdf.js** paverčia puslapį vaizdu 300 dpi ir nuskaito teksto sluoksnį, jei
   toks yra;
 * vaizdas paverčiamas juodu-baltu (Otsu slenkstis) – be to smulkūs ženklai
