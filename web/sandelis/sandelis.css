@@ -306,8 +306,8 @@ input[type=text], input[type=date], select {
 }
 input.mono { font-family: var(--mono); font-size: 14.5px; letter-spacing: .04em; }
 input[type=text]:focus, input[type=date]:focus, select:focus { outline: none; border-color: #5a5a62; box-shadow: 0 0 0 3px rgba(255, 255, 255, .06); }
+/* Skaitomas lapas: laukelis mirga, bet jį galima pildyti ir pačiam. */
 input.loading {
-  color: transparent; pointer-events: none;
   background: linear-gradient(90deg, var(--card) 0%, var(--card-3) 50%, var(--card) 100%); background-size: 200% 100%;
   animation: shimmer 1.3s linear infinite;
 }

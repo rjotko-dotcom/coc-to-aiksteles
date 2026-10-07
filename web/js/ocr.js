@@ -175,18 +175,48 @@ function acquire() {
   return new Promise((resolve) => waiting.push((slot) => { slot.busy = true; resolve(slot); }));
 }
 
+/** Ilgiausiai tiek laukiama vieno vaizdo – kitaip laikoma, kad procesas užstrigo. */
+const DETECT_TIMEOUT = 90_000;
+
+class OcrTimeout extends Error {}
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new OcrTimeout("Atpažinimas užtruko per ilgai.")), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/** Užstrigęs ar sugedęs procesas išjungiamas, o vietoj jo paleidžiamas naujas. */
+function replace(slot) {
+  slot.worker.terminate();
+  for (const [id, job] of pending) {
+    if (job.worker !== slot.worker) continue;
+    pending.delete(id);
+    job.reject(new Error("Foninis procesas paleistas iš naujo."));
+  }
+  const index = slots.indexOf(slot);
+  if (index >= 0) slots.splice(index, 1);
+  spawn().then((worker) => { if (worker) addSlot(worker); }).catch(() => {});
+}
+
 /** Atpažįsta drobę: foniniame procese, o nepavykus – lange. */
 async function detect(canvas) {
   if (await getWorker()) {
     growPool();
     const slot = await acquire();
+    let healthy = true;
     try {
       const bitmap = await createImageBitmap(canvas);
-      return await call(slot.worker, { type: "detect", bitmap }, [bitmap]);
-    } catch {
-      // skaitysime lange
+      return await withTimeout(call(slot.worker, { type: "detect", bitmap }, [bitmap]), DETECT_TIMEOUT);
+    } catch (error) {
+      healthy = false;
+      replace(slot);
+      // Užstrigus lange nebandome – tada užšaltų visas puslapis.
+      if (error instanceof OcrTimeout) throw error;
     } finally {
-      release(slot);
+      if (healthy) release(slot);
     }
   }
   const engine = await getEngine();
