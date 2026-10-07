@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, modelFromFilename, specialFolders,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -123,9 +123,3 @@ test("aplankas: pagal modelį arba specialus", () => {
   assert.ok(!matches(list[3], "moderoje"));
 });
 
-test("modelis iš failo pavadinimo", () => {
-  assert.equal(modelFromFilename("partija 4 (X-Trail).pdf"), "X-TRAIL");
-  assert.equal(modelFromFilename("partija 1 (Qashqai) -6854 LEO.pdf"), "QASHQAI");
-  assert.equal(modelFromFilename("skenas (2).pdf"), "");
-  assert.equal(modelFromFilename("skenas.pdf"), "");
-});
