@@ -14,7 +14,7 @@ import { buildXlsx } from "./xlsx.js";
 import * as disk from "./folder.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
-  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful,
+  mergePlan, newestFirst, modelFromFilename, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful,
   vinProblems,
 } from "./logic.js";
 
@@ -371,10 +371,13 @@ const found = (data) => NEEDED.filter((key) => data[key]).length;
 async function readPage(file, onStatus, job = {}) {
   const stop = () => { if (job.cancelled) throw new Error("atšaukta"); };
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
-  if (found(quick) === NEEDED.length || !quick.ocr_used) return quick;
+  // VIN – svarbiausia. Jį radus lapas laikomas perskaitytu: modelis, jei jo nėra,
+  // imamas iš failo pavadinimo arba įrašomas ranka. Visas lapas (ir didesne
+  // raiška) skaitomas tik tada, kai nerastas pats VIN – tai keli kartai ilgiau.
+  if (quick.vin || !quick.ocr_used) return quick;
   stop();
-  const full = await readCertificate(file, onStatus, { required: NEEDED });
-  const best = found(full) >= found(quick) ? full : quick;
+  const full = await readCertificate(file, onStatus, { required: ["vin"] });
+  const best = full.vin || found(full) >= found(quick) ? full : quick;
   if (found(best) > 0) return best;
   stop();
   // Nieko nerasta – gal lapas įdėtas į skenerį aukštyn kojom? Tada tik pranešame
@@ -460,6 +463,8 @@ async function readLane() {
       const readValues = {
         vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
       };
+      // Modelio lape nerasta – gal jis parašytas failo pavadinime, pvz. „partija 4 (X-Trail).pdf“.
+      if (!readValues.model) readValues.model = modelFromFilename(record.source_file);
       for (const [key, value] of Object.entries(readValues)) {
         if (!typedByHand(record, key)) changes[key] = value;
       }

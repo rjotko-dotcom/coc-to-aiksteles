@@ -121,6 +121,16 @@ export function specialFolders(records, extra = []) {
     .sort((a, b) => a.name.localeCompare(b.name, "lt"));
 }
 
+/**
+ * Modelis iš failo pavadinimo: „partija 4 (X-Trail).pdf“ → „X-TRAIL“.
+ * Imamas paskutinis tekstas skliaustuose, jei jame yra raidžių.
+ */
+export function modelFromFilename(name) {
+  const groups = [...String(name || "").matchAll(/\(([^()]+)\)/g)].map((match) => match[1].trim());
+  const candidate = groups.reverse().find((text) => /\p{L}/u.test(text) && text.length <= 30);
+  return candidate ? candidate.toUpperCase() : "";
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 
