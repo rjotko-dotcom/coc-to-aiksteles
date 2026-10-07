@@ -5,7 +5,7 @@ import test from "node:test";
 
 import {
   EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, matches, mergePlan,
-  monthlyActivity, pdfName, vinProblems,
+  monthlyActivity, pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
 import { strFromU8, unzipSync } from "../vendor/fflate/fflate.mjs";
@@ -114,4 +114,15 @@ test("priminimas apie kopiją", () => {
   assert.equal(backupDue(null, 5, now), true);
   assert.equal(backupDue("2026-10-08T12:00:00Z", 5, now), false);
   assert.equal(backupDue("2026-10-01T12:00:00Z", 5, now), true);
+});
+
+test("markė atskiriama nuo modelio", () => {
+  assert.deepEqual(splitMakeModel("NISSAN", "NISSAN QASHQAI"), { make: "NISSAN", model: "QASHQAI" });
+  assert.deepEqual(splitMakeModel("", "NISSANQASHQAI"), { make: "NISSAN", model: "QASHQAI" });
+  assert.deepEqual(splitMakeModel("", "Hyundai Kona Electric"), { make: "HYUNDAI", model: "Kona Electric" });
+  assert.deepEqual(splitMakeModel("", "NISSAN X-TRAIL"), { make: "NISSAN", model: "X-TRAIL" });
+  assert.deepEqual(splitMakeModel("", "MINIVAN"), { make: "", model: "MINIVAN" });
+  assert.deepEqual(splitMakeModel("MINI", "MINI COUNTRYMAN"), { make: "MINI", model: "COUNTRYMAN" });
+  assert.deepEqual(splitMakeModel("NISSAN", "NISSAN"), { make: "NISSAN", model: "NISSAN" });
+  assert.deepEqual(splitMakeModel("CITROEN", "C4"), { make: "CITROEN", model: "C4" });
 });

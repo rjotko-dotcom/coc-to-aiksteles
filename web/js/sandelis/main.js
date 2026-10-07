@@ -13,7 +13,8 @@ import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, localDay, matches,
-  mergePlan, monthlyActivity, newestFirst, pdfName, showDate, statusName, todayIso, vinDoubtful, vinProblems,
+  mergePlan, monthlyActivity, newestFirst, pdfName, showDate, splitMakeModel, statusName, todayIso, vinDoubtful,
+  vinProblems,
 } from "./logic.js";
 
 /** Kiek eilučių rodyti iš karto – didelis sąrašas kitaip stabdytų puslapį. */
@@ -214,7 +215,7 @@ async function runQueue() {
         const changes = {
           coc: {
             approval_number: data.approval_number, approval_date: data.approval_date,
-            colour: data.colour, colour_raw: data.colour_raw, category: data.category,
+            commercial_name: data.commercial_name, colour: data.colour, colour_raw: data.colour_raw, category: data.category,
             manufacture_date: data.manufacture_date, manufacturer: data.manufacturer,
           },
           snippets: {
@@ -226,7 +227,7 @@ async function runQueue() {
         // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
         if (!record.touched) {
           Object.assign(changes, {
-            vin: cleanVin(data.vin), make: data.make, model: data.commercial_name, tvv: data.type_variant_version,
+            vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
           });
         }
         await update(record, changes);
@@ -513,13 +514,13 @@ let chartKey = "";
 
 function renderChart() {
   const months = monthlyActivity(records);
-  const key = JSON.stringify(months);
+  const key = JSON.stringify(months) + $("chart").clientHeight;
   if (key === chartKey) return;
   chartKey = key;
 
   const box = $("chart");
   const width = Math.max(320, box.clientWidth || 600);
-  const height = 230;
+  const height = Math.max(200, box.clientHeight || 230);
   const pad = { left: 34, right: 12, top: 14, bottom: 28 };
   const peak = Math.max(4, ...months.map((m) => Math.max(m.added, m.given)));
   const top = Math.ceil(peak / 4) * 4;
@@ -730,6 +731,7 @@ function render() {
   renderRecipients();
   renderRecent();
   if (!$("overview").classList.contains("hidden")) renderChart();
+  renderBackupState();
 }
 
 // ---------------------------------------------------------------------------
@@ -868,9 +870,12 @@ async function templateBytes() {
 
 function pazymaValues(record) {
   const coc = record.coc || {};
+  // Pažymoje – pilnas komercinis pavadinimas, kaip CoC („NISSAN QASHQAI“),
+  // nebent modelis po to buvo pataisytas ranka.
+  const original = coc.commercial_name && splitMakeModel(record.make, coc.commercial_name).model === record.model;
   return buildValues({
     ...coc,
-    make: record.make, commercial_name: record.model, type_variant_version: record.tvv,
+    make: record.make, commercial_name: original ? coc.commercial_name : record.model, type_variant_version: record.tvv,
     vin: record.vin, national_approval_number: coc.national_approval_number || "",
   }, todayIso());
 }

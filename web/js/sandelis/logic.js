@@ -63,6 +63,35 @@ export function matches(record, query) {
   });
 }
 
+const BRANDS = [
+  "ALFA ROMEO", "AUDI", "BMW", "BYD", "CITROEN", "CITROËN", "CUPRA", "DACIA", "DS", "FIAT", "FORD", "HONDA",
+  "HYUNDAI", "IVECO", "JEEP", "KIA", "LAND ROVER", "LEXUS", "MAZDA", "MERCEDES-BENZ", "MG", "MINI", "MITSUBISHI",
+  "NISSAN", "OPEL", "PEUGEOT", "POLESTAR", "RENAULT", "SEAT", "SKODA", "ŠKODA", "SMART", "SUBARU", "SUZUKI",
+  "TESLA", "TOYOTA", "VOLKSWAGEN", "VOLVO", "VW",
+];
+
+/**
+ * Atskiria markę nuo modelio.
+ *
+ * CoC komerciniame pavadinime dažnai būna ir markė („NISSAN QASHQAI“), o
+ * atpažinimas kartais praleidžia tarpą („NISSANQASHQAI“). Sąraše patogiau
+ * markė atskirai, modelis atskirai. Be tarpo skeliama tik ilgesnė markė –
+ * kad „MINIVAN“ netaptų „MINI“ + „VAN“.
+ */
+export function splitMakeModel(make, model) {
+  const name = String(model || "").trim();
+  const known = String(make || "").trim();
+  for (const brand of [known, ...BRANDS].filter(Boolean)) {
+    if (!name.toUpperCase().startsWith(brand.toUpperCase())) continue;
+    const rest = name.slice(brand.length);
+    const spaced = /^[\s-]/.test(rest);
+    const tail = rest.replace(/^[\s-]+/, "");
+    if (!tail || (!spaced && brand.length < 5)) continue;
+    return { make: known || name.slice(0, brand.length).toUpperCase(), model: tail };
+  }
+  return { make: known, model: name };
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 

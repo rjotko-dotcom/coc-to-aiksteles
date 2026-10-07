@@ -131,9 +131,13 @@ Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti
    liudijimu** (atskiru PDF, nukopijuotu be kokybės praradimo).
 2. VIN, markė ir modelis perskaitomi automatiškai (tas pats atpažinimas kaip
    pažymų generatoriuje – kompiuteryje, be interneto ir be jokio AI).
-3. Skiltyje „Patikrinkite nuskenuotus“ prie kiekvieno lapo matyti jo vaizdas
-   ir VIN iškarpa. Sulyginate, jei reikia pataisote, **Enter** – patvirtinta,
-   žymeklis pereina prie kito lapo.
+   Skaityti pradedama iškart, kol kiti lapai dar karpomi, o kiekvieno lapo
+   pirmiausia perskaitoma tik viršutinė dalis (ten VIN ir modelis) – visas lapas
+   tik jei ko nors trūksta. Taip lapas apdorojamas maždaug trečdaliu greičiau.
+3. Skiltyje „Patikra“ prie kiekvieno lapo matyti jo vaizdas ir VIN iškarpa.
+   Sulyginate, jei reikia pataisote, **Enter** – patvirtinta, žymeklis pereina
+   prie kito lapo. Lapus, kuriuose viskas rasta ir nėra įspėjimų, galima
+   patvirtinti visus iš karto.
 4. Paieška: įvedus kelis paskutinius VIN ženklus iškart atsakoma **„Turime“**,
    **„Neturime“** arba **„Atiduotas 2026.10.07 – kam“**. Ieškoti galima ir
    pagal modelį ar gavėją.
@@ -152,7 +156,14 @@ sąraše (pvz. tas pats lapas nuskenuotas dukart).
 skiltyje „Atsarginė kopija“ kartą per savaitę atsisiųskite kopiją (`.zip` su
 sąrašu ir visais PDF) ir laikykite ją kitur. Programa pati primena, jei kopija
 senesnė nei 7 dienos. Kopiją galima įkelti ir į kitą kompiuterį – esami įrašai
-nedubliuojami. Ten pat – sąrašas Excel'iui (`.csv`, kabliataškiai).
+nedubliuojami.
+
+**Excel** – tikras `.xlsx` failas su trimis lapais (Turimi, Atiduoti, Visi):
+datos įrašomos kaip Excel datos, antraštė užšaldyta, stulpeliuose filtrai.
+Galima eksportuoti viską arba tik pažymėtas eilutes.
+
+Spartieji klavišai: `/` – paieška, `Enter` paieškoje – atidaryti pirmą
+rastą, `Esc` – išvalyti.
 
 Įdiegti kaip atskirą programą: atidarius adresą Chrome → adreso juostoje
 „Įdiegti“. Ji atsidaro savo lange ir veikia be interneto.
