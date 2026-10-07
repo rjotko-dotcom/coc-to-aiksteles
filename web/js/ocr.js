@@ -76,52 +76,117 @@ function fromBox(entry) {
 // tai „užšaldo“ puslapį, todėl pirmiausia bandoma foniniame procese
 // (`ocr-worker.js`). Jei jo paleisti nepavyksta, skaitoma kaip anksčiau – lange.
 
-let workerPromise = null;
 const pending = new Map();
 let sequence = 0;
 
 function call(worker, message, transfer = []) {
   return new Promise((resolve, reject) => {
     sequence += 1;
-    pending.set(sequence, { resolve, reject });
+    pending.set(sequence, { resolve, reject, worker });
     worker.postMessage({ ...message, id: sequence }, transfer);
   });
 }
 
+/**
+ * Kiek lapų skaityti vienu metu.
+ *
+ * Vienas lapas vienu metu išnaudoja tik dalį procesoriaus, todėl keli
+ * foniniai procesai lygiagrečiai apdoroja partiją kelis kartus greičiau.
+ * Daugiau nei trijų nereikia – kiekvienas užima ~200 MB atminties.
+ */
+export function parallelism() {
+  const cores = navigator.hardwareConcurrency || 2;
+  return Math.max(1, Math.min(3, Math.floor(cores / 2)));
+}
+
+/** Gijos vienam foniniam procesui – kad visi kartu neviršytų branduolių skaičiaus. */
+function workerThreads() {
+  if (!self.crossOriginIsolated) return 1;
+  const cores = navigator.hardwareConcurrency || 2;
+  return Math.max(1, Math.min(4, Math.floor((cores - 1) / parallelism())));
+}
+
+async function spawn() {
+  if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined"
+      || typeof createImageBitmap === "undefined") return null;
+  const worker = new Worker(new URL("./ocr-worker.js", import.meta.url));
+  worker.onmessage = ({ data }) => {
+    const job = pending.get(data.id);
+    if (!job) return;
+    pending.delete(data.id);
+    if (data.error) job.reject(new Error(data.error)); else job.resolve(data.result);
+  };
+  worker.onerror = (event) => {
+    for (const [id, job] of pending) {
+      if (job.worker !== worker) continue;
+      pending.delete(id);
+      job.reject(new Error(event.message || "Foninis procesas sustojo."));
+    }
+  };
+  await call(worker, {
+    type: "start", bundle: BUNDLE, models: MODELS, wasmPaths: asset("ort/"), threads: workerThreads(),
+  });
+  return worker;
+}
+
+// Foninių procesų telkinys: kiekvienas vienu metu skaito vieną vaizdą.
+const slots = [];
+const waiting = [];
+let firstWorker = null;
+let poolGrown = false;
+
+function release(slot) {
+  const next = waiting.shift();
+  if (next) next(slot);
+  else slot.busy = false;
+}
+
+function addSlot(worker) {
+  const slot = { worker, busy: true };
+  slots.push(slot);
+  release(slot);
+}
+
 function getWorker() {
-  if (!workerPromise) {
-    workerPromise = (async () => {
-      if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined"
-          || typeof createImageBitmap === "undefined") return null;
-      const worker = new Worker(new URL("./ocr-worker.js", import.meta.url));
-      worker.onmessage = ({ data }) => {
-        const job = pending.get(data.id);
-        if (!job) return;
-        pending.delete(data.id);
-        if (data.error) job.reject(new Error(data.error)); else job.resolve(data.result);
-      };
-      worker.onerror = (event) => {
-        for (const job of pending.values()) job.reject(new Error(event.message || "Foninis procesas sustojo."));
-        pending.clear();
-      };
-      await call(worker, {
-        type: "start", bundle: BUNDLE, models: MODELS, wasmPaths: asset("ort/"), threads: threadCount(),
-      });
+  if (!firstWorker) {
+    firstWorker = spawn().then((worker) => {
+      if (worker) addSlot(worker);
       return worker;
-    })().catch(() => null);
+    }).catch(() => null);
   }
-  return workerPromise;
+  return firstWorker;
+}
+
+/** Likę procesai paleidžiami tik tada, kai jų prireikia. */
+function growPool() {
+  if (poolGrown) return;
+  poolGrown = true;
+  for (let i = 1; i < parallelism(); i += 1) {
+    spawn().then((worker) => { if (worker) addSlot(worker); }).catch(() => {});
+  }
+}
+
+function acquire() {
+  const free = slots.find((slot) => !slot.busy);
+  if (free) {
+    free.busy = true;
+    return Promise.resolve(free);
+  }
+  return new Promise((resolve) => waiting.push((slot) => { slot.busy = true; resolve(slot); }));
 }
 
 /** Atpažįsta drobę: foniniame procese, o nepavykus – lange. */
 async function detect(canvas) {
-  const worker = await getWorker();
-  if (worker) {
+  if (await getWorker()) {
+    growPool();
+    const slot = await acquire();
     try {
       const bitmap = await createImageBitmap(canvas);
-      return await call(worker, { type: "detect", bitmap }, [bitmap]);
+      return await call(slot.worker, { type: "detect", bitmap }, [bitmap]);
     } catch {
       // skaitysime lange
+    } finally {
+      release(slot);
     }
   }
   const engine = await getEngine();
