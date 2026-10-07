@@ -48,12 +48,8 @@
       <span><b>CoC sandėlis</b><small>Veikia be interneto</small></span>
     </div>
 
-    <button class="side-search" type="button" data-action="focus-search">
-      <svg><use href="#i-search"/></svg><span>Ieškoti VIN</span><kbd>/</kbd>
-    </button>
-
     <nav>
-      <a href="#top" class="nav on" data-nav="top"><svg><use href="#i-home"/></svg>Apžvalga</a>
+      <a href="#top" class="nav on" data-nav="top"><svg><use href="#i-search"/></svg>Paieška</a>
       <a href="#review" class="nav" data-nav="review"><svg><use href="#i-scan"/></svg>Patikra<span class="badge warn" id="nav-review"></span></a>
       <p class="nav-title">Liudijimai</p>
       <a href="#list" class="nav" data-nav="list" data-tab="turimas"><svg><use href="#i-file"/></svg>Turimi<span class="badge" id="nav-in"></span></a>
@@ -78,7 +74,7 @@
   <main class="main" id="top">
     <header class="topbar">
       <button class="icon-btn menu-btn" type="button" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
-      <div class="crumb"><svg><use href="#i-home"/></svg><span>Apžvalga</span></div>
+      <div class="crumb"><svg><use href="#i-box"/></svg><span>CoC sandėlis</span></div>
       <div class="top-actions">
         <button class="btn ghost" type="button" data-action="excel"><svg><use href="#i-sheet"/></svg><span>Excel</span></button>
         <button class="btn primary" type="button" data-action="upload"><svg><use href="#i-upload"/></svg><span>Įkelti skeną</span></button>
@@ -86,8 +82,8 @@
     </header>
 
     <section class="hero reveal">
-      <p class="today" id="today"></p>
       <h1 id="greeting">Sveiki!</h1>
+      <p class="summary" id="summary"></p>
       <div class="search-box">
         <svg><use href="#i-search"/></svg>
         <input type="search" id="q" placeholder="Ar turime? Įveskite VIN (pakanka 6 paskutinių), modelį ar gavėją…"
@@ -95,25 +91,6 @@
         <kbd>/</kbd>
       </div>
       <div id="answer" aria-live="polite"></div>
-    </section>
-
-    <section class="stats">
-      <article class="stat reveal" style="--d:1">
-        <div><span>Turimi</span><b data-count id="s-in">0</b><small id="s-in-sub">&nbsp;</small></div>
-        <i class="stat-icon green"><svg><use href="#i-file"/></svg></i>
-      </article>
-      <article class="stat reveal" style="--d:2">
-        <div><span>Laukia patikros</span><b data-count id="s-review">0</b><small id="s-review-sub">&nbsp;</small></div>
-        <i class="stat-icon amber"><svg><use href="#i-scan"/></svg></i>
-      </article>
-      <article class="stat reveal" style="--d:3">
-        <div><span>Atiduota šį mėnesį</span><b data-count id="s-out">0</b><small id="s-out-sub">&nbsp;</small></div>
-        <i class="stat-icon blue"><svg><use href="#i-send"/></svg></i>
-      </article>
-      <article class="stat reveal" style="--d:4">
-        <div><span>Įkelta šį mėnesį</span><b data-count id="s-added">0</b><small id="s-added-sub">&nbsp;</small></div>
-        <i class="stat-icon violet"><svg><use href="#i-inbox"/></svg></i>
-      </article>
     </section>
 
     <section class="card progress hidden" id="progress">
@@ -136,20 +113,6 @@
         <li><i>2</i><div><b>Patikrinkite</b><span>Kiekvienas lapas taps atskiru CoC. VIN ir modelis perskaitomi automatiškai.</span></div></li>
         <li><i>3</i><div><b>Raskite ir atiduokite</b><span>Paieška atsako „turime / neturime“, atidavimas įrašomas su data ir gavėju.</span></div></li>
       </ol>
-    </section>
-
-    <section class="duo" id="overview">
-      <article class="card chart-card reveal" style="--d:5">
-        <header class="card-head">
-          <h2>Įkelta ir atiduota</h2>
-          <div class="legend"><span><i class="solid"></i>Įkelta</span><span><i class="dash"></i>Atiduota</span><span class="pill-sm">6 mėn.</span></div>
-        </header>
-        <div class="chart" id="chart"></div>
-      </article>
-      <article class="card recent-card reveal" style="--d:6">
-        <header class="card-head"><h2>Paskutiniai atiduoti</h2></header>
-        <ul class="recent" id="recent"></ul>
-      </article>
     </section>
 
     <section class="card hidden" id="review">

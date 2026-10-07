@@ -12,8 +12,8 @@ import {
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, localDay, matches,
-  mergePlan, monthlyActivity, newestFirst, pdfName, showDate, splitMakeModel, statusName, todayIso, vinDoubtful,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, matches,
+  mergePlan, newestFirst, pdfName, showDate, splitMakeModel, statusName, todayIso, vinDoubtful,
   vinProblems,
 } from "./logic.js";
 
@@ -98,29 +98,6 @@ async function openPdf(id) {
 async function update(record, changes) {
   Object.assign(record, changes, { updated: now() });
   await saveRecord(record);
-}
-
-/** Skaičius „atsuka“ iki naujos reikšmės. */
-function countTo(element, value) {
-  const from = Number(element.dataset.value || 0);
-  element.dataset.value = value;
-  if (from === value || reduceMotion()) { element.textContent = value; return; }
-  const start = performance.now();
-  const duration = 900;
-  const step = (time) => {
-    const t = Math.min(1, (time - start) / duration);
-    const eased = 1 - (1 - t) ** 3;
-    element.textContent = Math.round(from + (value - from) * eased);
-    if (t < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
-}
-
-/** Avataro spalva iš vardo – tas pats žmogus visada tos pačios spalvos. */
-function hue(name) {
-  let sum = 0;
-  for (const ch of String(name)) sum = (sum * 31 + ch.charCodeAt(0)) % 360;
-  return sum;
 }
 
 // ---------------------------------------------------------------------------
@@ -456,154 +433,25 @@ async function removeRecord(id) {
 }
 
 // ---------------------------------------------------------------------------
-// Apžvalga: skaičiai, grafikas, paskutiniai atiduoti
+// Skaičiai
 // ---------------------------------------------------------------------------
 
 function renderCounts() {
   const n = counts(records);
-  const month = todayIso().slice(0, 7);
-  const week = Date.now() - 7 * 864e5;
-  const ready = records.filter((record) => record.status !== STATUS.REVIEW);
-  const givenMonth = records.filter((record) => record.status === STATUS.OUT && String(record.given_date).startsWith(month));
-  const addedMonth = ready.filter((record) => localDay(record.added).startsWith(month));
-  const addedWeek = ready.filter((record) => new Date(record.added).getTime() > week);
-
-  countTo($("s-in"), n[STATUS.IN]);
-  countTo($("s-review"), n[STATUS.REVIEW]);
-  countTo($("s-out"), givenMonth.length);
-  countTo($("s-added"), addedMonth.length);
-  $("s-in-sub").textContent = addedWeek.length ? `+${addedWeek.length} per savaitę` : " ";
-  $("s-review-sub").textContent = n[STATUS.REVIEW] ? "Laukia Jūsų patvirtinimo" : "Viskas patikrinta";
-  $("s-out-sub").textContent = `Iš viso atiduota: ${n[STATUS.OUT]}`;
-  $("s-added-sub").textContent = `Iš viso įkelta: ${ready.length}`;
-
+  const ready = n.all - n[STATUS.REVIEW];
   $("nav-in").textContent = n[STATUS.IN] || "";
   $("nav-out").textContent = n[STATUS.OUT] || "";
   $("nav-review").textContent = n[STATUS.REVIEW] || "";
   $("t-in").textContent = n[STATUS.IN];
   $("t-out").textContent = n[STATUS.OUT];
-  $("t-all").textContent = ready.length;
+  $("t-all").textContent = ready;
 
-  const hour = new Date().getHours();
-  const hello = hour < 11 ? "Labas rytas!" : hour < 18 ? "Laba diena!" : "Labas vakaras!";
-  $("greeting").innerHTML = records.length
-    ? `${hello} Turime <span class="num">${n[STATUS.IN]}</span> CoC.`
-    : `${hello} Pradėkime nuo pirmo skeno.`;
-
+  $("greeting").textContent = records.length ? `Turime ${n[STATUS.IN]} CoC` : "Pradėkime nuo pirmo skeno";
+  $("summary").textContent = records.length
+    ? [n[STATUS.REVIEW] ? `${n[STATUS.REVIEW]} laukia patikros` : "", `${n[STATUS.OUT]} atiduota`]
+      .filter(Boolean).join(" · ")
+    : "";
   $("empty").classList.toggle("hidden", records.length > 0);
-  $("overview").classList.toggle("hidden", ready.length === 0);
-}
-
-/** Švelni kreivė per taškus (Catmull–Rom → Bezier). */
-function smoothPath(points) {
-  if (points.length < 2) return "";
-  let path = `M${points[0][0]},${points[0][1]}`;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const [x0, y0] = points[i - 1] || points[i];
-    const [x1, y1] = points[i];
-    const [x2, y2] = points[i + 1];
-    const [x3, y3] = points[i + 2] || points[i + 1];
-    const c1 = [x1 + (x2 - x0) / 6, y1 + (y2 - y0) / 6];
-    const c2 = [x2 - (x3 - x1) / 6, y2 - (y3 - y1) / 6];
-    path += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${x2},${y2}`;
-  }
-  return path;
-}
-
-let chartKey = "";
-
-function renderChart() {
-  const months = monthlyActivity(records);
-  const key = JSON.stringify(months) + $("chart").clientHeight;
-  if (key === chartKey) return;
-  chartKey = key;
-
-  const box = $("chart");
-  const width = Math.max(320, box.clientWidth || 600);
-  const height = Math.max(200, box.clientHeight || 230);
-  const pad = { left: 34, right: 12, top: 14, bottom: 28 };
-  const peak = Math.max(4, ...months.map((m) => Math.max(m.added, m.given)));
-  const top = Math.ceil(peak / 4) * 4;
-  const x = (i) => pad.left + (i * (width - pad.left - pad.right)) / (months.length - 1);
-  const y = (v) => pad.top + (1 - v / top) * (height - pad.top - pad.bottom);
-  const added = months.map((m, i) => [x(i), y(m.added)]);
-  const given = months.map((m, i) => [x(i), y(m.given)]);
-  const addedPath = smoothPath(added);
-  const area = `${addedPath} L${x(months.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
-
-  const grid = [0, 1, 2, 3, 4].map((step) => {
-    const value = (top / 4) * step;
-    return `<line class="grid-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(value)}" y2="${y(value)}"/>
-      <text class="axis" x="${pad.left - 10}" y="${y(value) + 4}" text-anchor="end">${value}</text>`;
-  }).join("");
-  const labels = months.map((m, i) =>
-    `<text class="axis" x="${x(i)}" y="${height - 6}" text-anchor="middle">${m.label}</text>`).join("");
-
-  box.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"
-         aria-label="Įkelta ir atiduota per paskutinius 6 mėnesius">
-      <defs>
-        <linearGradient id="area-fill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0" stop-color="#fafafa" stop-opacity=".16"/>
-          <stop offset="1" stop-color="#fafafa" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      ${grid}${labels}
-      <path class="area fade" d="${area}"/>
-      <path class="line given" d="${smoothPath(given)}"/>
-      <path class="line added draw" d="${addedPath}"/>
-      <line class="guide" y1="${pad.top}" y2="${y(0)}"/>
-      <circle class="dot d-added" r="4.5"/>
-      <circle class="dot d-given" r="4" style="stroke:#71717a"/>
-    </svg>
-    <div class="tip"></div>`;
-
-  const line = box.querySelector(".line.added");
-  const length = line.getTotalLength();
-  line.style.strokeDasharray = length;
-  line.style.strokeDashoffset = length;
-  const dashed = box.querySelector(".line.given");
-  if (!reduceMotion()) {
-    dashed.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: 500, fill: "both" });
-  }
-
-  const svg = box.querySelector("svg");
-  const tip = box.querySelector(".tip");
-  svg.addEventListener("mousemove", (event) => {
-    const rect = svg.getBoundingClientRect();
-    const px = ((event.clientX - rect.left) / rect.width) * width;
-    let index = 0;
-    for (let i = 1; i < months.length; i += 1) if (Math.abs(x(i) - px) < Math.abs(x(index) - px)) index = i;
-    const m = months[index];
-    box.classList.add("hover");
-    box.querySelector(".guide").setAttribute("x1", x(index));
-    box.querySelector(".guide").setAttribute("x2", x(index));
-    const [ax, ay] = added[index];
-    const [gx, gy] = given[index];
-    box.querySelector(".d-added").setAttribute("cx", ax);
-    box.querySelector(".d-added").setAttribute("cy", ay);
-    box.querySelector(".d-given").setAttribute("cx", gx);
-    box.querySelector(".d-given").setAttribute("cy", gy);
-    tip.innerHTML = `<b>${m.label}</b><span>Įkelta: ${m.added}</span><span>Atiduota: ${m.given}</span>`;
-    tip.style.left = `${(ax / width) * rect.width}px`;
-    tip.style.top = `${(Math.min(ay, gy) / height) * rect.height}px`;
-  });
-  svg.addEventListener("mouseleave", () => box.classList.remove("hover"));
-}
-
-function renderRecent() {
-  const list = records.filter((record) => record.status === STATUS.OUT)
-    .sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)) || String(b.updated).localeCompare(String(a.updated)))
-    .slice(0, 5);
-  $("recent").innerHTML = list.length
-    ? list.map((record, i) => `
-      <li data-row="${record.id}" style="--i:${i}">
-        <span class="avatar" style="--h:${hue(record.given_to || "?")}">${esc(initials(record.given_to))}</span>
-        <div class="who"><b>${esc(record.given_to || "Gavėjas nenurodytas")}</b>
-          <span>…${esc((record.vin || "").slice(-6))} · ${esc(record.model || "")}</span></div>
-        <time>${esc(showDate(record.given_date))}</time>
-      </li>`).join("")
-    : `<li class="none">Dar nieko neatiduota.</li>`;
 }
 
 // ---------------------------------------------------------------------------
@@ -729,9 +577,8 @@ function render() {
   renderTable();
   renderAnswer($("q").value);
   renderRecipients();
-  renderRecent();
-  if (!$("overview").classList.contains("hidden")) renderChart();
   renderBackupState();
+  highlightNav();
 }
 
 // ---------------------------------------------------------------------------
@@ -939,7 +786,6 @@ async function restore(file) {
     for (const record of plan.replace) await saveRecord(record);
     records = await allRecords();
     animateRows = true;
-    chartKey = "";
     render();
     toast(`Kopija įkelta: pridėta ${plan.add.length}, atnaujinta ${plan.replace.length}, jau buvo ${plan.skip}.`);
     runQueue();
@@ -1083,10 +929,6 @@ $("rows").addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-row]");
   if (row) openDetail(row.dataset.row);
 });
-$("recent").addEventListener("click", (event) => {
-  const row = event.target.closest("[data-row]");
-  if (row) openDetail(row.dataset.row);
-});
 $("check-all").addEventListener("change", (event) => {
   const ids = visibleRecords().slice(0, shown).map((record) => record.id);
   ids.forEach((id) => (event.target.checked ? selected.add(id) : selected.delete(id)));
@@ -1179,21 +1021,14 @@ document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener(
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { chartKey = ""; renderChart(); moveIndicator(); }, 150);
+  resizeTimer = setTimeout(moveIndicator, 150);
 });
 
 // ---------------------------------------------------------------------------
 // Paleidimas
 // ---------------------------------------------------------------------------
 
-function renderToday() {
-  const text = new Intl.DateTimeFormat("lt-LT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
-    .format(new Date());
-  $("today").textContent = text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 async function start() {
-  renderToday();
   try {
     records = await allRecords();
   } catch (error) {

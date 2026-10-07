@@ -166,36 +166,6 @@ export function excelSheets(records) {
   ];
 }
 
-const MONTHS = ["Sau", "Vas", "Kov", "Bal", "Geg", "Bir", "Lie", "Rgp", "Rgs", "Spa", "Lap", "Gru"];
-
-/** Kiek liudijimų įkelta ir atiduota kiekvieną iš paskutinių `months` mėnesių. */
-export function monthlyActivity(records, months = 6, now = new Date()) {
-  const result = [];
-  for (let back = months - 1; back >= 0; back -= 1) {
-    const date = new Date(now.getFullYear(), now.getMonth() - back, 1);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    result.push({ key, label: MONTHS[date.getMonth()], added: 0, given: 0 });
-  }
-  const index = new Map(result.map((entry, i) => [entry.key, i]));
-  for (const record of records) {
-    if (record.status === STATUS.REVIEW) continue;
-    const added = index.get(localDay(record.added).slice(0, 7));
-    if (added !== undefined) result[added].added += 1;
-    if (record.status === STATUS.OUT) {
-      const given = index.get(String(record.given_date || "").slice(0, 7));
-      if (given !== undefined) result[given].given += 1;
-    }
-  }
-  return result;
-}
-
-/** Vardo inicialai avatarui: „Jonas Jonaitis“ → „JJ“, „UAB Autos“ → „UA“. */
-export function initials(name) {
-  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
-  if (!words.length) return "?";
-  return (words[0][0] + (words[1] ? words[1][0] : words[0][1] || "")).toUpperCase();
-}
-
 /**
  * Ką įrašyti iš atsarginės kopijos.
  *

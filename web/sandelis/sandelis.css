@@ -80,13 +80,6 @@ kbd {
   box-shadow: 0 6px 20px -8px rgba(255, 255, 255, .45);
 }
 .logo svg { width: 20px; height: 20px; stroke-width: 2; }
-.side-search {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  background: var(--card); border: 1px solid var(--line); color: var(--dim);
-  border-radius: 11px; padding: 9px 10px; font: inherit; cursor: pointer; transition: border-color .2s, color .2s;
-}
-.side-search:hover { border-color: var(--line-2); color: var(--soft); }
-.side-search span { flex: 1; text-align: left; }
 nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-title { margin: 14px 10px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 .nav {
@@ -166,9 +159,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 
 /* ===== Pagrindinė antraštė ir paieška ===== */
 .hero { padding-top: 14px; }
-.today { margin: 0; color: var(--dim); font-size: 13px; }
-h1 { margin: 4px 0 18px; font-size: clamp(26px, 3.2vw, 34px); font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
-h1 .num { font-variant-numeric: tabular-nums; }
+h1 { margin: 10px 0 4px; font-size: clamp(26px, 3.2vw, 34px); font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
+h1 + .summary { margin: 0 0 18px; color: var(--muted); font-size: 15px; min-height: 22px; }
 h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
 h3 { margin: 22px 0 10px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 .search-box {
@@ -206,78 +198,6 @@ h3 { margin: 22px 0 10px; font-size: 11.5px; letter-spacing: .08em; text-transfo
 }
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .count { color: var(--dim); font-weight: 500; }
-
-.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.stat {
-  display: flex; justify-content: space-between; gap: 10px; padding: 18px 18px 16px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r);
-  position: relative; overflow: hidden; transition: border-color .25s, transform .3s var(--ease);
-}
-.stat:hover { border-color: var(--line-2); transform: translateY(-2px); }
-.stat span { color: var(--muted); font-size: 13px; }
-.stat b { display: block; font-size: 32px; font-weight: 650; letter-spacing: -.03em; margin-top: 6px; font-variant-numeric: tabular-nums; }
-.stat small { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; }
-.stat-icon {
-  width: 46px; height: 46px; border-radius: 13px; display: grid; place-items: center; align-self: center;
-  border: 1px solid var(--line-2); background: var(--card-2);
-}
-.stat-icon svg { width: 21px; height: 21px; }
-.stat-icon.green { color: var(--green); } .stat-icon.amber { color: var(--amber); }
-.stat-icon.blue { color: var(--blue); } .stat-icon.violet { color: var(--violet); }
-.stat::after {
-  content: ""; position: absolute; right: -30px; bottom: -50px; width: 130px; height: 130px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, .045), transparent 70%); pointer-events: none;
-}
-
-.duo { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
-.legend { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12.5px; }
-.legend span { display: inline-flex; align-items: center; gap: 6px; }
-.legend i { width: 16px; height: 0; border-top: 2px solid var(--text); }
-.legend i.dash { border-top-style: dashed; border-color: var(--dim); }
-.pill-sm { border: 1px solid var(--line-2); border-radius: 8px; padding: 2px 8px; }
-
-/* Grafikas */
-.chart-card { display: flex; flex-direction: column; }
-.chart { position: relative; flex: 1; min-height: 230px; }
-.chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; stroke-width: 1; }
-.chart .grid-line { stroke: var(--line); stroke-dasharray: 2 4; }
-.chart .axis { fill: var(--dim); stroke: none; font: 11px var(--sans); }
-.chart .line { fill: none; stroke: var(--text); stroke-width: 2.2; }
-.chart .line.given { stroke: var(--dim); stroke-dasharray: 5 5; stroke-width: 1.8; }
-.chart .area { fill: url(#area-fill); stroke: none; }
-.chart .dot { fill: var(--bg); stroke: var(--text); stroke-width: 2; opacity: 0; transition: opacity .2s; }
-.chart .guide { stroke: var(--line-2); stroke-width: 1; opacity: 0; transition: opacity .2s; }
-.chart.hover .dot, .chart.hover .guide { opacity: 1; }
-.chart .draw { animation: draw 1.4s var(--ease) forwards; }
-.chart .fade { animation: fade 1.2s .3s var(--ease) both; }
-.tip {
-  position: absolute; pointer-events: none; background: var(--card-3); border: 1px solid var(--line-2);
-  border-radius: 10px; padding: 8px 11px; font-size: 12.5px; white-space: nowrap; transform: translate(-50%, -110%);
-  opacity: 0; transition: opacity .15s; box-shadow: 0 12px 30px -12px #000;
-}
-.chart.hover .tip { opacity: 1; }
-.tip b { display: block; margin-bottom: 2px; }
-.tip span { color: var(--muted); display: block; }
-
-/* Paskutiniai atiduoti */
-.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.recent li {
-  display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 11px;
-  background: var(--card-2); border: 1px solid transparent; cursor: pointer;
-  transition: border-color .2s, background .2s, transform .25s var(--ease);
-  animation: rise .5s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms);
-}
-.recent li:hover { border-color: var(--line-2); transform: translateX(3px); }
-.recent .who { flex: 1; min-width: 0; }
-.recent .who b { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recent .who span { color: var(--dim); font: 12px var(--mono); }
-.recent time { color: var(--dim); font-size: 12px; white-space: nowrap; }
-.recent .none { cursor: default; justify-content: center; color: var(--dim); padding: 30px 10px; background: transparent; }
-.avatar {
-  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; flex: none;
-  font-size: 12px; font-weight: 650; color: hsl(var(--h) 80% 78%); background: hsl(var(--h) 45% 20%);
-  border: 1px solid hsl(var(--h) 40% 30%);
-}
 
 /* Tuščia būsena */
 .empty-hero { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 26px; }
@@ -521,10 +441,6 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); an
 @keyframes pulse-border { 50% { border-color: var(--text); } }
 
 /* ===== Mažesni ekranai ===== */
-@media (max-width: 1180px) {
-  .stats { grid-template-columns: repeat(2, 1fr); }
-  .duo { grid-template-columns: 1fr; }
-}
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
@@ -544,10 +460,6 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); an
   .table-wrap { margin: 0 -20px; }
 }
 @media (max-width: 560px) {
-  .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
-  .stat { padding: 14px; }
-  .stat b { font-size: 26px; }
-  .stat-icon { display: none; }
   .top-actions .btn span { display: none; }
   .hide-sm { display: none; }
   .rcard { grid-template-columns: 1fr; }

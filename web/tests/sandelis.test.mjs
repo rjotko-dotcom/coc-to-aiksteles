@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, matches, mergePlan,
-  monthlyActivity, pdfName, splitMakeModel, vinProblems,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, matches, mergePlan,
+  pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
 import { strFromU8, unzipSync } from "../vendor/fflate/fflate.mjs";
@@ -66,25 +66,6 @@ test("Excel: trys lapai, datos kaip Excel datos, specialūs ženklai saugūs", (
   assert.ok(given.includes("UAB „Autos“ &amp; Co"));
   assert.ok(given.includes(`<v>${excelDate("2026-10-07")}</v>`));
   assert.equal(excelDate("2026-10-07"), 46302);
-});
-
-test("mėnesių aktyvumas grafikui", () => {
-  const now = new Date(2026, 9, 15);
-  const list = [
-    record({ id: 1, added: "2026-10-01T08:00:00Z" }),
-    record({ id: 2, added: "2026-09-03T08:00:00Z", status: STATUS.OUT, given_date: "2026-10-05" }),
-    record({ id: 3, added: "2025-01-03T08:00:00Z" }),
-  ];
-  const months = monthlyActivity(list, 6, now);
-  assert.deepEqual(months.map((m) => m.label), ["Geg", "Bir", "Lie", "Rgp", "Rgs", "Spa"]);
-  assert.deepEqual(months.at(-1), { key: "2026-10", label: "Spa", added: 1, given: 1 });
-  assert.equal(months.at(-2).added, 1);
-});
-
-test("inicialai", () => {
-  assert.equal(initials("Jonas Jonaitis"), "JJ");
-  assert.equal(initials("Ūla"), "ŪL");
-  assert.equal(initials(""), "?");
 });
 
 test("PDF pavadinimas iš VIN ir modelio", () => {
