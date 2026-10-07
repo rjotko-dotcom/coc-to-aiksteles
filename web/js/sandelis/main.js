@@ -11,6 +11,7 @@ import {
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
+import * as disk from "./folder.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful,
@@ -103,6 +104,97 @@ async function openPdf(id) {
 async function update(record, changes) {
   Object.assign(record, changes, { updated: now() });
   await saveRecord(record);
+  scheduleSync();
+}
+
+// ---------------------------------------------------------------------------
+// Duomenų aplankas kompiuteryje (išlieka išvalius Chrome)
+// ---------------------------------------------------------------------------
+
+/** "none" – nepasirinktas, "ok" – rašoma, "permission" – reikia paspausti „Leisti“. */
+let store = { handle: null, state: "none", saved: null, busy: false, again: false };
+let syncTimer = null;
+
+function scheduleSync(delay = 1500) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, delay);
+}
+
+async function syncNow() {
+  if (store.state !== "ok") return;
+  if (store.busy) { store.again = true; return; }
+  store.busy = true;
+  try {
+    await disk.save(store.handle, records, {
+      getPdf, xlsx: buildXlsx(excelSheets(records), EXCEL_COLUMNS),
+    });
+    store.saved = new Date();
+  } catch (error) {
+    // Dažniausiai – Chrome atšaukė leidimą (pvz. po perkrovimo). Užteks paspausti „Leisti“.
+    store.state = await disk.hasPermission(store.handle) ? "ok" : "permission";
+    if (store.state === "ok") toast(`Nepavyko įrašyti į aplanką: ${error.message || error}`, "err");
+  } finally {
+    store.busy = false;
+    renderBackupState();
+    if (store.again) { store.again = false; scheduleSync(300); }
+  }
+}
+
+/** Įkelia aplanke esančius įrašus, kurių naršyklėje nėra (arba kurie ten senesni). */
+async function mergeFromFolder(handle) {
+  const data = await disk.load(handle);
+  if (!data) return null;
+  const plan = mergePlan(records, data.records);
+  for (const record of plan.add) await addRecord(record, await data.pdf(record.id));
+  for (const record of plan.replace) await saveRecord(record);
+  records = await allRecords();
+  return plan;
+}
+
+async function connectFolder(restoreOnly = false) {
+  if (!disk.supported()) {
+    toast("Ši naršyklė aplanko pasirinkti neleidžia – naudokite Chrome arba Edge.", "err");
+    return;
+  }
+  let handle;
+  try {
+    handle = await disk.pickFolder();
+  } catch {
+    return; // atšaukė pasirinkimą
+  }
+  if (!await disk.hasPermission(handle, true)) { toast("Be leidimo į aplanką rašyti negalima.", "warn"); return; }
+  const plan = await mergeFromFolder(handle);
+  if (restoreOnly && !plan) {
+    toast(`Aplanke „${handle.name}“ sandėlio duomenų nerasta.`, "warn");
+    return;
+  }
+  store = { ...store, handle, state: "ok" };
+  await setMeta("folderHandle", handle);
+  animateRows = true;
+  render();
+  await syncNow();
+  if (plan && (plan.add.length || plan.replace.length)) {
+    toast(`Atkurta iš aplanko: ${plan.add.length} nauj., ${plan.replace.length} atnaujint.`);
+    runQueue();
+  } else {
+    toast(`Duomenys bus saugomi aplanke „${handle.name}“.`);
+  }
+}
+
+async function allowFolder() {
+  if (!await disk.hasPermission(store.handle, true)) return;
+  store.state = "ok";
+  const plan = await mergeFromFolder(store.handle);
+  if (plan && plan.add.length) render();
+  await syncNow();
+  toast(`Saugojimas į aplanką „${store.handle.name}“ vėl veikia.`);
+}
+
+async function loadFolderState() {
+  const handle = await getMeta("folderHandle").catch(() => null);
+  if (!handle || !disk.supported()) return;
+  store.handle = handle;
+  store.state = await disk.hasPermission(handle) ? "ok" : "permission";
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +284,7 @@ async function handleFiles(fileList) {
       }
       await addRecord(record, bytes);
       records.push(record);
+      scheduleSync();
       added += 1;
       // Skaityti pradedama iškart, kol kiti lapai dar karpomi.
       renderReview();
@@ -485,6 +578,8 @@ async function removeRecord(id) {
   const label = record.vin || `${record.source_file}, ${record.page} lapas`;
   if (!await ask("Ištrinti liudijimą?", `${label}\nBus ištrintas ir jo PDF.`, "Ištrinti", true)) return;
   await deleteRecord(id);
+  if (store.state === "ok") disk.removePdf(store.handle, id);
+  scheduleSync();
   records = records.filter((other) => other.id !== id);
   selected.delete(id);
   animateOut(id);
@@ -901,6 +996,7 @@ async function restore(file) {
     for (const record of plan.add) await addRecord(record, files[`pdf/${record.id}.pdf`] || null);
     for (const record of plan.replace) await saveRecord(record);
     records = await allRecords();
+    scheduleSync(0);
     animateRows = true;
     render();
     toast(`Kopija įkelta: pridėta ${plan.add.length}, atnaujinta ${plan.replace.length}, jau buvo ${plan.skip}.`);
@@ -911,17 +1007,37 @@ async function restore(file) {
 }
 
 async function renderBackupState() {
-  const last = await getMeta("lastBackup").catch(() => null);
+  const card = $("backup-card");
   const ready = records.filter((record) => record.status !== STATUS.REVIEW).length;
-  const due = backupDue(last, ready);
-  const days = last ? Math.floor((Date.now() - new Date(last)) / 864e5) : null;
-  $("backup-card").classList.toggle("due", due);
-  $("backup-text").textContent = last
-    ? (days === 0 ? "Padaryta šiandien." : `Paskutinė prieš ${days} d.${due ? " Laikas naujai." : ""}`)
-    : ready ? "Dar nedaryta – duomenys tik šiame kompiuteryje." : "Bus galima, kai įkelsite CoC.";
-  $("backup-meter").style.width = last ? `${Math.max(6, 100 - (days / 7) * 100)}%` : "0%";
+  const button = $("store-btn");
+  card.classList.remove("ok", "due");
+  if (store.state === "ok") {
+    card.classList.add("ok");
+    $("store-title").textContent = `Saugoma: ${store.handle.name}`;
+    $("backup-text").textContent = store.saved
+      ? `Įrašyta ${store.saved.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" })}. Išvalius Chrome duomenys liks aplanke.`
+      : "Kiekvienas pakeitimas įrašomas į aplanką kompiuteryje.";
+    button.dataset.action = "folder-connect";
+    button.querySelector("span").textContent = "Keisti aplanką";
+  } else if (store.state === "permission") {
+    card.classList.add("due");
+    $("store-title").textContent = "Reikia leidimo";
+    $("backup-text").textContent = `Chrome prašo patvirtinti, kad galima toliau saugoti į aplanką „${store.handle.name}“.`;
+    button.dataset.action = "folder-allow";
+    button.querySelector("span").textContent = "Leisti";
+  } else {
+    const last = await getMeta("lastBackup").catch(() => null);
+    card.classList.toggle("due", ready > 0 && backupDue(last, ready));
+    $("store-title").textContent = "Duomenų aplankas";
+    $("backup-text").textContent = disk.supported()
+      ? "Duomenys kol kas tik naršyklėje. Pasirinkite aplanką kompiuteryje – tada išvalius Chrome niekas nedings."
+      : last ? `Paskutinė kopija – ${showDate(last)}.` : "Duomenys tik šioje naršyklėje – darykite kopiją.";
+    button.dataset.action = disk.supported() ? "folder-connect" : "backup";
+    button.querySelector("span").textContent = disk.supported() ? "Pasirinkti aplanką" : "Atsisiųsti kopiją";
+  }
+  $("restore-step").classList.toggle("hidden", !disk.supported());
   const usage = await usageMb();
-  $("usage").textContent = usage !== null ? `Užimama vietos: ${usage < 1 ? "<1" : usage.toFixed(0)} MB` : "";
+  $("usage").textContent = usage !== null ? `Naršyklėje užimama: ${usage < 1 ? "<1" : usage.toFixed(0)} MB` : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -1112,6 +1228,9 @@ const ACTIONS = {
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
   "folder-cancel": () => $("folder-dialog").close(),
+  "folder-connect": () => connectFolder(),
+  "folder-restore": () => connectFolder(true),
+  "folder-allow": allowFolder,
   "open-pdf": () => openPdf(detailId),
   "detail-close": () => $("detail").close(),
   "detail-pdf": () => downloadPdfs([detailId]),
@@ -1169,6 +1288,7 @@ window.addEventListener("resize", () => {
 
 async function start() {
   savedFolders = (await getMeta("folders").catch(() => null)) || [];
+  await loadFolderState();
   try {
     records = await allRecords();
   } catch (error) {
@@ -1179,6 +1299,9 @@ async function start() {
   for (const record of records) if (record.ocr === "skaitoma") record.ocr = "laukia";
   render();
   requestAnimationFrame(moveIndicator);
+  // Aplankas papildomas tuo, ko jame galbūt dar nėra (pvz. po atnaujinimo).
+  if (store.state === "ok") scheduleSync(0);
+  else if (store.state === "permission") toast("Spauskite „Leisti“ kairėje, kad duomenys vėl būtų saugomi aplanke.", "warn");
   renderBackupState();
   if (records.some((record) => record.ocr === "laukia")) runQueue();
   else warmUp();

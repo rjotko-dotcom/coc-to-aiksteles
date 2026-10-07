@@ -118,6 +118,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .backup-card.due { border-color: rgba(251, 191, 36, .35); }
 .backup-card.due .backup-icon { color: var(--amber); background: var(--amber-bg); }
 .backup-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--green-bg); color: var(--green); }
+.link-btn {
+  display: block; width: 100%; margin-top: 8px; padding: 4px; border: 0; background: none; cursor: pointer;
+  color: var(--dim); font: 12.5px var(--sans); text-decoration: underline; text-underline-offset: 3px;
+}
+.link-btn:hover { color: var(--soft); }
+.backup-card.ok .backup-icon { color: var(--green); background: var(--green-bg); }
+.backup-card.ok #store-btn { background: transparent; }
+.restore-step { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.restore-step .btn { margin-top: 8px; }
 .meter { height: 4px; border-radius: 4px; background: var(--card-3); overflow: hidden; margin-bottom: 12px; }
 .meter i { display: block; height: 100%; width: 0; border-radius: 4px; background: var(--green); transition: width 1s var(--ease); }
 .backup-card.due .meter i { background: var(--amber); }
