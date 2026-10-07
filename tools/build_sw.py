@@ -82,7 +82,13 @@ def main() -> None:
         digest.update(path.relative_to(WEB).as_posix().encode())
         digest.update(str(path.stat().st_size).encode())
 
-    entries = ['  "./",', '  "./version.js",'] + [
+    # Katalogai su savo puslapiu (pvz. `sandelis/`) atidaromi adresu be
+    # `index.html` – jį irgi reikia turėti neprisijungus.
+    folders = sorted(
+        path.parent.relative_to(WEB).as_posix() for path in files
+        if path.name == "index.html" and path.parent != WEB
+    )
+    entries = ['  "./",', '  "./version.js",'] + [f'  "./{folder}/",' for folder in folders] + [
         f'  "./{path.relative_to(WEB).as_posix()}",' for path in files
     ]
     (WEB / "sw.js").write_text(

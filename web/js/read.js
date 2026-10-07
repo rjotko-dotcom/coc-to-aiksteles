@@ -6,7 +6,9 @@ import { recognise } from "./ocr.js";
 import { parseCocText } from "./coc.js";
 import { refineValues } from "./refine.js";
 
-pdfjs.GlobalWorkerOptions.workerSrc = "./vendor/pdfjs/pdf.worker.min.mjs";
+// Keliai skaičiuojami nuo šio failo, o ne nuo puslapio – tą patį skaitytuvą
+// naudoja ir sandėlio puslapis kitame kataloge.
+pdfjs.GlobalWorkerOptions.workerSrc = new URL("../vendor/pdfjs/pdf.worker.min.mjs", import.meta.url).href;
 
 /** Kokia raiška piešiami puslapiai atpažinimui (PDF taškas = 1/72 colio).
  *  PP-OCR smulkų CoC šriftą patikimai perskaito ir iš 200 dpi. */
@@ -163,11 +165,13 @@ function addSnippets(data, lines, canvases) {
   return data;
 }
 
-async function ocrPage(page, dpi = OCR_DPI) {
+/** `top` – kokią puslapio dalį nuo viršaus skaityti (1 – visą). */
+async function ocrPage(page, dpi = OCR_DPI, top = 1) {
   const viewport = page.getViewport({ scale: dpi / 72 });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
-  canvas.height = Math.round(viewport.height);
+  // Kas netelpa į drobę, tiesiog nepiešiama – atpažinimas trunka trumpiau.
+  canvas.height = Math.round(viewport.height * top);
   const context = canvas.getContext("2d", { alpha: false });
   await page.render({ canvasContext: context, viewport }).promise;
   const lines = linesFromBoxes(await recognise(canvas));
@@ -175,15 +179,15 @@ async function ocrPage(page, dpi = OCR_DPI) {
 }
 
 /** Kiek privalomų laukų rasta (pagal tai renkamės geresnį bandymą). */
-const score = (data) => REQUIRED.filter((key) => data[key]).length;
+const score = (data, required = REQUIRED) => required.filter((key) => data[key]).length;
 
-async function readWithOcr(pdf, file, dpi, onStatus, label) {
+async function readWithOcr(pdf, file, dpi, onStatus, label, top = 1) {
   const canvases = [];
   const lines = [];
   for (let number = 1; number <= pdf.numPages; number += 1) {
     onStatus(`${label}${number} iš ${pdf.numPages} puslapio…`);
     const page = await pdf.getPage(number);
-    const result = await ocrPage(page, dpi);
+    const result = await ocrPage(page, dpi, top);
     result.lines.forEach((line) => lines.push({ ...line, pageIndex: canvases.length }));
     canvases.push(result.canvas);
     page.cleanup();
@@ -202,8 +206,16 @@ async function readWithOcr(pdf, file, dpi, onStatus, label) {
  *
  * `onStatus(message)` praneša eigą: skenuotus liudijimus reikia atpažinti,
  * o tai trunka apie 15 sekundžių.
+ *
+ * `required` – laukai, dėl kurių verta skaityti antrą kartą didesne raiška.
+ * Sandėlyje skenuojama tik pirma liudijimo pusė, todėl ten užtenka VIN ir
+ * modelio – kitaip kiekvienas lapas be spalvos būtų skaitomas du kartus.
+ *
+ * `top` – skaityti tik viršutinę puslapio dalį (pvz. 0.6). Sandėlis taip
+ * pirmiausia ieško VIN ir modelio, o viso lapo imasi tik jei jų ten nėra.
+ * `retry: false` – neskaityti antrą kartą didesne raiška (tam greitam bandymui).
  */
-export async function readCertificate(file, onStatus = () => {}) {
+export async function readCertificate(file, onStatus = () => {}, { required = REQUIRED, top = 1, retry = true } = {}) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data: bytes }).promise;
 
@@ -217,16 +229,16 @@ export async function readCertificate(file, onStatus = () => {}) {
   let ocrUsed = text.replace(/\s/g, "").length < TEXT_THRESHOLD;
 
   if (ocrUsed) {
-    let best = await readWithOcr(pdf, file, OCR_DPI, onStatus, "Atpažįstamas ");
+    let best = await readWithOcr(pdf, file, OCR_DPI, onStatus, "Atpažįstamas ", top);
 
     // Jei kažko trūksta, tas pats liudijimas perskaitomas didesne raiška.
-    if (score(best.data) < REQUIRED.length) {
-      const retry = await readWithOcr(pdf, file, RETRY_DPI, onStatus, "Skaitoma dar kartą, tiksliau: ");
-      if (score(retry.data) > score(best.data)) {
+    if (retry && score(best.data, required) < required.length) {
+      const second = await readWithOcr(pdf, file, RETRY_DPI, onStatus, "Skaitoma dar kartą, tiksliau: ", top);
+      if (score(second.data, required) > score(best.data, required)) {
         best.canvases.forEach((canvas) => { canvas.width = 0; canvas.height = 0; });
-        best = retry;
+        best = second;
       } else {
-        retry.canvases.forEach((canvas) => { canvas.width = 0; canvas.height = 0; });
+        second.canvases.forEach((canvas) => { canvas.width = 0; canvas.height = 0; });
       }
     }
 

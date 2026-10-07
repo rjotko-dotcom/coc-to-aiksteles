@@ -117,8 +117,67 @@ tinklą**: puslapis atsidaro, liudijimas nuskaitomas, pažyma parsisiunčiama.
 ### Testai
 
 ```bash
-node --test web/tests/logic.test.mjs
+node --test web/tests/logic.test.mjs web/tests/sandelis.test.mjs
 ```
+
+## CoC sandėlis (turimų liudijimų sąrašas)
+
+**Adresas: https://rjotko-dotcom.github.io/coc-to-aiksteles/sandelis/**
+
+Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti.
+
+1. Skeneris atsiunčia PDF el. paštu – išsaugokite priedą ir įmeskite į laukelį
+   (arba tiesiog nuvilkite bet kur į langą). Programa paklausia, **į kurį
+   aplanką** dedate šiuos CoC: „Pagal modelį“ arba specialų aplanką (pvz.
+   „Nėra moderoje“, kur kartu guli skirtingi modeliai). Naują specialų aplanką
+   galima sukurti čia pat.
+   Viename PDF gali būti kiek nori lapų: **kiekvienas lapas tampa atskiru
+   liudijimu** (atskiru PDF, nukopijuotu be kokybės praradimo).
+2. VIN, markė ir modelis perskaitomi automatiškai (tas pats atpažinimas kaip
+   pažymų generatoriuje – kompiuteryje, be interneto ir be jokio AI).
+   Skaityti pradedama iškart, kol kiti lapai dar karpomi, o kiekvieno lapo
+   pirmiausia perskaitoma tik viršutinė dalis (ten VIN ir modelis) – visas lapas
+   tik jei ko nors trūksta. Taip lapas apdorojamas maždaug trečdaliu greičiau.
+3. Skiltyje „Patikra“ prie kiekvieno lapo matyti jo vaizdas ir VIN iškarpa.
+   Sulyginate, jei reikia pataisote, **Enter** – patvirtinta, žymeklis pereina
+   prie kito lapo. Lapus, kuriuose viskas rasta ir nėra įspėjimų, galima
+   patvirtinti visus iš karto.
+4. Paieška: įvedus kelis paskutinius VIN ženklus iškart atsakoma **„Turime“**
+   ir **kuriame aplanke** jis guli (su mygtuku „Atiduoti“),
+   **„Neturime“** arba **„Atiduotas 2026.10.07 – kam“**. Ieškoti galima ir
+   pagal modelį ar gavėją.
+5. **Atiduoti** – įrašoma data (pasiūloma šiandienos, galima keisti), kam
+   atiduota ir pastaba. Galima pažymėti kelis ir atiduoti iš karto, suklydus –
+   „Grąžinti“.
+6. Paspaudus eilutę atsidaro liudijimas: didelė peržiūra, visi laukai
+   redaguojami, **Generuoti pažymą**, **Atsisiųsti PDF** (`VIN_MODELIS.pdf`).
+
+**Aplankai.** Specialaus aplanko CoC lieka tame aplanke, net jei modelis
+skiriasi – su modelių aplankais nesimaišo. Šoniniame meniu matyti visi
+specialūs aplankai su kiekiais, o sąrašą galima filtruoti pagal aplanką.
+Aplanką galima pakeisti patikros metu (kiekvienam lapui) arba vėliau
+liudijimo lange. Excel faile – atskiras stulpelis „Aplankas“.
+
+VIN tvarkomas pagal ISO 3779: jame nėra raidžių I, O ir Q, todėl įvestos jos
+pačios virsta 1 ir 0, o mažosios raidės ir tarpai sutvarkomi. Programa perspėja,
+jei VIN ne 17 ženklų, jei nesutampa kontrolinis skaitmuo ir jei toks VIN jau yra
+sąraše (pvz. tas pats lapas nuskenuotas dukart).
+
+**Duomenys laikomi tik šiame kompiuteryje** (Chrome IndexedDB), todėl
+skiltyje „Atsarginė kopija“ kartą per savaitę atsisiųskite kopiją (`.zip` su
+sąrašu ir visais PDF) ir laikykite ją kitur. Programa pati primena, jei kopija
+senesnė nei 7 dienos. Kopiją galima įkelti ir į kitą kompiuterį – esami įrašai
+nedubliuojami.
+
+**Excel** – tikras `.xlsx` failas su trimis lapais (Turimi, Atiduoti, Visi):
+datos įrašomos kaip Excel datos, antraštė užšaldyta, stulpeliuose filtrai.
+Galima eksportuoti viską arba tik pažymėtas eilutes.
+
+Spartieji klavišai: `/` – paieška, `Enter` paieškoje – atidaryti pirmą
+rastą, `Esc` – išvalyti.
+
+Įdiegti kaip atskirą programą: atidarius adresą Chrome → adreso juostoje
+„Įdiegti“. Ji atsidaro savo lange ir veikia be interneto.
 
 ## Vietinė versija (Python)
 
@@ -340,6 +399,8 @@ web/js/layout.js      eilučių ir stulpelių atkūrimas
 web/js/coc.js         laukų atpažinimas
 web/js/refine.js      tikslinantis kodų perskaitymas
 web/js/docx.js        pažymos pildymas naršyklėje
+web/sandelis/         CoC sandėlio puslapis
+web/js/sandelis/      sandėlio logika, duomenys ir PDF karpymas
 app/coc_extract.py    CoC PDF skaitymas ir laukų atpažinimas
 app/ocr.py            skenuotų CoC atpažinimas (OCR)
 app/colors.py         spalvų vertimas EN -> LT
