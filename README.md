@@ -152,6 +152,12 @@ Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti
 6. Paspaudus eilutę atsidaro liudijimas: didelė peržiūra, visi laukai
    redaguojami, **Generuoti pažymą**, **Atsisiųsti PDF** (`VIN_MODELIS.pdf`).
 
+**Skenavimo klaidos.** Jei lapas įdėtas į skenerį aukštyn kojom, programa jį
+perskaito apvertusi ir patikroje pažymi „Aukštyn kojom“ (tokio lapo „Patvirtinti
+visus paruoštus“ nepatvirtina – peržiūrite patys). Tas pats PDF antrą kartą
+atpažįstamas pagal turinį (ne pavadinimą) ir prieš įkeliant perspėjama.
+Mygtukas **„Ištrinti visą skeną“** išmeta visus to PDF lapus iš karto.
+
 **Aplankai.** Specialaus aplanko CoC lieka tame aplanke, net jei modelis
 skiriasi – su modelių aplankais nesimaišo. Šoniniame meniu matyti visi
 specialūs aplankai su kiekiais, o sąrašą galima filtruoti pagal aplanką.
