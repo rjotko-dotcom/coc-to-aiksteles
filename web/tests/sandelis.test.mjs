@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, matches, mergePlan,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -106,4 +106,19 @@ test("markė atskiriama nuo modelio", () => {
   assert.deepEqual(splitMakeModel("MINI", "MINI COUNTRYMAN"), { make: "MINI", model: "COUNTRYMAN" });
   assert.deepEqual(splitMakeModel("NISSAN", "NISSAN"), { make: "NISSAN", model: "NISSAN" });
   assert.deepEqual(splitMakeModel("CITROEN", "C4"), { make: "CITROEN", model: "C4" });
+});
+
+test("aplankas: pagal modelį arba specialus", () => {
+  assert.equal(folderOf({ model: "Qashqai" }), "QASHQAI");
+  assert.equal(folderOf({ model: "" }), "Be modelio");
+  assert.equal(folderOf({ model: "JUKE", folder: "Nėra moderoje" }), "Nėra moderoje");
+  const list = [
+    record({ id: 1, model: "JUKE", folder: "Nėra moderoje" }),
+    record({ id: 2, model: "KONA", folder: "Nėra moderoje" }),
+    record({ id: 3, model: "KONA", folder: "Nėra moderoje", status: STATUS.OUT }),
+    record({ id: 4, model: "QASHQAI" }),
+  ];
+  assert.deepEqual(specialFolders(list, ["Bėdos"]), [{ name: "Bėdos", count: 0 }, { name: "Nėra moderoje", count: 2 }]);
+  assert.ok(matches(list[0], "moderoje"));
+  assert.ok(!matches(list[3], "moderoje"));
 });

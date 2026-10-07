@@ -12,8 +12,8 @@ import {
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, matches,
-  mergePlan, newestFirst, pdfName, showDate, splitMakeModel, statusName, todayIso, vinDoubtful,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful,
   vinProblems,
 } from "./logic.js";
 
@@ -37,6 +37,11 @@ const selected = new Set();
 let detailId = null;
 let giveIds = [];
 let animateRows = true;
+/** Aplankų filtras: "" – visi, MODEL_FOLDERS – tik modelių aplankai, kitaip – specialaus aplanko vardas. */
+let folderFilter = "";
+const MODEL_FOLDERS = "\u0000modeliai";
+/** Sukurti, bet dar tušti specialūs aplankai (kad nedingtų iš sąrašo). */
+let savedFolders = [];
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"]/g, (ch) =>
@@ -107,9 +112,52 @@ async function update(record, changes) {
 let queueRunning = false;
 const session = { done: 0, times: [] };
 
+const allFolders = () => specialFolders(records, savedFolders);
+
+async function rememberFolder(name) {
+  const clean = String(name || "").trim();
+  if (!clean || savedFolders.includes(clean)) return;
+  savedFolders = [...savedFolders, clean];
+  await setMeta("folders", savedFolders);
+}
+
+/**
+ * Paklausia, į kurį aplanką dedami įkeliami CoC.
+ * Grąžina "" (pagal modelį), specialaus aplanko vardą arba null (atšaukta).
+ */
+async function chooseFolder(fileCount) {
+  const last = (await getMeta("lastFolder").catch(() => "")) || "";
+  const folders = allFolders();
+  const options = [{ value: "", label: "Pagal modelį", note: "kiekvienas CoC – savo modelio aplanke" },
+    ...folders.map((folder) => ({ value: folder.name, label: folder.name, note: `${folder.count} turimi`, special: true }))];
+  const chosen = options.some((option) => option.value === last) ? last : "";
+  $("folder-count").textContent = fileCount === 1 ? "1 failas" : `${fileCount} failai`;
+  $("folder-choices").innerHTML = options.map((option) => `
+    <label class="choice ${option.special ? "special" : ""}">
+      <input type="radio" name="folder" value="${esc(option.value)}" ${option.value === chosen ? "checked" : ""}>
+      ${icon(option.special ? "folder" : "file")}<span>${esc(option.label)}</span><small>${esc(option.note)}</small>
+    </label>`).join("");
+  $("folder-new").value = "";
+  return new Promise((resolve) => {
+    const dialog = $("folder-dialog");
+    dialog.returnValue = "";
+    dialog.addEventListener("close", async () => {
+      if (dialog.returnValue !== "ok") { resolve(null); return; }
+      const typed = $("folder-new").value.trim();
+      const picked = typed || (document.querySelector("#folder-choices input:checked")?.value ?? "");
+      await rememberFolder(picked);
+      await setMeta("lastFolder", picked);
+      resolve(picked);
+    }, { once: true });
+    dialog.showModal();
+  });
+}
+
 async function handleFiles(fileList) {
   const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
   if (!files.length) { toast("Pasirinkite PDF failą.", "warn"); return; }
+  const folder = await chooseFolder(files.length);
+  if (folder === null) return;
   askPersistence();
 
   let added = 0;
@@ -129,6 +177,7 @@ async function handleFiles(fileList) {
         ocr: "laukia",
         vin: "", make: "", model: "", tvv: "",
         coc: {},
+        folder,
         source_file: file.name,
         page: index + 1,
         pages: pages.length,
@@ -277,6 +326,17 @@ function hintHtml(kind, text) {
   return `${icon(kind === "ok" ? "check" : kind === "warn" ? "clock" : "x")}${esc(text)}`;
 }
 
+/** Aplanko pasirinkimas patikros kortelėje. */
+function folderSelect(record) {
+  const current = String(record.folder || "").trim();
+  const names = allFolders().map((folder) => folder.name);
+  if (current && !names.includes(current)) names.push(current);
+  return `<select data-field="folder" aria-label="Aplankas">
+    <option value="" ${current ? "" : "selected"}>Modelio aplankas</option>
+    ${names.map((name) => `<option value="${esc(name)}" ${name === current ? "selected" : ""}>${esc(name)}</option>`).join("")}
+  </select>`;
+}
+
 function cardHtml(record) {
   const busy = record.ocr === "laukia" || record.ocr === "skaitoma";
   const [kind, hint] = vinHint(record);
@@ -294,7 +354,7 @@ function cardHtml(record) {
     <div class="rfields">
       <div class="rhead">
         <div><b>${esc(record.source_file)}</b> <small>· ${record.page} iš ${record.pages} lapo</small></div>
-        ${state}
+        <div class="right">${folderSelect(record)}${state}</div>
       </div>
       ${record.ocr === "klaida" ? `<div class="alert">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}). Įrašykite ranka.</div>` : ""}
       ${snippet ? `<div class="snippet-box"><img src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
@@ -476,12 +536,23 @@ function renderAnswer(query) {
     const have = hits.filter((record) => record.status === STATUS.IN);
     const review = hits.filter((record) => record.status === STATUS.REVIEW);
     const gone = hits.filter((record) => record.status === STATUS.OUT);
-    if (have.length) {
+    if (have.length === 1) {
+      const [one] = have;
       html = `<div class="answer ok"><span class="mark">${icon("check")}</span>
-        <div><b>Turime.</b> <span>${list(have)}${have.length > 3 ? ` ir dar ${have.length - 3}` : ""}</span></div></div>`;
+        <div><b>Turime.</b> <span>${list(have)}</span>
+          <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(one))}</b></span></div>
+        <div class="actions">
+          <button type="button" class="btn primary sm" data-give="${one.id}">${icon("send")}Atiduoti</button>
+          <button type="button" class="btn sm" data-detail="${one.id}">Atidaryti</button></div></div>`;
+    } else if (have.length) {
+      const folders = [...new Set(have.map(folderOf))].join(", ");
+      html = `<div class="answer ok"><span class="mark">${icon("check")}</span>
+        <div><b>Turime ${have.length}.</b> <span>${list(have)}${have.length > 3 ? ` ir dar ${have.length - 3}` : ""}</span>
+          <span class="where">${icon("folder")} Aplankuose <b>${esc(folders)}</b></span></div></div>`;
     } else if (review.length) {
       html = `<div class="answer warn"><span class="mark">${icon("scan")}</span>
-        <div><b>Yra, bet dar nepatikrintas.</b> <span>${list(review)}</span></div></div>`;
+        <div><b>Yra, bet dar nepatikrintas.</b> <span>${list(review)}</span>
+          <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(review[0]))}</b></span></div></div>`;
     } else {
       const last = gone.sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)))[0];
       html = `<div class="answer warn"><span class="mark">${icon("send")}</span>
@@ -497,13 +568,20 @@ function vinCell(vin) {
   return `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>`;
 }
 
+function inFolderFilter(record) {
+  if (!folderFilter) return true;
+  if (folderFilter === MODEL_FOLDERS) return !inSpecialFolder(record);
+  return String(record.folder || "").trim() === folderFilter;
+}
+
 function visibleRecords() {
   const query = $("q").value;
   if (query.trim()) {
     return records.filter((record) => record.status !== STATUS.REVIEW && matches(record, query)).sort(newestFirst);
   }
-  if (tab === "visi") return records.filter((record) => record.status !== STATUS.REVIEW).sort(newestFirst);
-  const list = records.filter((record) => record.status === tab);
+  const pool = records.filter(inFolderFilter);
+  if (tab === "visi") return pool.filter((record) => record.status !== STATUS.REVIEW).sort(newestFirst);
+  const list = pool.filter((record) => record.status === tab);
   if (tab === STATUS.OUT) {
     return list.sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)) || newestFirst(a, b));
   }
@@ -540,20 +618,23 @@ function renderTable() {
       <td class="vin">${vinCell(record.vin)}</td>
       <td><div class="model"><span class="model-icon">${icon("file")}</span>
         <div><b>${esc(record.model || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div></div></td>
+      <td>${inSpecialFolder(record)
+        ? `<span class="folder special">${icon("folder")}${esc(record.folder)}</span>`
+        : `<span class="folder">${icon("folder")}${esc(folderOf(record))}</span>`}</td>
       <td class="date hide-sm">${esc(showDate(record.added))}</td>
       <td class="status-cell">${statusText}</td>
       <td class="actions">${action}</td>
     </tr>`;
   });
   animateRows = false;
-  $("rows").innerHTML = rows.join("") || `<tr class="empty-row"><td colspan="6">${
+  $("rows").innerHTML = rows.join("") || `<tr class="empty-row"><td colspan="7">${
     query ? "Nieko nerasta." : records.length ? "Šiame sąraše tuščia." : "Dar nėra nė vieno liudijimo – įmeskite nuskenuotą PDF."
   }</td></tr>`;
 
   const more = list.length - shown;
   $("list-note").innerHTML = more > 0
     ? `Rodoma ${shown} iš ${list.length}. <button type="button" class="btn sm" data-action="more">Rodyti daugiau</button>`
-    : query ? `Rasta: ${list.length} · ieškoma visuose sąrašuose` : "";
+    : query ? `Rasta: ${list.length} · ieškoma visuose sąrašuose ir aplankuose` : "";
 
   const visibleIds = list.slice(0, shown).map((record) => record.id);
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
@@ -564,6 +645,31 @@ function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
   $("bulk").classList.toggle("on", selected.size > 0);
   if (selected.size) $("bulk-count").textContent = `Pažymėta: ${selected.size}`;
+}
+
+function renderFolders() {
+  const folders = allFolders();
+  if (folderFilter && folderFilter !== MODEL_FOLDERS && !folders.some((folder) => folder.name === folderFilter)) folderFilter = "";
+  $("folder-filter").innerHTML = [
+    `<option value="">Visi aplankai</option>`,
+    `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
+    ...folders.map((folder) => `<option value="${esc(folder.name)}">${esc(folder.name)} (${folder.count})</option>`),
+  ].join("");
+  $("folder-filter").value = folderFilter;
+  $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
+  $("folder-nav").innerHTML = folders.length
+    ? folders.map((folder) => `<button type="button" class="nav ${folderFilter === folder.name ? "on-folder" : ""}"
+        data-folder="${esc(folder.name)}">${icon("folder")}${esc(folder.name)}<span class="badge">${folder.count || ""}</span></button>`).join("")
+    : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
+  $("folders").innerHTML = folders.map((folder) => `<option value="${esc(folder.name)}">`).join("");
+}
+
+function setFolderFilter(value) {
+  folderFilter = value;
+  if ($("q").value) { $("q").value = ""; renderAnswer(""); }
+  animateRows = true;
+  renderFolders();
+  renderTable();
 }
 
 function renderRecipients() {
@@ -577,6 +683,7 @@ function render() {
   renderTable();
   renderAnswer($("q").value);
   renderRecipients();
+  renderFolders();
   renderBackupState();
   highlightNav();
 }
@@ -634,6 +741,7 @@ async function returnRecords(ids) {
 const DETAIL_FIELDS = {
   "d-vin": "vin", "d-make": "make", "d-model": "model", "d-tvv": "tvv",
   "d-status": "status", "d-given-date": "given_date", "d-given-to": "given_to", "d-note": "note",
+  "d-folder": "folder",
 };
 const COC_FIELDS = {
   "d-approval": "approval_number", "d-approval-date": "approval_date",
@@ -645,6 +753,12 @@ function detailVinHint() {
   const [kind, text] = vinHint(draft);
   $("d-vin-hint").className = `hint ${kind}`;
   $("d-vin-hint").innerHTML = hintHtml(kind, text);
+}
+
+function detailFolderHint() {
+  const special = $("d-folder").value.trim();
+  $("d-folder-hint").className = "hint";
+  $("d-folder-hint").innerHTML = `${icon("folder")}Guli aplanke: ${esc(special || folderOf({ model: $("d-model").value }))}`;
 }
 
 async function openDetail(id) {
@@ -662,6 +776,7 @@ async function openDetail(id) {
     record.updated && record.updated !== record.added ? `keista ${showDate(record.updated)}` : "",
   ].filter(Boolean).join(" · ");
   detailVinHint();
+  detailFolderHint();
   $("detail-preview").removeAttribute("src");
   $("detail").showModal();
   try {
@@ -682,6 +797,7 @@ async function saveDetail() {
   for (const [input, key] of Object.entries(COC_FIELDS)) changes.coc[key] = $(input).value.trim();
   if (changes.status === STATUS.OUT && !changes.given_date) changes.given_date = todayIso();
   if (changes.status !== STATUS.REVIEW) Object.assign(changes, { thumb: "", snippets: {} });
+  await rememberFolder(changes.folder);
   await update(record, changes);
   render();
   toast("Išsaugota.");
@@ -842,6 +958,7 @@ $("review-list").addEventListener("input", (event) => {
   const input = event.target;
   const card = input.closest(".rcard");
   if (!card || !input.dataset.field) return;
+  if (input.dataset.field === "folder") return;
   const record = byId(card.dataset.id);
   if (!record) return;
   record[input.dataset.field] = input.value;
@@ -857,6 +974,11 @@ $("review-list").addEventListener("input", (event) => {
   saveTimers[record.id] = setTimeout(() => { update(record, {}); renderConfirmClean(); }, 400);
 });
 $("review-list").addEventListener("change", (event) => {
+  if (event.target.dataset.field === "folder") {
+    const record = byId(event.target.closest(".rcard").dataset.id);
+    if (record) { record.folder = event.target.value; update(record, {}); }
+    return;
+  }
   // VIN pataisomas išėjus iš laukelio: mažosios raidės, tarpai, O → 0, I → 1.
   if (event.target.dataset.field !== "vin") return;
   const cleaned = cleanVin(event.target.value);
@@ -929,6 +1051,20 @@ $("rows").addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-row]");
   if (row) openDetail(row.dataset.row);
 });
+$("folder-filter").addEventListener("change", (event) => setFolderFilter(event.target.value));
+$("folder-nav").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-folder]");
+  if (!button) return;
+  $("sidebar").classList.remove("open");
+  setTab(STATUS.IN);
+  setFolderFilter(folderFilter === button.dataset.folder ? "" : button.dataset.folder);
+  $("list").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+});
+$("answer").addEventListener("click", (event) => {
+  const button = event.target.closest("button");
+  if (button?.dataset.give) openGive([button.dataset.give]);
+  if (button?.dataset.detail) openDetail(button.dataset.detail);
+});
 $("check-all").addEventListener("change", (event) => {
   const ids = visibleRecords().slice(0, shown).map((record) => record.id);
   ids.forEach((id) => (event.target.checked ? selected.add(id) : selected.delete(id)));
@@ -975,6 +1111,7 @@ const ACTIONS = {
   "pazyma-selected": () => makePazymos([...selected]),
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
+  "folder-cancel": () => $("folder-dialog").close(),
   "open-pdf": () => openPdf(detailId),
   "detail-close": () => $("detail").close(),
   "detail-pdf": () => downloadPdfs([detailId]),
@@ -1004,6 +1141,8 @@ $("detail-form").addEventListener("submit", (event) => {
   if (!event.submitter || event.submitter.value === "save") saveDetail();
 });
 $("d-vin").addEventListener("input", detailVinHint);
+$("d-folder").addEventListener("input", detailFolderHint);
+$("d-model").addEventListener("input", detailFolderHint);
 $("d-vin").addEventListener("change", () => { $("d-vin").value = cleanVin($("d-vin").value); detailVinHint(); });
 $("d-status").addEventListener("change", () => {
   if ($("d-status").value === STATUS.OUT && !$("d-given-date").value) $("d-given-date").value = todayIso();
@@ -1029,6 +1168,7 @@ window.addEventListener("resize", () => {
 // ---------------------------------------------------------------------------
 
 async function start() {
+  savedFolders = (await getMeta("folders").catch(() => null)) || [];
   try {
     records = await allRecords();
   } catch (error) {

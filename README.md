@@ -126,7 +126,11 @@ node --test web/tests/logic.test.mjs web/tests/sandelis.test.mjs
 
 Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti.
 
-1. Skeneris atsiunčia PDF el. paštu – išsaugokite priedą ir įmeskite į laukelį.
+1. Skeneris atsiunčia PDF el. paštu – išsaugokite priedą ir įmeskite į laukelį
+   (arba tiesiog nuvilkite bet kur į langą). Programa paklausia, **į kurį
+   aplanką** dedate šiuos CoC: „Pagal modelį“ arba specialų aplanką (pvz.
+   „Nėra moderoje“, kur kartu guli skirtingi modeliai). Naują specialų aplanką
+   galima sukurti čia pat.
    Viename PDF gali būti kiek nori lapų: **kiekvienas lapas tampa atskiru
    liudijimu** (atskiru PDF, nukopijuotu be kokybės praradimo).
 2. VIN, markė ir modelis perskaitomi automatiškai (tas pats atpažinimas kaip
@@ -138,7 +142,8 @@ Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti
    Sulyginate, jei reikia pataisote, **Enter** – patvirtinta, žymeklis pereina
    prie kito lapo. Lapus, kuriuose viskas rasta ir nėra įspėjimų, galima
    patvirtinti visus iš karto.
-4. Paieška: įvedus kelis paskutinius VIN ženklus iškart atsakoma **„Turime“**,
+4. Paieška: įvedus kelis paskutinius VIN ženklus iškart atsakoma **„Turime“**
+   ir **kuriame aplanke** jis guli (su mygtuku „Atiduoti“),
    **„Neturime“** arba **„Atiduotas 2026.10.07 – kam“**. Ieškoti galima ir
    pagal modelį ar gavėją.
 5. **Atiduoti** – įrašoma data (pasiūloma šiandienos, galima keisti), kam
@@ -146,6 +151,12 @@ Atskira programa popieriniams CoC, kurie guli biure: nuskenuoti, rasti, atiduoti
    „Grąžinti“.
 6. Paspaudus eilutę atsidaro liudijimas: didelė peržiūra, visi laukai
    redaguojami, **Generuoti pažymą**, **Atsisiųsti PDF** (`VIN_MODELIS.pdf`).
+
+**Aplankai.** Specialaus aplanko CoC lieka tame aplanke, net jei modelis
+skiriasi – su modelių aplankais nesimaišo. Šoniniame meniu matyti visi
+specialūs aplankai su kiekiais, o sąrašą galima filtruoti pagal aplanką.
+Aplanką galima pakeisti patikros metu (kiekvienam lapui) arba vėliau
+liudijimo lange. Excel faile – atskiras stulpelis „Aplankas“.
 
 VIN tvarkomas pagal ISO 3779: jame nėra raidžių I, O ir Q, todėl įvestos jos
 pačios virsta 1 ir 0, o mažosios raidės ir tarpai sutvarkomi. Programa perspėja,

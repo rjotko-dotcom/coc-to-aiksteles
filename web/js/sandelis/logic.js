@@ -54,7 +54,7 @@ export function matches(record, query) {
   if (!words.length) return true;
   const vin = record.vin || "";
   const text = fold([
-    record.make, record.model, record.tvv, record.given_to, record.note, record.source_file,
+    record.make, record.model, record.tvv, record.given_to, record.note, record.source_file, record.folder,
   ].join(" "));
   return words.every((word) => {
     const asVin = cleanVin(word);
@@ -90,6 +90,35 @@ export function splitMakeModel(make, model) {
     return { make: known || name.slice(0, brand.length).toUpperCase(), model: tail };
   }
   return { make: known, model: name };
+}
+
+/**
+ * Kuriame fiziniame aplanke guli liudijimas.
+ *
+ * Dauguma CoC sudėti į aplankus pagal modelį – tada aplankas yra pats modelis.
+ * Bet yra ir specialūs aplankai (pvz. „Nėra moderoje“), kuriuose kartu guli
+ * skirtingi modeliai: tokio aplanko pavadinimas įrašomas `record.folder` ir
+ * modelis jo nebekeičia.
+ */
+export function folderOf(record) {
+  const special = String(record.folder || "").trim();
+  if (special) return special;
+  return String(record.model || "").trim().toUpperCase() || "Be modelio";
+}
+
+/** Ar liudijimas guli specialiame (ne modelio) aplanke. */
+export const inSpecialFolder = (record) => Boolean(String(record.folder || "").trim());
+
+/** Specialių aplankų sąrašas su kiekiais (tik turimi CoC), abėcėlės tvarka. */
+export function specialFolders(records, extra = []) {
+  const totals = new Map(extra.filter(Boolean).map((name) => [name, 0]));
+  for (const record of records) {
+    if (!inSpecialFolder(record)) continue;
+    const name = record.folder.trim();
+    totals.set(name, (totals.get(name) || 0) + (record.status === STATUS.IN ? 1 : 0));
+  }
+  return [...totals].map(([name, count]) => ({ name, count }))
+    .sort((a, b) => a.name.localeCompare(b.name, "lt"));
 }
 
 /** Rūšiavimas: naujausi viršuje. */
@@ -147,6 +176,7 @@ export const EXCEL_COLUMNS = [
   { title: "Markė", get: (r) => r.make, width: 14 },
   { title: "Modelis", get: (r) => r.model, width: 22 },
   { title: "Tipas/Variantas/Versija", get: (r) => r.tvv, width: 24 },
+  { title: "Aplankas", get: (r) => folderOf(r), width: 20 },
   { title: "Būsena", get: (r) => statusName(r.status), width: 12 },
   { title: "Įkelta", get: (r) => localDay(r.added), width: 12, kind: "date" },
   { title: "Atiduota", get: (r) => r.given_date, width: 12, kind: "date" },

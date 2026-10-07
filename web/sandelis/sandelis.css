@@ -93,6 +93,9 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0;
   background: var(--text);
 }
+.nav-empty { margin: 0 10px 4px; color: var(--dim); font-size: 12.5px; }
+.nav.on-folder { background: var(--violet-bg); color: var(--violet); }
+#folder-nav .nav svg { color: var(--violet); }
 .nav .ext { width: 14px; height: 14px; margin-left: auto; opacity: .5; }
 .badge {
   margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--muted);
@@ -313,6 +316,42 @@ input[type=checkbox]:checked::after {
   transition: transform .4s var(--ease), width .4s var(--ease);
 }
 .segmented.searching { opacity: .5; }
+
+/* Aplankai */
+.filter-row { display: flex; gap: 10px; margin: -4px 0 12px; flex-wrap: wrap; }
+.folder-filter {
+  display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 0 4px 0 12px;
+  border: 1px solid var(--line-2); border-radius: 10px; background: var(--card-2); color: var(--muted);
+}
+.folder-filter select { border: 0; background: transparent; padding: 8px 6px; width: auto; min-width: 180px; }
+.folder-filter select:focus { box-shadow: none; }
+.folder-filter.on { border-color: rgba(167, 139, 250, .45); color: var(--violet); }
+.folder {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap;
+}
+.folder svg { width: 15px; height: 15px; }
+.folder.special {
+  color: var(--violet); background: var(--violet-bg); border: 1px solid rgba(167, 139, 250, .25);
+  padding: 2px 9px; border-radius: 8px;
+}
+.rhead select { width: auto; padding: 5px 9px; font-size: 13px; border-radius: 8px; }
+.rhead .right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.choices { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; max-height: 46vh; overflow-y: auto; }
+.choice {
+  display: flex; align-items: center; gap: 12px; padding: 11px 13px; margin: 0; border-radius: 11px; cursor: pointer;
+  border: 1px solid var(--line-2); background: var(--card-2); color: var(--text); font-size: 14px;
+  transition: border-color .2s, background .2s;
+}
+.choice:hover { border-color: #44444b; }
+.choice:has(input:checked) { border-color: var(--text); background: var(--card-3); }
+.choice input { accent-color: #fafafa; width: 16px; height: 16px; margin: 0; }
+.choice svg { color: var(--muted); }
+.choice small { margin-left: auto; color: var(--dim); }
+.choice.special svg { color: var(--violet); }
+.new-folder { margin-top: 4px; }
+.answer .actions { margin-left: auto; display: flex; gap: 8px; }
+.answer .where { display: block; color: var(--soft); margin-top: 2px; }
+.answer .where b { font-size: 14px; }
 
 /* Grupiniai veiksmai */
 .bulk {

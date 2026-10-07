@@ -36,6 +36,8 @@
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></symbol>
   </defs>
@@ -55,6 +57,8 @@
       <a href="#list" class="nav" data-nav="list" data-tab="turimas"><svg><use href="#i-file"/></svg>Turimi<span class="badge" id="nav-in"></span></a>
       <a href="#list" class="nav" data-nav="list" data-tab="atiduotas"><svg><use href="#i-send"/></svg>Atiduoti<span class="badge" id="nav-out"></span></a>
       <a href="#list" class="nav" data-nav="list" data-tab="visi"><svg><use href="#i-list"/></svg>Visi</a>
+      <p class="nav-title">Specialūs aplankai</p>
+      <div id="folder-nav"></div>
       <p class="nav-title">Įrankiai</p>
       <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
       <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
@@ -138,6 +142,11 @@
         </div>
       </header>
 
+      <div class="filter-row">
+        <label class="folder-filter"><svg><use href="#i-folder"/></svg>
+          <select id="folder-filter" aria-label="Aplankas"></select></label>
+      </div>
+
       <div class="bulk" id="bulk">
         <b id="bulk-count"></b>
         <button class="btn primary sm" data-action="give-selected"><svg><use href="#i-send"/></svg>Atiduoti</button>
@@ -155,6 +164,7 @@
               <th class="check"><input type="checkbox" id="check-all" aria-label="Pažymėti visus"></th>
               <th>VIN</th>
               <th>Modelis</th>
+              <th>Aplankas</th>
               <th class="hide-sm">Įkelta</th>
               <th>Būsena</th>
               <th></th>
@@ -190,6 +200,26 @@
 <input id="files" type="file" accept="application/pdf" multiple hidden>
 <input id="restore-file" type="file" accept=".zip,application/zip" hidden>
 <datalist id="recipients"></datalist>
+<datalist id="folders"></datalist>
+
+<dialog id="folder-dialog" class="small-dialog">
+  <form method="dialog" id="folder-form">
+    <header class="dialog-head">
+      <div><span class="pill tikrinti" id="folder-count"></span><h2>Į kurį aplanką dedate?</h2></div>
+      <button type="button" class="icon-btn" data-action="folder-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Pasirinkite, kur fiziškai guli šie popieriniai CoC. Vėliau aplanką galima pakeisti kiekvienam atskirai.</p>
+    <div class="choices" id="folder-choices"></div>
+    <div class="new-folder">
+      <label for="folder-new">Arba naujas specialus aplankas</label>
+      <input type="text" id="folder-new" autocomplete="off" placeholder="pvz. Nėra moderoje">
+    </div>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="ok"><svg><use href="#i-upload"/></svg>Įkelti</button>
+      <button type="button" class="btn" data-action="folder-cancel">Atšaukti</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="detail" class="sheet-dialog">
   <form method="dialog" id="detail-form">
@@ -211,6 +241,9 @@
           <div><label for="d-model">Modelis</label><input type="text" id="d-model" autocomplete="off"></div>
           <div class="wide"><label for="d-tvv">Tipas / Variantas / Versija</label>
             <input type="text" id="d-tvv" class="mono" autocomplete="off" spellcheck="false"></div>
+          <div class="wide"><label for="d-folder">Specialus aplankas</label>
+            <input type="text" id="d-folder" list="folders" autocomplete="off" placeholder="Tuščia – guli modelio aplanke">
+            <div class="hint" id="d-folder-hint"></div></div>
         </div>
 
         <h3>Atidavimas</h3>
