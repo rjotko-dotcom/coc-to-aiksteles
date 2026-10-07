@@ -377,6 +377,22 @@ input[type=checkbox]:checked::after {
 .choice small { margin-left: auto; color: var(--dim); }
 .choice.special svg { color: var(--violet); }
 .new-folder { margin-top: 4px; }
+.answer.many { align-items: flex-start; }
+.answer .options { flex: 1; min-width: 0; }
+.answer .options ul { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.answer .options li {
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.3fr) 190px; gap: 12px; align-items: center;
+  padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, .25); border: 1px solid rgba(255, 255, 255, .06);
+}
+.answer .options li span { color: var(--soft); }
+.opt-main { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt-where { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-where svg { width: 15px; height: 15px; color: var(--violet); }
+.opt-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.mono-vin { font-family: var(--mono); font-weight: 500; letter-spacing: .02em; }
+.mono-vin mark { background: rgba(250, 250, 250, .16); color: var(--text); border-radius: 4px; padding: 0 2px; font-weight: 700; }
+.muted-inline { color: var(--dim); font-size: 12.5px; }
+@media (max-width: 760px) { .answer .options li { grid-template-columns: 1fr; } }
 .answer .actions { margin-left: auto; display: flex; gap: 8px; }
 .answer .where { display: block; color: var(--soft); margin-top: 2px; }
 .answer .where b { font-size: 14px; }

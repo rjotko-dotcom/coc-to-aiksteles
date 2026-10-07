@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -123,3 +123,18 @@ test("aplankas: pagal modelį arba specialus", () => {
   assert.ok(!matches(list[3], "moderoje"));
 });
 
+
+test("paieška pagal 4 paskutinius VIN ženklus", () => {
+  const list = [
+    record({ id: "a", vin: "SJNJ12TA9U2374201" }),
+    record({ id: "b", vin: "SJNJ12TD1U2334201" }),
+    record({ id: "c", vin: "SJNJ12TD1U2339775" }),
+    record({ id: "d", vin: "" }),
+  ];
+  assert.deepEqual(vinHits(list, "4201").map((r) => r.id), ["a", "b"]);
+  assert.deepEqual(vinHits(list, "2374201").map((r) => r.id), ["a"]);
+  assert.deepEqual(vinHits(list, "2339").map((r) => r.id), ["c"], "jei pabaigoje nėra – bet kur");
+  assert.deepEqual(vinHits(list, "420"), [], "per trumpa");
+  assert.deepEqual(vinHits(list, "QASHQAI"), [], "ne VIN");
+  assert.deepEqual(vinHits(list, "9999"), []);
+});

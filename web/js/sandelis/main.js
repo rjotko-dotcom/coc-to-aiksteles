@@ -14,7 +14,7 @@ import { buildXlsx } from "./xlsx.js";
 import * as disk from "./folder.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
-  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful,
+  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
 
@@ -775,47 +775,67 @@ function renderCounts() {
 // Sąrašas ir paieška
 // ---------------------------------------------------------------------------
 
-/** Aiškus atsakymas į klausimą „ar turime šitą CoC?“. */
+/** Vienos eilutės aprašas: VIN (su paryškinta rasta dalimi) ir modelis. */
+function vinLabel(record, part) {
+  const vin = record.vin || "";
+  const at = part ? vin.lastIndexOf(part) : -1;
+  const shown = at >= 0
+    ? `${esc(vin.slice(0, at))}<mark>${esc(vin.slice(at, at + part.length))}</mark>${esc(vin.slice(at + part.length))}`
+    : esc(vin);
+  return `<b class="mono-vin">${shown}</b> ${esc([record.make, record.model].filter(Boolean).join(" "))}`;
+}
+
+function statusLine(record) {
+  if (record.status === STATUS.OUT) {
+    return `<span class="pill out">Atiduotas ${esc(showDate(record.given_date))}</span>${
+      record.given_to ? ` <span class="muted-inline">${esc(record.given_to)}</span>` : ""}`;
+  }
+  return `<span class="pill ${record.status}">${esc(statusName(record.status))}</span>`;
+}
+
+function answerButtons(record) {
+  const give = record.status === STATUS.IN
+    ? `<button type="button" class="btn primary sm" data-give="${record.id}">${icon("send")}Atiduoti</button>` : "";
+  return `${give}<button type="button" class="btn sm" data-detail="${record.id}">Atidaryti</button>`;
+}
+
+/** Aiškus atsakymas į klausimą „ar turime šitą CoC?“ (pakanka 4 paskutinių VIN ženklų). */
 function renderAnswer(query) {
   const box = $("answer");
-  const vin = cleanVin(query);
-  if (/\s/.test(query.trim()) || vin.length < 5) { box.innerHTML = ""; return; }
-  const hits = records.filter((record) => (record.vin || "").includes(vin));
-  const list = (items) => items.slice(0, 3).map((record) =>
-    `<b>${esc(record.vin)}</b> ${esc([record.make, record.model].filter(Boolean).join(" "))}`).join(", ");
+  const part = cleanVin(query);
+  const hits = vinHits(records, query);
   let html = "";
   if (!hits.length) {
-    if (/\d/.test(vin)) {
+    if (!/\s/.test(query.trim()) && part.length >= 4 && /\d/.test(part)) {
       html = `<div class="answer no"><span class="mark">${icon("x")}</span>
-        <div><b>Neturime.</b> <span>CoC su VIN, kuriame yra „${esc(vin)}“, sąraše nėra.</span></div></div>`;
+        <div><b>Neturime.</b> <span>CoC su VIN, kuriame yra „${esc(part)}“, sąraše nėra.</span></div></div>`;
     }
+  } else if (hits.length === 1) {
+    const [one] = hits;
+    const kind = one.status === STATUS.IN ? "ok" : "warn";
+    const title = one.status === STATUS.IN ? "Turime."
+      : one.status === STATUS.REVIEW ? "Yra, bet dar nepatikrintas."
+        : `Atiduotas ${esc(showDate(one.given_date))}${one.given_to ? ` – ${esc(one.given_to)}` : ""}.`;
+    html = `<div class="answer ${kind}"><span class="mark">${icon(one.status === STATUS.IN ? "check" : one.status === STATUS.OUT ? "send" : "scan")}</span>
+      <div><b>${title}</b> <span>${vinLabel(one, part)}</span>
+        <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(one))}</b></span></div>
+      <div class="actions">${answerButtons(one)}</div></div>`;
   } else {
-    const have = hits.filter((record) => record.status === STATUS.IN);
-    const review = hits.filter((record) => record.status === STATUS.REVIEW);
-    const gone = hits.filter((record) => record.status === STATUS.OUT);
-    if (have.length === 1) {
-      const [one] = have;
-      html = `<div class="answer ok"><span class="mark">${icon("check")}</span>
-        <div><b>Turime.</b> <span>${list(have)}</span>
-          <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(one))}</b></span></div>
-        <div class="actions">
-          <button type="button" class="btn primary sm" data-give="${one.id}">${icon("send")}Atiduoti</button>
-          <button type="button" class="btn sm" data-detail="${one.id}">Atidaryti</button></div></div>`;
-    } else if (have.length) {
-      const folders = [...new Set(have.map(folderOf))].join(", ");
-      html = `<div class="answer ok"><span class="mark">${icon("check")}</span>
-        <div><b>Turime ${have.length}.</b> <span>${list(have)}${have.length > 3 ? ` ir dar ${have.length - 3}` : ""}</span>
-          <span class="where">${icon("folder")} Aplankuose <b>${esc(folders)}</b></span></div></div>`;
-    } else if (review.length) {
-      html = `<div class="answer warn"><span class="mark">${icon("scan")}</span>
-        <div><b>Yra, bet dar nepatikrintas.</b> <span>${list(review)}</span>
-          <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(review[0]))}</b></span></div></div>`;
-    } else {
-      const last = gone.sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)))[0];
-      html = `<div class="answer warn"><span class="mark">${icon("send")}</span>
-        <div><b>Atiduotas ${esc(showDate(last.given_date))}${last.given_to ? ` – ${esc(last.given_to)}` : ""}.</b>
-        <span>${list([last])}</span></div></div>`;
-    }
+    // Keli CoC su tokia VIN pabaiga – parodomi visi, kad išsirinktumėte.
+    const have = hits.filter((record) => record.status === STATUS.IN).length;
+    const order = { [STATUS.IN]: 0, [STATUS.REVIEW]: 1, [STATUS.OUT]: 2 };
+    const sorted = [...hits].sort((a, b) => order[a.status] - order[b.status] || a.vin.localeCompare(b.vin));
+    const shown = sorted.slice(0, 12);
+    html = `<div class="answer ${have ? "ok" : "warn"} many"><span class="mark">${icon(have ? "check" : "list")}</span>
+      <div class="options">
+        <b>Rasta ${hits.length} CoC su „${esc(part)}“${have ? ` (turime ${have})` : ""} – kurio ieškote?</b>
+        <ul>${shown.map((record) => `
+          <li><span class="opt-main">${vinLabel(record, part)}</span>
+            <span class="opt-where">${icon("folder")}${esc(folderOf(record))}</span>
+            <span class="opt-status">${statusLine(record)}</span>
+            <span class="opt-actions">${answerButtons(record)}</span></li>`).join("")}</ul>
+        ${hits.length > shown.length ? `<span class="where">Ir dar ${hits.length - shown.length} – įveskite daugiau VIN ženklų.</span>` : ""}
+      </div></div>`;
   }
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
