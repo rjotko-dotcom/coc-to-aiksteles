@@ -354,6 +354,13 @@ async function fileHash(bytes) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** Ar laukelį žmogus jau įrašė pats (seniems įrašams – `touched` reiškė visus). */
+const typedByHand = (record, key) => Boolean(record.touched || (record.typed || {})[key]);
+
+/** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
+const PAGE_TIMEOUT = 4 * 60_000;
+const PAGE_TIMEOUT_TEXT = "lapas skaitomas per ilgai";
+
 /** Kiek reikiamų laukų rasta. */
 const found = (data) => NEEDED.filter((key) => data[key]).length;
 
@@ -361,12 +368,15 @@ const found = (data) => NEEDED.filter((key) => data[key]).length;
  * Perskaito vieną lapą: pirmiausia tik viršutinę dalį, o jei VIN ar modelio
  * ten nėra – visą lapą (prireikus ir didesne raiška).
  */
-async function readPage(file, onStatus) {
+async function readPage(file, onStatus, job = {}) {
+  const stop = () => { if (job.cancelled) throw new Error("atšaukta"); };
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
   if (found(quick) === NEEDED.length || !quick.ocr_used) return quick;
+  stop();
   const full = await readCertificate(file, onStatus, { required: NEEDED });
   const best = found(full) >= found(quick) ? full : quick;
   if (found(best) > 0) return best;
+  stop();
   // Nieko nerasta – gal lapas įdėtas į skenerį aukštyn kojom? Tada tik pranešame
   // (PDF lieka toks, koks nuskenuotas), bet VIN ir modelį vis tiek pasiūlome.
   const flipped = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false, rotation: 180 });
@@ -424,7 +434,15 @@ async function readLane() {
     try {
       const bytes = await getPdf(record.id);
       const file = new File([bytes], `${record.source_file} (${record.page} lapas).pdf`, { type: "application/pdf" });
-      const data = await readPage(file, () => {});
+      // Jei lapas skaitomas per ilgai, jis paliekamas įrašyti ranka – eilė nestovi.
+      const job = {};
+      let timer;
+      const data = await Promise.race([
+        readPage(file, () => {}, job),
+        new Promise((_, reject) => {
+          timer = setTimeout(() => { job.cancelled = true; reject(new Error(PAGE_TIMEOUT_TEXT)); }, PAGE_TIMEOUT);
+        }),
+      ]).finally(() => clearTimeout(timer));
       const changes = {
         coc: {
           approval_number: data.approval_number, approval_date: data.approval_date,
@@ -438,11 +456,12 @@ async function readLane() {
         ocr: "baigta",
         upside_down: Boolean(data.upside_down),
       };
-      // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
-      if (!record.touched) {
-        Object.assign(changes, {
-          vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
-        });
+      // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo – pildomi tik kiti laukeliai.
+      const readValues = {
+        vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
+      };
+      for (const [key, value] of Object.entries(readValues)) {
+        if (!typedByHand(record, key)) changes[key] = value;
       }
       await update(record, changes);
     } catch (error) {
@@ -534,7 +553,8 @@ function cardHtml(record) {
     : isClean(record) ? `<span class="state ok">${icon("check")}Paruošta patvirtinti</span>`
       : record.ocr === "klaida" ? `<span class="state err">${icon("x")}Neperskaityta</span>`
         : `<span class="state warn">${icon("clock")}Patikrinkite</span>`;
-  const loading = busy && !record.touched ? "loading" : "";
+  const loading = (key) => (busy && !typedByHand(record, key) ? "loading" : "");
+  const hintText = busy ? 'placeholder="Skaitoma… arba įrašykite patys"' : "";
   return `
     <button type="button" class="thumb" data-open="${record.id}" title="Atidaryti PDF">
       ${record.thumb ? `<img src="${record.thumb}" alt="${record.page} lapas">` : "<span>Peržiūros nėra – atidaryti PDF</span>"}
@@ -549,17 +569,17 @@ function cardHtml(record) {
       ${snippet ? `<div class="snippet-box"><img src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
       <div class="vin">
         <label for="r-${record.id}-vin">VIN</label>
-        <input type="text" class="mono ${loading}" id="r-${record.id}-vin" data-field="vin" value="${esc(record.vin)}"
+        <input type="text" class="mono ${loading("vin")}" id="r-${record.id}-vin" data-field="vin" value="${esc(record.vin)}" ${hintText}
                maxlength="24" autocomplete="off" spellcheck="false">
         <div class="hint ${kind}">${hintHtml(kind, hint)}</div>
       </div>
       <div>
         <label for="r-${record.id}-make">Markė</label>
-        <input type="text" class="${loading}" id="r-${record.id}-make" data-field="make" value="${esc(record.make)}" autocomplete="off">
+        <input type="text" class="${loading("make")}" id="r-${record.id}-make" data-field="make" value="${esc(record.make)}" autocomplete="off">
       </div>
       <div>
         <label for="r-${record.id}-model">Modelis</label>
-        <input type="text" class="${loading}" id="r-${record.id}-model" data-field="model" value="${esc(record.model)}" autocomplete="off">
+        <input type="text" class="${loading("model")}" id="r-${record.id}-model" data-field="model" value="${esc(record.model)}" autocomplete="off">
       </div>
       <div class="ractions">
         <button type="button" class="btn primary sm" data-confirm="${record.id}">${icon("check")}Patvirtinti</button>
@@ -1210,7 +1230,7 @@ $("review-list").addEventListener("input", (event) => {
   const record = byId(card.dataset.id);
   if (!record) return;
   record[input.dataset.field] = input.value;
-  record.touched = true;
+  record.typed = { ...(record.typed || {}), [input.dataset.field]: true };
   input.classList.remove("loading");
   if (input.dataset.field === "vin") {
     const [kind, text] = vinHint(record);
