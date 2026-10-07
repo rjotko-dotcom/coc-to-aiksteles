@@ -121,6 +121,22 @@ export function specialFolders(records, extra = []) {
     .sort((a, b) => a.name.localeCompare(b.name, "lt"));
 }
 
+/**
+ * CoC, kurių VIN atitinka paieškos tekstą (pakanka 4 paskutinių ženklų).
+ *
+ * Pirmiausia ieškoma VIN pabaigoje – taip dažniausiai ir sakoma („…2374201“
+ * arba „4201“); jei nieko nėra, bet kurioje VIN vietoje. Grąžina [] ir tada,
+ * kai tekstas nepanašus į VIN dalį (per trumpas ar be skaitmenų).
+ */
+export function vinHits(records, query) {
+  const text = String(query || "").trim();
+  const part = cleanVin(text);
+  if (/\s/.test(text) || part.length < 4 || !/\d/.test(part)) return [];
+  const withVin = records.filter((record) => record.vin);
+  const atEnd = withVin.filter((record) => record.vin.endsWith(part));
+  return atEnd.length ? atEnd : withVin.filter((record) => record.vin.includes(part));
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 
