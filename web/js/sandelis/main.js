@@ -246,22 +246,39 @@ async function chooseFolder(fileCount) {
 }
 
 async function handleFiles(fileList) {
-  const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
-  if (!files.length) { toast("Pasirinkite PDF failą.", "warn"); return; }
+  const candidates = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
+  if (!candidates.length) { toast("Pasirinkite PDF failą.", "warn"); return; }
+
+  // Tas pats PDF antrą kartą? Atpažįstama pagal turinį, ne pavadinimą.
+  const files = [];
+  for (const file of candidates) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const hash = await fileHash(bytes);
+    const earlier = records.filter((record) => record.file_hash === hash);
+    if (earlier.length && !await ask(
+      "Šis PDF jau įkeltas",
+      `„${file.name}“ jau buvo įkeltas ${showDate(earlier[0].added)} (${earlier.length} lap.).\nĮkėlus dar kartą, atsiras dublikatai.`,
+      "Vis tiek įkelti",
+    )) continue;
+    files.push({ file, bytes, hash });
+  }
+  if (!files.length) return;
+
   const folder = await chooseFolder(files.length);
   if (folder === null) return;
   askPersistence();
 
   let added = 0;
-  for (const file of files) {
+  for (const { file, bytes: fileBytes, hash } of files) {
     let pages;
     try {
-      pages = await splitPages(new Uint8Array(await file.arrayBuffer()));
+      pages = await splitPages(fileBytes);
     } catch (error) {
       toast(`Nepavyko atidaryti ${file.name}: ${error.message || error}`, "err");
       continue;
     }
     const batch = now();
+    const batchId = crypto.randomUUID();
     for (const [index, bytes] of pages.entries()) {
       const record = {
         id: crypto.randomUUID(),
@@ -270,6 +287,8 @@ async function handleFiles(fileList) {
         vin: "", make: "", model: "", tvv: "",
         coc: {},
         folder,
+        batch: batchId,
+        file_hash: hash,
         source_file: file.name,
         page: index + 1,
         pages: pages.length,
@@ -299,6 +318,12 @@ async function handleFiles(fileList) {
   }
 }
 
+/** PDF turinio atspaudas (SHA-256) – tam pačiam failui atpažinti. */
+async function fileHash(bytes) {
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /** Kiek reikiamų laukų rasta. */
 const found = (data) => NEEDED.filter((key) => data[key]).length;
 
@@ -310,7 +335,12 @@ async function readPage(file, onStatus) {
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
   if (found(quick) === NEEDED.length || !quick.ocr_used) return quick;
   const full = await readCertificate(file, onStatus, { required: NEEDED });
-  return found(full) >= found(quick) ? full : quick;
+  const best = found(full) >= found(quick) ? full : quick;
+  if (found(best) > 0) return best;
+  // Nieko nerasta – gal lapas įdėtas į skenerį aukštyn kojom? Tada tik pranešame
+  // (PDF lieka toks, koks nuskenuotas), bet VIN ir modelį vis tiek pasiūlome.
+  const flipped = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false, rotation: 180 });
+  return found(flipped) > 0 ? { ...flipped, upside_down: true } : best;
 }
 
 /** Atpažįsta laukiančius lapus po vieną. Tęsiama ir po puslapio perkrovimo. */
@@ -342,6 +372,7 @@ async function runQueue() {
             model: (data.snippets || {}).commercial_name || "",
           },
           ocr: "baigta",
+          upside_down: Boolean(data.upside_down),
         };
         // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
         if (!record.touched) {
@@ -365,6 +396,8 @@ async function runQueue() {
     if (session.done) {
       const review = records.filter((record) => record.status === STATUS.REVIEW).length;
       if (review) toast(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`);
+      const flipped = records.filter((record) => record.status === STATUS.REVIEW && record.upside_down).length;
+      if (flipped) toast(`${flipped} lap. nuskenuoti aukštyn kojom – jie pažymėti patikroje.`, "warn");
       session.done = 0;
       session.times = [];
     }
@@ -411,7 +444,7 @@ function vinHint(record) {
 }
 
 /** Ar lapą galima patvirtinti neperžiūrint (viskas rasta, jokių įspėjimų). */
-const isClean = (record) => record.status === STATUS.REVIEW && record.ocr === "baigta"
+const isClean = (record) => record.status === STATUS.REVIEW && record.ocr === "baigta" && !record.upside_down
   && vinHint(record)[0] === "ok" && String(record.model || "").trim();
 
 function hintHtml(kind, text) {
@@ -436,6 +469,7 @@ function cardHtml(record) {
   const snippet = (record.snippets || {}).vin;
   const state = busy
     ? `<span class="state"><span class="spinner"></span>${record.ocr === "skaitoma" ? "Skaitoma…" : "Laukia eilėje"}</span>`
+    : record.upside_down ? `<span class="state warn">${icon("undo")}Aukštyn kojom</span>`
     : isClean(record) ? `<span class="state ok">${icon("check")}Paruošta patvirtinti</span>`
       : record.ocr === "klaida" ? `<span class="state err">${icon("x")}Neperskaityta</span>`
         : `<span class="state warn">${icon("clock")}Patikrinkite</span>`;
@@ -449,6 +483,7 @@ function cardHtml(record) {
         <div><b>${esc(record.source_file)}</b> <small>· ${record.page} iš ${record.pages} lapo</small></div>
         <div class="right">${folderSelect(record)}${state}</div>
       </div>
+      ${record.upside_down ? `<div class="alert warn">${icon("undo")}<span>Šis lapas nuskenuotas <b>aukštyn kojom</b>. VIN ir modelis perskaityti apvertus – sulyginkite su lapu.</span></div>` : ""}
       ${record.ocr === "klaida" ? `<div class="alert">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}). Įrašykite ranka.</div>` : ""}
       ${snippet ? `<div class="snippet-box"><img src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
       <div class="vin">
@@ -469,6 +504,7 @@ function cardHtml(record) {
         <button type="button" class="btn primary sm" data-confirm="${record.id}">${icon("check")}Patvirtinti</button>
         <button type="button" class="btn sm" data-open="${record.id}">${icon("eye")}PDF</button>
         <button type="button" class="btn danger sm" data-remove="${record.id}">${icon("trash")}Ištrinti lapą</button>
+        ${record.pages > 1 ? `<button type="button" class="btn danger sm ghost-danger" data-remove-scan="${record.id}">${icon("trash")}Ištrinti visą skeną</button>` : ""}
       </div>
     </div>`;
 }
@@ -570,6 +606,31 @@ function nextReviewAfter(id) {
   const index = cards.findIndex((card) => card.dataset.id === id);
   const next = cards[index + 1] || cards[index - 1];
   return next ? next.dataset.id : null;
+}
+
+/** Visi to paties įkelto PDF lapai (seniems įrašams – pagal failą ir įkėlimo laiką). */
+const batchOf = (record) => record.batch || `${record.source_file}|${record.added}`;
+const scanOf = (record) => records.filter((other) => batchOf(other) === batchOf(record));
+
+async function removeScan(id) {
+  const record = byId(id);
+  if (!record) return;
+  const pages = scanOf(record);
+  const done = pages.filter((page) => page.status !== STATUS.REVIEW);
+  const text = `„${record.source_file}“, įkeltas ${showDate(record.added)}: bus ištrinti visi ${pages.length} lap. ir jų PDF.`
+    + (done.length ? `\nDėmesio: ${done.length} iš jų jau patvirtinti arba atiduoti – jie irgi bus ištrinti.` : "");
+  if (!await ask("Ištrinti visą skeną?", text, "Ištrinti visą skeną", true)) return;
+  for (const page of pages) {
+    await deleteRecord(page.id);
+    if (store.state === "ok") disk.removePdf(store.handle, page.id);
+    selected.delete(page.id);
+    animateOut(page.id);
+  }
+  const gone = new Set(pages.map((page) => page.id));
+  records = records.filter((other) => !gone.has(other.id));
+  scheduleSync();
+  render();
+  toast(`Ištrintas skenas: ${pages.length} lap.`);
 }
 
 async function removeRecord(id) {
@@ -1114,6 +1175,7 @@ $("review-list").addEventListener("click", (event) => {
   if (target.dataset.open) openPdf(target.dataset.open);
   if (target.dataset.confirm) confirmRecord(target.dataset.confirm);
   if (target.dataset.remove) removeRecord(target.dataset.remove);
+  if (target.dataset.removeScan) removeScan(target.dataset.removeScan);
 });
 
 // Paieška ir sąrašas

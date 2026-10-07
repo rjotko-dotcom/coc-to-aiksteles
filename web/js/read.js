@@ -165,9 +165,9 @@ function addSnippets(data, lines, canvases) {
   return data;
 }
 
-/** `top` – kokią puslapio dalį nuo viršaus skaityti (1 – visą). */
-async function ocrPage(page, dpi = OCR_DPI, top = 1) {
-  const viewport = page.getViewport({ scale: dpi / 72 });
+/** `top` – kokią puslapio dalį nuo viršaus skaityti (1 – visą); `rotation` – papildomas pasukimas laipsniais. */
+async function ocrPage(page, dpi = OCR_DPI, top = 1, rotation = 0) {
+  const viewport = page.getViewport({ scale: dpi / 72, rotation: (page.rotate + rotation) % 360 });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
   // Kas netelpa į drobę, tiesiog nepiešiama – atpažinimas trunka trumpiau.
@@ -181,13 +181,13 @@ async function ocrPage(page, dpi = OCR_DPI, top = 1) {
 /** Kiek privalomų laukų rasta (pagal tai renkamės geresnį bandymą). */
 const score = (data, required = REQUIRED) => required.filter((key) => data[key]).length;
 
-async function readWithOcr(pdf, file, dpi, onStatus, label, top = 1) {
+async function readWithOcr(pdf, file, dpi, onStatus, label, top = 1, rotation = 0) {
   const canvases = [];
   const lines = [];
   for (let number = 1; number <= pdf.numPages; number += 1) {
     onStatus(`${label}${number} iš ${pdf.numPages} puslapio…`);
     const page = await pdf.getPage(number);
-    const result = await ocrPage(page, dpi, top);
+    const result = await ocrPage(page, dpi, top, rotation);
     result.lines.forEach((line) => lines.push({ ...line, pageIndex: canvases.length }));
     canvases.push(result.canvas);
     page.cleanup();
@@ -214,8 +214,11 @@ async function readWithOcr(pdf, file, dpi, onStatus, label, top = 1) {
  * `top` – skaityti tik viršutinę puslapio dalį (pvz. 0.6). Sandėlis taip
  * pirmiausia ieško VIN ir modelio, o viso lapo imasi tik jei jų ten nėra.
  * `retry: false` – neskaityti antrą kartą didesne raiška (tam greitam bandymui).
+ * `rotation: 180` – skaityti apvertus (lapui, nuskenuotam aukštyn kojom).
  */
-export async function readCertificate(file, onStatus = () => {}, { required = REQUIRED, top = 1, retry = true } = {}) {
+export async function readCertificate(file, onStatus = () => {}, {
+  required = REQUIRED, top = 1, retry = true, rotation = 0,
+} = {}) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjs.getDocument({ data: bytes }).promise;
 
@@ -229,11 +232,11 @@ export async function readCertificate(file, onStatus = () => {}, { required = RE
   let ocrUsed = text.replace(/\s/g, "").length < TEXT_THRESHOLD;
 
   if (ocrUsed) {
-    let best = await readWithOcr(pdf, file, OCR_DPI, onStatus, "Atpažįstamas ", top);
+    let best = await readWithOcr(pdf, file, OCR_DPI, onStatus, "Atpažįstamas ", top, rotation);
 
     // Jei kažko trūksta, tas pats liudijimas perskaitomas didesne raiška.
     if (retry && score(best.data, required) < required.length) {
-      const second = await readWithOcr(pdf, file, RETRY_DPI, onStatus, "Skaitoma dar kartą, tiksliau: ", top);
+      const second = await readWithOcr(pdf, file, RETRY_DPI, onStatus, "Skaitoma dar kartą, tiksliau: ", top, rotation);
       if (score(second.data, required) > score(best.data, required)) {
         best.canvases.forEach((canvas) => { canvas.width = 0; canvas.height = 0; });
         best = second;
