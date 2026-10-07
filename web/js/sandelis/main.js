@@ -358,7 +358,7 @@ async function fileHash(bytes) {
 const typedByHand = (record, key) => Boolean(record.touched || (record.typed || {})[key]);
 
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
-const PAGE_TIMEOUT = 4 * 60_000;
+const PAGE_TIMEOUT = 20 * 60_000;
 const PAGE_TIMEOUT_TEXT = "lapas skaitomas per ilgai";
 
 /** Kiek reikiamų laukų rasta. */
@@ -568,7 +568,8 @@ function cardHtml(record) {
         <div class="right">${folderSelect(record)}${state}</div>
       </div>
       ${record.upside_down ? `<div class="alert warn">${icon("undo")}<span>Šis lapas nuskenuotas <b>aukštyn kojom</b>. VIN ir modelis perskaityti apvertus – sulyginkite su lapu.</span></div>` : ""}
-      ${record.ocr === "klaida" ? `<div class="alert">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}). Įrašykite ranka.</div>` : ""}
+      ${record.ocr === "klaida" ? `<div class="alert retry">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}).
+        Įrašykite ranka arba <button type="button" class="btn sm" data-retry="${record.id}">${icon("undo")}Skaityti dar kartą</button></div>` : ""}
       ${snippet ? `<div class="snippet-box"><img src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
       <div class="vin">
         <label for="r-${record.id}-vin">VIN</label>
@@ -638,8 +639,24 @@ function renderReview() {
   renderConfirmClean();
 }
 
+/** Neperskaitytus lapus grąžina į skaitymo eilę. */
+async function retryReading(ids) {
+  for (const id of ids) {
+    const record = byId(id);
+    if (!record || record.status !== STATUS.REVIEW) continue;
+    await update(record, { ocr: "laukia", ocr_error: "" });
+    renderCard(record);
+  }
+  renderConfirmClean();
+  runQueue();
+  toast(ids.length === 1 ? "Lapas skaitomas dar kartą." : `Dar kartą skaitoma lapų: ${ids.length}.`);
+}
+
 function renderConfirmClean() {
   const clean = records.filter(isClean).length;
+  const failed = records.filter((record) => record.status === STATUS.REVIEW && record.ocr === "klaida");
+  $("retry-failed").hidden = failed.length === 0;
+  $("retry-failed").querySelector("span").textContent = `Skaityti neperskaitytus dar kartą (${failed.length})`;
   const button = $("confirm-clean");
   button.hidden = clean < 2;
   button.querySelector("span").textContent = `Patvirtinti visus paruoštus (${clean})`;
@@ -1270,6 +1287,7 @@ $("review-list").addEventListener("click", (event) => {
   if (target.dataset.confirm) confirmRecord(target.dataset.confirm);
   if (target.dataset.remove) removeRecord(target.dataset.remove);
   if (target.dataset.removeScan) removeScan(target.dataset.removeScan);
+  if (target.dataset.retry) retryReading([target.dataset.retry]);
 });
 
 // Paieška ir sąrašas
@@ -1376,6 +1394,8 @@ const ACTIONS = {
   menu: () => $("sidebar").classList.toggle("open"),
   "focus-search": focusSearch,
   "confirm-clean": confirmClean,
+  "retry-failed": () => retryReading(records
+    .filter((record) => record.status === STATUS.REVIEW && record.ocr === "klaida").map((record) => record.id)),
   more: () => { shown += PAGE; renderTable(); },
   "give-selected": () => openGive([...selected]),
   "return-selected": () => returnRecords([...selected]),

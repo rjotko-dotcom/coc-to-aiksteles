@@ -129,8 +129,12 @@
           <h2>Patikra <span class="count" id="review-count"></span></h2>
           <p class="muted">Sulyginkite VIN ir modelį su lapu. <kbd>Enter</kbd> – patvirtinti ir pereiti prie kito.</p>
         </div>
+        <div class="review-actions">
+        <button type="button" class="btn" data-action="retry-failed" id="retry-failed" hidden>
+          <svg><use href="#i-undo"/></svg><span></span></button>
         <button type="button" class="btn" data-action="confirm-clean" id="confirm-clean" hidden>
           <svg><use href="#i-check"/></svg><span></span></button>
+        </div>
       </header>
       <div id="review-list"></div>
     </section>

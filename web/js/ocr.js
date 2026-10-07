@@ -175,8 +175,12 @@ function acquire() {
   return new Promise((resolve) => waiting.push((slot) => { slot.busy = true; resolve(slot); }));
 }
 
-/** Ilgiausiai tiek laukiama vieno vaizdo – kitaip laikoma, kad procesas užstrigo. */
-const DETECT_TIMEOUT = 90_000;
+/**
+ * Ilgiausiai tiek laukiama vieno vaizdo – tik tikram užstrigimui pagauti.
+ * Lėtesniame kompiuteryje visas lapas didesne raiška skaitomas ir ilgiau nei
+ * minutę, todėl riba sąmoningai didelė.
+ */
+const DETECT_TIMEOUT = 5 * 60_000;
 
 class OcrTimeout extends Error {}
 
