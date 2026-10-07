@@ -80,12 +80,25 @@ export function duplicatesOf(records, record) {
   return records.filter((other) => other.id !== record.id && cleanVin(other.vin) === vin);
 }
 
-/** `2026-10-07` → `2026.10.07` (taip datas rašome lietuviškai). */
-export const showDate = (iso) => (iso ? String(iso).slice(0, 10).replace(/-/g, ".") : "");
-
 export function todayIso(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
+
+/**
+ * Diena pagal vietinį laiką.
+ *
+ * Įkėlimo laikas saugomas UTC (`2026-10-06T22:30:00Z`), o Lietuvoje tai jau
+ * spalio 7-oji – vien nukirpus datą ji būtų diena per anksti.
+ */
+export function localDay(value) {
+  const text = String(value || "");
+  if (!text.includes("T")) return text.slice(0, 10);
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? text.slice(0, 10) : todayIso(date);
+}
+
+/** `2026-10-07` → `2026.10.07` (taip datas rašome lietuviškai). */
+export const showDate = (iso) => localDay(iso).replace(/-/g, ".");
 
 /** PDF failo pavadinimas: `SJNJ12TD3U2000001_QASHQAI.pdf`. */
 export function pdfName(record) {
@@ -99,29 +112,59 @@ const STATUS_NAMES = {
 };
 export const statusName = (status) => STATUS_NAMES[status] || status;
 
-/**
- * Lentelė Excel'iui.
- *
- * Skyriklis – kabliataškis: lietuviškame Excel'yje kablelis yra dešimtainis
- * ženklas, todėl kableliais atskirtas failas atsidarytų viename stulpelyje.
- */
-export function toCsv(records) {
-  const columns = [
-    ["VIN", (r) => r.vin],
-    ["Markė", (r) => r.make],
-    ["Modelis", (r) => r.model],
-    ["Tipas/Variantas/Versija", (r) => r.tvv],
-    ["Būsena", (r) => statusName(r.status)],
-    ["Įkelta", (r) => showDate(r.added)],
-    ["Atiduota", (r) => showDate(r.given_date)],
-    ["Kam atiduota", (r) => r.given_to],
-    ["Pastaba", (r) => r.note],
-    ["Failas", (r) => r.source_file],
+/** Excel stulpeliai (žr. `xlsx.js`). */
+export const EXCEL_COLUMNS = [
+  { title: "VIN", get: (r) => r.vin, width: 22, kind: "mono" },
+  { title: "Markė", get: (r) => r.make, width: 14 },
+  { title: "Modelis", get: (r) => r.model, width: 22 },
+  { title: "Tipas/Variantas/Versija", get: (r) => r.tvv, width: 24 },
+  { title: "Būsena", get: (r) => statusName(r.status), width: 12 },
+  { title: "Įkelta", get: (r) => localDay(r.added), width: 12, kind: "date" },
+  { title: "Atiduota", get: (r) => r.given_date, width: 12, kind: "date" },
+  { title: "Kam atiduota", get: (r) => r.given_to, width: 26 },
+  { title: "Pastaba", get: (r) => r.note, width: 30 },
+  { title: "Failas", get: (r) => r.source_file, width: 24 },
+];
+
+/** Excel lapai: turimi, atiduoti ir visi kartu (nepatikrinti neįtraukiami). */
+export function excelSheets(records) {
+  const ready = records.filter((r) => r.status !== STATUS.REVIEW).sort(newestFirst);
+  return [
+    { name: "Turimi", rows: ready.filter((r) => r.status === STATUS.IN) },
+    { name: "Atiduoti", rows: ready.filter((r) => r.status === STATUS.OUT)
+      .sort((a, b) => String(b.given_date).localeCompare(String(a.given_date))) },
+    { name: "Visi", rows: ready },
   ];
-  const cell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-  const lines = [columns.map(([name]) => cell(name)).join(";")];
-  for (const record of records) lines.push(columns.map(([, get]) => cell(get(record))).join(";"));
-  return "﻿" + lines.join("\r\n") + "\r\n";
+}
+
+const MONTHS = ["Sau", "Vas", "Kov", "Bal", "Geg", "Bir", "Lie", "Rgp", "Rgs", "Spa", "Lap", "Gru"];
+
+/** Kiek liudijimų įkelta ir atiduota kiekvieną iš paskutinių `months` mėnesių. */
+export function monthlyActivity(records, months = 6, now = new Date()) {
+  const result = [];
+  for (let back = months - 1; back >= 0; back -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - back, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    result.push({ key, label: MONTHS[date.getMonth()], added: 0, given: 0 });
+  }
+  const index = new Map(result.map((entry, i) => [entry.key, i]));
+  for (const record of records) {
+    if (record.status === STATUS.REVIEW) continue;
+    const added = index.get(localDay(record.added).slice(0, 7));
+    if (added !== undefined) result[added].added += 1;
+    if (record.status === STATUS.OUT) {
+      const given = index.get(String(record.given_date || "").slice(0, 7));
+      if (given !== undefined) result[given].given += 1;
+    }
+  }
+  return result;
+}
+
+/** Vardo inicialai avatarui: „Jonas Jonaitis“ → „JJ“, „UAB Autos“ → „UA“. */
+export function initials(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "?";
+  return (words[0][0] + (words[1] ? words[1][0] : words[0][1] || "")).toUpperCase();
 }
 
 /**

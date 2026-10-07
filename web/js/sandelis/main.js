@@ -10,16 +10,24 @@ import {
   addRecord, allRecords, askPersistence, deleteRecord, getMeta, getPdf, saveRecord, setMeta, usageMb,
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
+import { buildXlsx } from "./xlsx.js";
 import {
-  STATUS, backupDue, cleanVin, counts, duplicatesOf, matches, mergePlan, newestFirst, pdfName,
-  showDate, statusName, toCsv, todayIso, vinDoubtful, vinProblems,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, localDay, matches,
+  mergePlan, monthlyActivity, newestFirst, pdfName, showDate, statusName, todayIso, vinDoubtful, vinProblems,
 } from "./logic.js";
 
 /** Kiek eilučių rodyti iš karto – didelis sąrašas kitaip stabdytų puslapį. */
 const PAGE = 200;
 
-/** Laukai, dėl kurių verta skaityti lapą antrą kartą (žr. `readCertificate`). */
+/** Laukai, kurių sandėliui reikia iš kiekvieno lapo. */
 const NEEDED = ["vin", "commercial_name"];
+
+/**
+ * Kokią lapo dalį nuo viršaus skaityti pirmiausia. VIN ir modelis CoC
+ * pirmoje pusėje yra viršutinėje dalyje, todėl dažniausiai visko perskaityti
+ * nebereikia – lapas apdorojamas maždaug trečdaliu greičiau.
+ */
+const QUICK_TOP = 0.6;
 
 let records = [];
 let tab = STATUS.IN;
@@ -27,16 +35,44 @@ let shown = PAGE;
 const selected = new Set();
 let detailId = null;
 let giveIds = [];
+let animateRows = true;
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"]/g, (ch) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 const byId = (id) => records.find((record) => record.id === id);
 const now = () => new Date().toISOString();
+const icon = (name) => `<svg><use href="#i-${name}"/></svg>`;
+const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function status(text, ok = false) {
-  $("status").textContent = text;
-  $("status").className = ok ? "status ok" : "status";
+// ---------------------------------------------------------------------------
+// Pagalbiniai: pranešimai, klausimai, atsisiuntimas
+// ---------------------------------------------------------------------------
+
+function toast(text, kind = "ok") {
+  const box = document.createElement("div");
+  box.className = `toast ${kind}`;
+  box.innerHTML = `${icon(kind === "ok" ? "check" : kind === "err" ? "x" : "clock")}<span>${esc(text)}</span>`;
+  $("toasts").appendChild(box);
+  setTimeout(() => {
+    box.classList.add("out");
+    box.addEventListener("animationend", () => box.remove(), { once: true });
+  }, kind === "err" ? 6000 : 3200);
+}
+
+/** Klausimas savo lange (vietoj naršyklės `confirm`). Grąžina true / false. */
+function ask(title, text = "", okLabel = "Gerai", danger = false) {
+  return new Promise((resolve) => {
+    $("ask-title").textContent = title;
+    $("ask-text").textContent = text;
+    $("ask-ok").textContent = okLabel;
+    $("ask-ok").className = danger ? "btn danger" : "btn primary";
+    const dialog = $("ask");
+    dialog.returnValue = "";
+    dialog.addEventListener("close", () => resolve(dialog.returnValue === "ok"), { once: true });
+    dialog.showModal();
+    $("ask-ok").focus();
+  });
 }
 
 function download(bytes, filename, type = "application/octet-stream") {
@@ -52,7 +88,7 @@ function download(bytes, filename, type = "application/octet-stream") {
 
 async function openPdf(id) {
   const bytes = await getPdf(id);
-  if (!bytes) { alert("Šio liudijimo PDF nerastas."); return; }
+  if (!bytes) { toast("Šio liudijimo PDF nerastas.", "err"); return; }
   const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -63,25 +99,48 @@ async function update(record, changes) {
   await saveRecord(record);
 }
 
+/** Skaičius „atsuka“ iki naujos reikšmės. */
+function countTo(element, value) {
+  const from = Number(element.dataset.value || 0);
+  element.dataset.value = value;
+  if (from === value || reduceMotion()) { element.textContent = value; return; }
+  const start = performance.now();
+  const duration = 900;
+  const step = (time) => {
+    const t = Math.min(1, (time - start) / duration);
+    const eased = 1 - (1 - t) ** 3;
+    element.textContent = Math.round(from + (value - from) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/** Avataro spalva iš vardo – tas pats žmogus visada tos pačios spalvos. */
+function hue(name) {
+  let sum = 0;
+  for (const ch of String(name)) sum = (sum * 31 + ch.charCodeAt(0)) % 360;
+  return sum;
+}
+
 // ---------------------------------------------------------------------------
-// Skenų priėmimas
+// Skenų priėmimas ir atpažinimas
 // ---------------------------------------------------------------------------
 
 let queueRunning = false;
+const session = { done: 0, times: [] };
 
 async function handleFiles(fileList) {
   const files = [...fileList].filter((file) => /\.pdf$/i.test(file.name) || file.type === "application/pdf");
-  if (!files.length) { status("Pasirinkite PDF failą."); return; }
+  if (!files.length) { toast("Pasirinkite PDF failą.", "warn"); return; }
   askPersistence();
 
   let added = 0;
   for (const file of files) {
-    status(`Karpomas ${file.name}…`);
     let pages;
     try {
       pages = await splitPages(new Uint8Array(await file.arrayBuffer()));
     } catch (error) {
-      status(`Nepavyko atidaryti ${file.name}: ${error.message || error}`);
+      toast(`Nepavyko atidaryti ${file.name}: ${error.message || error}`, "err");
       continue;
     }
     const batch = now();
@@ -107,11 +166,31 @@ async function handleFiles(fileList) {
       await addRecord(record, bytes);
       records.push(record);
       added += 1;
+      // Skaityti pradedama iškart, kol kiti lapai dar karpomi.
+      renderReview();
+      renderCounts();
+      runQueue();
     }
-    render();
   }
-  status(added ? `Įkelta lapų: ${added}. Skaitomi VIN ir modeliai…` : "Nieko neįkelta.", added > 0);
-  runQueue();
+  render();
+  if (added) {
+    toast(`Įkelta lapų: ${added}. VIN ir modeliai skaitomi…`);
+    $("review").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  }
+}
+
+/** Kiek reikiamų laukų rasta. */
+const found = (data) => NEEDED.filter((key) => data[key]).length;
+
+/**
+ * Perskaito vieną lapą: pirmiausia tik viršutinę dalį, o jei VIN ar modelio
+ * ten nėra – visą lapą (prireikus ir didesne raiška).
+ */
+async function readPage(file, onStatus) {
+  const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
+  if (found(quick) === NEEDED.length || !quick.ocr_used) return quick;
+  const full = await readCertificate(file, onStatus, { required: NEEDED });
+  return found(full) >= found(quick) ? full : quick;
 }
 
 /** Atpažįsta laukiančius lapus po vieną. Tęsiama ir po puslapio perkrovimo. */
@@ -124,14 +203,15 @@ async function runQueue() {
         .sort((a, b) => String(a.added).localeCompare(String(b.added)) || a.page - b.page);
       if (!waiting.length) break;
       const record = waiting[0];
-      const left = waiting.length;
+      const started = performance.now();
       await update(record, { ocr: "skaitoma" });
       renderCard(record);
+      renderProgress(waiting.length, record);
       try {
         const bytes = await getPdf(record.id);
         const file = new File([bytes], `${record.source_file} (${record.page} lapas).pdf`, { type: "application/pdf" });
-        const data = await readCertificate(file, (message) => status(`Liko ${left}. ${message}`), { required: NEEDED });
-        const found = {
+        const data = await readPage(file, (message) => { $("progress-text").textContent = message; });
+        const changes = {
           coc: {
             approval_number: data.approval_number, approval_date: data.approval_date,
             colour: data.colour, colour_raw: data.colour_raw, category: data.category,
@@ -145,21 +225,46 @@ async function runQueue() {
         };
         // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
         if (!record.touched) {
-          Object.assign(found, {
+          Object.assign(changes, {
             vin: cleanVin(data.vin), make: data.make, model: data.commercial_name, tvv: data.type_variant_version,
           });
         }
-        await update(record, found);
+        await update(record, changes);
       } catch (error) {
         await update(record, { ocr: "klaida", ocr_error: error.message || String(error) });
       }
+      session.done += 1;
+      session.times.push(performance.now() - started);
       if (byId(record.id)) renderCard(record);
       renderCounts();
+      renderConfirmClean();
     }
-    const review = records.filter((record) => record.status === STATUS.REVIEW).length;
-    if (review) status(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`, true);
   } finally {
     queueRunning = false;
+    renderProgress(0);
+    if (session.done) {
+      const review = records.filter((record) => record.status === STATUS.REVIEW).length;
+      if (review) toast(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`);
+      session.done = 0;
+      session.times = [];
+    }
+  }
+}
+
+function renderProgress(left, record = null) {
+  const box = $("progress");
+  if (!left) { box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  const total = session.done + left;
+  $("progress-title").textContent = `Skaitomas ${session.done + 1} lapas iš ${total}`;
+  $("progress-text").textContent = record ? `${record.source_file} · ${record.page} lapas` : "";
+  $("progress-bar").style.width = `${Math.max(4, (session.done / total) * 100)}%`;
+  const recent = session.times.slice(-5);
+  if (recent.length) {
+    const seconds = Math.round((recent.reduce((a, b) => a + b, 0) / recent.length / 1000) * left);
+    $("progress-eta").textContent = seconds > 90 ? `liko ~${Math.round(seconds / 60)} min.` : `liko ~${seconds} s`;
+  } else {
+    $("progress-eta").textContent = "";
   }
 }
 
@@ -167,7 +272,7 @@ async function runQueue() {
 // Patikra
 // ---------------------------------------------------------------------------
 
-/** Pastabos apie VIN po laukeliu: klaida, abejonė, dublikatas. */
+/** Pastaba apie VIN: [rūšis, tekstas]. */
 function vinHint(record) {
   const vin = cleanVin(record.vin);
   if (record.ocr === "laukia" || record.ocr === "skaitoma") return ["", ""];
@@ -179,54 +284,68 @@ function vinHint(record) {
     const where = twin.status === STATUS.OUT
       ? `atiduotas ${showDate(twin.given_date)}${twin.given_to ? ` – ${twin.given_to}` : ""}`
       : statusName(twin.status).toLowerCase();
-    return ["err", `Toks VIN jau yra (${where}). Gal tas pats lapas nuskenuotas dukart?`];
+    return ["err", `Toks VIN jau yra (${where}). Gal lapas nuskenuotas dukart?`];
   }
   if (vinDoubtful(vin)) return ["warn", "Kontrolinis skaitmuo nesutampa – sulyginkite ženklą po ženklo."];
-  return ["ok", "17 ženklų ✓"];
+  return ["ok", "17 ženklų, formatas tinka"];
+}
+
+/** Ar lapą galima patvirtinti neperžiūrint (viskas rasta, jokių įspėjimų). */
+const isClean = (record) => record.status === STATUS.REVIEW && record.ocr === "baigta"
+  && vinHint(record)[0] === "ok" && String(record.model || "").trim();
+
+function hintHtml(kind, text) {
+  if (!kind) return "";
+  return `${icon(kind === "ok" ? "check" : kind === "warn" ? "clock" : "x")}${esc(text)}`;
 }
 
 function cardHtml(record) {
   const busy = record.ocr === "laukia" || record.ocr === "skaitoma";
   const [kind, hint] = vinHint(record);
   const snippet = (record.snippets || {}).vin;
+  const state = busy
+    ? `<span class="state"><span class="spinner"></span>${record.ocr === "skaitoma" ? "Skaitoma…" : "Laukia eilėje"}</span>`
+    : isClean(record) ? `<span class="state ok">${icon("check")}Paruošta patvirtinti</span>`
+      : record.ocr === "klaida" ? `<span class="state err">${icon("x")}Neperskaityta</span>`
+        : `<span class="state warn">${icon("clock")}Patikrinkite</span>`;
+  const loading = busy && !record.touched ? "loading" : "";
   return `
     <button type="button" class="thumb" data-open="${record.id}" title="Atidaryti PDF">
       ${record.thumb ? `<img src="${record.thumb}" alt="${record.page} lapas">` : "<span>Peržiūros nėra – atidaryti PDF</span>"}
     </button>
-    <div class="fields">
-      <div class="fileline">
-        <strong>${esc(record.source_file)} · ${record.page} iš ${record.pages} lapo</strong>
-        <span>${busy ? `<span class="working">${record.ocr === "skaitoma" ? "Skaitoma…" : "Laukia eilėje"}</span>` : ""}</span>
+    <div class="rfields">
+      <div class="rhead">
+        <div><b>${esc(record.source_file)}</b> <small>· ${record.page} iš ${record.pages} lapo</small></div>
+        ${state}
       </div>
-      ${record.ocr === "klaida" ? `<div class="banner err">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}). Įrašykite ranka.</div>` : ""}
-      ${snippet ? `<div class="snippet-box"><img class="snippet" src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
+      ${record.ocr === "klaida" ? `<div class="alert">Automatiškai perskaityti nepavyko (${esc(record.ocr_error)}). Įrašykite ranka.</div>` : ""}
+      ${snippet ? `<div class="snippet-box"><img src="${snippet}" alt="VIN vieta liudijime"></div>` : ""}
       <div class="vin">
         <label for="r-${record.id}-vin">VIN</label>
-        <input type="text" class="code" id="r-${record.id}-vin" data-field="vin" value="${esc(record.vin)}"
+        <input type="text" class="mono ${loading}" id="r-${record.id}-vin" data-field="vin" value="${esc(record.vin)}"
                maxlength="24" autocomplete="off" spellcheck="false">
-        <div class="hint ${kind}">${esc(hint)}</div>
+        <div class="hint ${kind}">${hintHtml(kind, hint)}</div>
       </div>
       <div>
         <label for="r-${record.id}-make">Markė</label>
-        <input type="text" id="r-${record.id}-make" data-field="make" value="${esc(record.make)}" autocomplete="off">
+        <input type="text" class="${loading}" id="r-${record.id}-make" data-field="make" value="${esc(record.make)}" autocomplete="off">
       </div>
       <div>
         <label for="r-${record.id}-model">Modelis</label>
-        <input type="text" id="r-${record.id}-model" data-field="model" value="${esc(record.model)}" autocomplete="off">
+        <input type="text" class="${loading}" id="r-${record.id}-model" data-field="model" value="${esc(record.model)}" autocomplete="off">
       </div>
-      <div class="row">
-        <button type="button" class="primary" data-confirm="${record.id}">Patvirtinti</button>
-        <button type="button" data-open="${record.id}">Atidaryti PDF</button>
-        <button type="button" class="danger" data-remove="${record.id}">Ištrinti lapą</button>
+      <div class="ractions">
+        <button type="button" class="btn primary sm" data-confirm="${record.id}">${icon("check")}Patvirtinti</button>
+        <button type="button" class="btn sm" data-open="${record.id}">${icon("eye")}PDF</button>
+        <button type="button" class="btn danger sm" data-remove="${record.id}">${icon("trash")}Ištrinti lapą</button>
       </div>
     </div>`;
 }
 
 /** Perpiešia vieną kortelę, neprarandant žymeklio laukelyje. */
 function renderCard(record) {
-  const card = document.querySelector(`.card[data-id="${record.id}"]`);
-  if (!card) { render(); return; }
-  if (record.status !== STATUS.REVIEW) { render(); return; }
+  const card = document.querySelector(`.rcard[data-id="${record.id}"]`);
+  if (!card || record.status !== STATUS.REVIEW) { render(); return; }
   const focused = document.activeElement && card.contains(document.activeElement) ? document.activeElement : null;
   const field = focused && focused.dataset.field;
   const caret = focused && focused.selectionStart;
@@ -238,21 +357,25 @@ function renderCard(record) {
   }
 }
 
-function renderReview() {
-  const review = records.filter((record) => record.status === STATUS.REVIEW)
+function reviewList() {
+  return records.filter((record) => record.status === STATUS.REVIEW)
     .sort((a, b) => String(a.added).localeCompare(String(b.added)) || a.page - b.page);
+}
+
+function renderReview() {
+  const review = reviewList();
   $("review").classList.toggle("hidden", !review.length);
-  $("review-count").textContent = review.length ? `(${review.length})` : "";
+  $("review-count").textContent = review.length ? `· ${review.length}` : "";
   const list = $("review-list");
   const existing = new Map([...list.children].map((card) => [card.dataset.id, card]));
   const wanted = new Set(review.map((record) => record.id));
-  for (const [id, card] of existing) if (!wanted.has(id)) card.remove();
+  for (const [id, card] of existing) if (!wanted.has(id) && !card.classList.contains("leaving")) card.remove();
   let previous = null;
   for (const record of review) {
     let card = existing.get(record.id);
     if (!card) {
       card = document.createElement("div");
-      card.className = "card";
+      card.className = "rcard";
       card.dataset.id = record.id;
       card.innerHTML = cardHtml(record);
     }
@@ -261,54 +384,230 @@ function renderReview() {
     }
     previous = card;
   }
+  renderConfirmClean();
 }
 
-async function confirmRecord(id) {
+function renderConfirmClean() {
+  const clean = records.filter(isClean).length;
+  const button = $("confirm-clean");
+  button.hidden = clean < 2;
+  button.querySelector("span").textContent = `Patvirtinti visus paruoštus (${clean})`;
+}
+
+/** Kortelė išslysta, o tada pasitraukia iš sąrašo. */
+function animateOut(id) {
+  const card = document.querySelector(`.rcard[data-id="${id}"]`);
+  if (!card || reduceMotion()) { card?.remove(); return; }
+  card.style.height = `${card.offsetHeight}px`;
+  card.classList.add("leaving");
+  setTimeout(() => {
+    card.style.transition = "height .3s var(--ease), margin .3s var(--ease), padding .3s var(--ease)";
+    Object.assign(card.style, { height: "0px", marginBottom: "0px", paddingTop: "0px", paddingBottom: "0px", borderWidth: "0px" });
+    setTimeout(() => card.remove(), 320);
+  }, 220);
+}
+
+async function confirmRecord(id, quiet = false) {
   const record = byId(id);
-  if (!record) return;
+  if (!record) return false;
   const vin = cleanVin(record.vin);
   const problems = vinProblems(vin);
-  if (problems.length && !confirm(`${problems[0]}\n\nVis tiek patvirtinti?`)) return;
-  if (duplicatesOf(records, record).length && !confirm("Toks VIN jau yra sąraše. Vis tiek pridėti dar vieną?")) return;
-  const next = nextReviewAfter(id);
+  if (!quiet && problems.length && !await ask("VIN atrodo neteisingas", `${problems[0]}\nVis tiek patvirtinti?`, "Patvirtinti")) return false;
+  if (!quiet && duplicatesOf(records, record).length
+      && !await ask("Toks VIN jau yra", "Šis VIN jau yra sąraše. Vis tiek pridėti dar vieną?", "Pridėti")) return false;
+  const next = quiet ? null : nextReviewAfter(id);
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
+  animateOut(id);
+  if (!quiet) {
+    render();
+    if (next) document.getElementById(`r-${next}-vin`)?.focus();
+    else $("q").focus();
+  }
+  return true;
+}
+
+async function confirmClean() {
+  const clean = records.filter(isClean);
+  for (const record of clean) await confirmRecord(record.id, true);
   render();
-  if (next) document.getElementById(`r-${next}-vin`)?.focus();
-  else $("q").focus();
+  toast(`Patvirtinta: ${clean.length}.`);
 }
 
 function nextReviewAfter(id) {
-  const cards = [...document.querySelectorAll("#review-list .card")];
+  const cards = [...document.querySelectorAll("#review-list .rcard:not(.leaving)")];
   const index = cards.findIndex((card) => card.dataset.id === id);
   const next = cards[index + 1] || cards[index - 1];
   return next ? next.dataset.id : null;
 }
 
-async function removeRecord(id, ask = true) {
+async function removeRecord(id) {
   const record = byId(id);
   if (!record) return;
   const label = record.vin || `${record.source_file}, ${record.page} lapas`;
-  if (ask && !confirm(`Ištrinti liudijimą ${label}? Bus ištrintas ir jo PDF.`)) return;
+  if (!await ask("Ištrinti liudijimą?", `${label}\nBus ištrintas ir jo PDF.`, "Ištrinti", true)) return;
   await deleteRecord(id);
   records = records.filter((other) => other.id !== id);
   selected.delete(id);
+  animateOut(id);
   render();
+  toast("Ištrinta.");
+}
+
+// ---------------------------------------------------------------------------
+// Apžvalga: skaičiai, grafikas, paskutiniai atiduoti
+// ---------------------------------------------------------------------------
+
+function renderCounts() {
+  const n = counts(records);
+  const month = todayIso().slice(0, 7);
+  const week = Date.now() - 7 * 864e5;
+  const ready = records.filter((record) => record.status !== STATUS.REVIEW);
+  const givenMonth = records.filter((record) => record.status === STATUS.OUT && String(record.given_date).startsWith(month));
+  const addedMonth = ready.filter((record) => localDay(record.added).startsWith(month));
+  const addedWeek = ready.filter((record) => new Date(record.added).getTime() > week);
+
+  countTo($("s-in"), n[STATUS.IN]);
+  countTo($("s-review"), n[STATUS.REVIEW]);
+  countTo($("s-out"), givenMonth.length);
+  countTo($("s-added"), addedMonth.length);
+  $("s-in-sub").textContent = addedWeek.length ? `+${addedWeek.length} per savaitę` : " ";
+  $("s-review-sub").textContent = n[STATUS.REVIEW] ? "Laukia Jūsų patvirtinimo" : "Viskas patikrinta";
+  $("s-out-sub").textContent = `Iš viso atiduota: ${n[STATUS.OUT]}`;
+  $("s-added-sub").textContent = `Iš viso įkelta: ${ready.length}`;
+
+  $("nav-in").textContent = n[STATUS.IN] || "";
+  $("nav-out").textContent = n[STATUS.OUT] || "";
+  $("nav-review").textContent = n[STATUS.REVIEW] || "";
+  $("t-in").textContent = n[STATUS.IN];
+  $("t-out").textContent = n[STATUS.OUT];
+  $("t-all").textContent = ready.length;
+
+  const hour = new Date().getHours();
+  const hello = hour < 11 ? "Labas rytas!" : hour < 18 ? "Laba diena!" : "Labas vakaras!";
+  $("greeting").innerHTML = records.length
+    ? `${hello} Turime <span class="num">${n[STATUS.IN]}</span> CoC.`
+    : `${hello} Pradėkime nuo pirmo skeno.`;
+
+  $("empty").classList.toggle("hidden", records.length > 0);
+  $("overview").classList.toggle("hidden", ready.length === 0);
+}
+
+/** Švelni kreivė per taškus (Catmull–Rom → Bezier). */
+function smoothPath(points) {
+  if (points.length < 2) return "";
+  let path = `M${points[0][0]},${points[0][1]}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const [x0, y0] = points[i - 1] || points[i];
+    const [x1, y1] = points[i];
+    const [x2, y2] = points[i + 1];
+    const [x3, y3] = points[i + 2] || points[i + 1];
+    const c1 = [x1 + (x2 - x0) / 6, y1 + (y2 - y0) / 6];
+    const c2 = [x2 - (x3 - x1) / 6, y2 - (y3 - y1) / 6];
+    path += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${x2},${y2}`;
+  }
+  return path;
+}
+
+let chartKey = "";
+
+function renderChart() {
+  const months = monthlyActivity(records);
+  const key = JSON.stringify(months);
+  if (key === chartKey) return;
+  chartKey = key;
+
+  const box = $("chart");
+  const width = Math.max(320, box.clientWidth || 600);
+  const height = 230;
+  const pad = { left: 34, right: 12, top: 14, bottom: 28 };
+  const peak = Math.max(4, ...months.map((m) => Math.max(m.added, m.given)));
+  const top = Math.ceil(peak / 4) * 4;
+  const x = (i) => pad.left + (i * (width - pad.left - pad.right)) / (months.length - 1);
+  const y = (v) => pad.top + (1 - v / top) * (height - pad.top - pad.bottom);
+  const added = months.map((m, i) => [x(i), y(m.added)]);
+  const given = months.map((m, i) => [x(i), y(m.given)]);
+  const addedPath = smoothPath(added);
+  const area = `${addedPath} L${x(months.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
+
+  const grid = [0, 1, 2, 3, 4].map((step) => {
+    const value = (top / 4) * step;
+    return `<line class="grid-line" x1="${pad.left}" x2="${width - pad.right}" y1="${y(value)}" y2="${y(value)}"/>
+      <text class="axis" x="${pad.left - 10}" y="${y(value) + 4}" text-anchor="end">${value}</text>`;
+  }).join("");
+  const labels = months.map((m, i) =>
+    `<text class="axis" x="${x(i)}" y="${height - 6}" text-anchor="middle">${m.label}</text>`).join("");
+
+  box.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img"
+         aria-label="Įkelta ir atiduota per paskutinius 6 mėnesius">
+      <defs>
+        <linearGradient id="area-fill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="#fafafa" stop-opacity=".16"/>
+          <stop offset="1" stop-color="#fafafa" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${grid}${labels}
+      <path class="area fade" d="${area}"/>
+      <path class="line given" d="${smoothPath(given)}"/>
+      <path class="line added draw" d="${addedPath}"/>
+      <line class="guide" y1="${pad.top}" y2="${y(0)}"/>
+      <circle class="dot d-added" r="4.5"/>
+      <circle class="dot d-given" r="4" style="stroke:#71717a"/>
+    </svg>
+    <div class="tip"></div>`;
+
+  const line = box.querySelector(".line.added");
+  const length = line.getTotalLength();
+  line.style.strokeDasharray = length;
+  line.style.strokeDashoffset = length;
+  const dashed = box.querySelector(".line.given");
+  if (!reduceMotion()) {
+    dashed.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 900, delay: 500, fill: "both" });
+  }
+
+  const svg = box.querySelector("svg");
+  const tip = box.querySelector(".tip");
+  svg.addEventListener("mousemove", (event) => {
+    const rect = svg.getBoundingClientRect();
+    const px = ((event.clientX - rect.left) / rect.width) * width;
+    let index = 0;
+    for (let i = 1; i < months.length; i += 1) if (Math.abs(x(i) - px) < Math.abs(x(index) - px)) index = i;
+    const m = months[index];
+    box.classList.add("hover");
+    box.querySelector(".guide").setAttribute("x1", x(index));
+    box.querySelector(".guide").setAttribute("x2", x(index));
+    const [ax, ay] = added[index];
+    const [gx, gy] = given[index];
+    box.querySelector(".d-added").setAttribute("cx", ax);
+    box.querySelector(".d-added").setAttribute("cy", ay);
+    box.querySelector(".d-given").setAttribute("cx", gx);
+    box.querySelector(".d-given").setAttribute("cy", gy);
+    tip.innerHTML = `<b>${m.label}</b><span>Įkelta: ${m.added}</span><span>Atiduota: ${m.given}</span>`;
+    tip.style.left = `${(ax / width) * rect.width}px`;
+    tip.style.top = `${(Math.min(ay, gy) / height) * rect.height}px`;
+  });
+  svg.addEventListener("mouseleave", () => box.classList.remove("hover"));
+}
+
+function renderRecent() {
+  const list = records.filter((record) => record.status === STATUS.OUT)
+    .sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)) || String(b.updated).localeCompare(String(a.updated)))
+    .slice(0, 5);
+  $("recent").innerHTML = list.length
+    ? list.map((record, i) => `
+      <li data-row="${record.id}" style="--i:${i}">
+        <span class="avatar" style="--h:${hue(record.given_to || "?")}">${esc(initials(record.given_to))}</span>
+        <div class="who"><b>${esc(record.given_to || "Gavėjas nenurodytas")}</b>
+          <span>…${esc((record.vin || "").slice(-6))} · ${esc(record.model || "")}</span></div>
+        <time>${esc(showDate(record.given_date))}</time>
+      </li>`).join("")
+    : `<li class="none">Dar nieko neatiduota.</li>`;
 }
 
 // ---------------------------------------------------------------------------
 // Sąrašas ir paieška
 // ---------------------------------------------------------------------------
-
-function renderCounts() {
-  const n = counts(records);
-  $("n-in").textContent = n[STATUS.IN];
-  $("n-out").textContent = n[STATUS.OUT];
-  $("n-review").textContent = n[STATUS.REVIEW];
-  $("t-in").textContent = n[STATUS.IN];
-  $("t-out").textContent = n[STATUS.OUT];
-  $("t-all").textContent = n.all - n[STATUS.REVIEW];
-}
 
 /** Aiškus atsakymas į klausimą „ar turime šitą CoC?“. */
 function renderAnswer(query) {
@@ -316,37 +615,43 @@ function renderAnswer(query) {
   const vin = cleanVin(query);
   if (/\s/.test(query.trim()) || vin.length < 5) { box.innerHTML = ""; return; }
   const hits = records.filter((record) => (record.vin || "").includes(vin));
-  if (!hits.length) {
-    // Gal tai ne VIN, o modelis ar žmogus – tada atsakymo nerodome, tik sąrašą.
-    if (/\d/.test(vin)) box.innerHTML = `<div class="banner err">✗ CoC su VIN, kuriame yra „${esc(vin)}“, <strong>neturime</strong>.</div>`;
-    else box.innerHTML = "";
-    return;
-  }
-  const have = hits.filter((record) => record.status === STATUS.IN);
-  const review = hits.filter((record) => record.status === STATUS.REVIEW);
-  const gone = hits.filter((record) => record.status === STATUS.OUT);
   const list = (items) => items.slice(0, 3).map((record) =>
-    `<strong>${esc(record.vin)}</strong> ${esc([record.make, record.model].filter(Boolean).join(" "))}`).join(", ");
-  if (have.length) {
-    box.innerHTML = `<div class="banner ok">✓ <strong>Turime</strong>: ${list(have)}${have.length > 3 ? ` ir dar ${have.length - 3}` : ""}.</div>`;
-  } else if (review.length) {
-    box.innerHTML = `<div class="banner warn">Yra, bet dar nepatikrintas: ${list(review)}.</div>`;
+    `<b>${esc(record.vin)}</b> ${esc([record.make, record.model].filter(Boolean).join(" "))}`).join(", ");
+  let html = "";
+  if (!hits.length) {
+    if (/\d/.test(vin)) {
+      html = `<div class="answer no"><span class="mark">${icon("x")}</span>
+        <div><b>Neturime.</b> <span>CoC su VIN, kuriame yra „${esc(vin)}“, sąraše nėra.</span></div></div>`;
+    }
   } else {
-    const last = gone.sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)))[0];
-    box.innerHTML = `<div class="banner warn">Buvo, bet <strong>atiduotas</strong> ${esc(showDate(last.given_date))}${last.given_to ? ` – ${esc(last.given_to)}` : ""}: ${list([last])}.</div>`;
+    const have = hits.filter((record) => record.status === STATUS.IN);
+    const review = hits.filter((record) => record.status === STATUS.REVIEW);
+    const gone = hits.filter((record) => record.status === STATUS.OUT);
+    if (have.length) {
+      html = `<div class="answer ok"><span class="mark">${icon("check")}</span>
+        <div><b>Turime.</b> <span>${list(have)}${have.length > 3 ? ` ir dar ${have.length - 3}` : ""}</span></div></div>`;
+    } else if (review.length) {
+      html = `<div class="answer warn"><span class="mark">${icon("scan")}</span>
+        <div><b>Yra, bet dar nepatikrintas.</b> <span>${list(review)}</span></div></div>`;
+    } else {
+      const last = gone.sort((a, b) => String(b.given_date).localeCompare(String(a.given_date)))[0];
+      html = `<div class="answer warn"><span class="mark">${icon("send")}</span>
+        <div><b>Atiduotas ${esc(showDate(last.given_date))}${last.given_to ? ` – ${esc(last.given_to)}` : ""}.</b>
+        <span>${list([last])}</span></div></div>`;
+    }
   }
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
 function vinCell(vin) {
-  if (!vin) return `<span class="sub">VIN nėra</span>`;
+  if (!vin) return `<span class="muted">VIN nėra</span>`;
   return `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>`;
 }
 
 function visibleRecords() {
   const query = $("q").value;
   if (query.trim()) {
-    return records.filter((record) => record.status !== STATUS.REVIEW && matches(record, query))
-      .sort(newestFirst);
+    return records.filter((record) => record.status !== STATUS.REVIEW && matches(record, query)).sort(newestFirst);
   }
   if (tab === "visi") return records.filter((record) => record.status !== STATUS.REVIEW).sort(newestFirst);
   const list = records.filter((record) => record.status === tab);
@@ -356,40 +661,50 @@ function visibleRecords() {
   return list.sort(newestFirst);
 }
 
-function renderTable() {
-  const query = $("q").value;
-  const list = visibleRecords();
-  document.querySelector(".tabs").classList.toggle("searching", Boolean(query.trim()));
-  document.querySelectorAll(".tabs button").forEach((button) =>
-    button.classList.toggle("on", button.dataset.tab === tab));
+function moveIndicator() {
+  const active = document.querySelector("#tabs button.on");
+  const indicator = $("seg-indicator");
+  if (!active) return;
+  indicator.style.width = `${active.offsetWidth}px`;
+  indicator.style.transform = `translateX(${active.offsetLeft}px)`;
+}
 
-  const rows = list.slice(0, shown).map((record) => {
+function renderTable() {
+  const query = $("q").value.trim();
+  const list = visibleRecords();
+  $("tabs").classList.toggle("searching", Boolean(query));
+  document.querySelectorAll("#tabs button").forEach((button) => button.classList.toggle("on", button.dataset.tab === tab));
+  moveIndicator();
+
+  const rows = list.slice(0, shown).map((record, index) => {
     const statusText = record.status === STATUS.OUT
-      ? `<span class="pill atiduotas">Atiduotas ${esc(showDate(record.given_date))}</span>
-         ${record.given_to ? `<span class="sub">${esc(record.given_to)}</span>` : ""}`
+      ? `<span class="pill out">Atiduotas ${esc(showDate(record.given_date))}</span>
+         ${record.given_to ? `<small>${esc(record.given_to)}</small>` : ""}`
       : `<span class="pill ${record.status}">${esc(statusName(record.status))}</span>`;
     const action = record.status === STATUS.OUT
-      ? `<button type="button" data-return="${record.id}">Grąžinti</button>`
-      : `<button type="button" data-give="${record.id}">Atiduoti</button>`;
-    return `<tr data-row="${record.id}" class="${selected.has(record.id) ? "selected" : ""}">
+      ? `<button type="button" class="btn sm" data-return="${record.id}">${icon("undo")}Grąžinti</button>`
+      : `<button type="button" class="btn sm" data-give="${record.id}">${icon("send")}Atiduoti</button>`;
+    const sub = [record.make, record.note].filter(Boolean).join(" · ");
+    return `<tr data-row="${record.id}" class="${selected.has(record.id) ? "selected" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
       <td class="check"><input type="checkbox" data-select="${record.id}" ${selected.has(record.id) ? "checked" : ""}
           aria-label="Pažymėti ${esc(record.vin)}"></td>
       <td class="vin">${vinCell(record.vin)}</td>
-      <td>${esc(record.make)}</td>
-      <td>${esc(record.model)}${record.note ? `<span class="sub">${esc(record.note)}</span>` : ""}</td>
-      <td>${esc(showDate(record.added))}</td>
-      <td>${statusText}</td>
+      <td><div class="model"><span class="model-icon">${icon("file")}</span>
+        <div><b>${esc(record.model || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div></div></td>
+      <td class="date hide-sm">${esc(showDate(record.added))}</td>
+      <td class="status-cell">${statusText}</td>
       <td class="actions">${action}</td>
     </tr>`;
   });
-  $("rows").innerHTML = rows.join("") || `<tr><td colspan="7" class="empty">${
-    query.trim() ? "Nieko nerasta." : records.length ? "Šiame sąraše tuščia." : "Dar nėra nė vieno liudijimo – įmeskite nuskenuotą PDF."
+  animateRows = false;
+  $("rows").innerHTML = rows.join("") || `<tr class="empty-row"><td colspan="6">${
+    query ? "Nieko nerasta." : records.length ? "Šiame sąraše tuščia." : "Dar nėra nė vieno liudijimo – įmeskite nuskenuotą PDF."
   }</td></tr>`;
 
   const more = list.length - shown;
   $("list-note").innerHTML = more > 0
-    ? `Rodoma ${shown} iš ${list.length}. <button type="button" data-action="more">Rodyti daugiau</button>`
-    : query.trim() ? `Rasta: ${list.length} (ieškoma visuose sąrašuose).` : "";
+    ? `Rodoma ${shown} iš ${list.length}. <button type="button" class="btn sm" data-action="more">Rodyti daugiau</button>`
+    : query ? `Rasta: ${list.length} · ieškoma visuose sąrašuose` : "";
 
   const visibleIds = list.slice(0, shown).map((record) => record.id);
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
@@ -398,8 +713,8 @@ function renderTable() {
 
 function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
-  $("bulk").classList.toggle("hidden", selected.size === 0);
-  $("bulk-count").textContent = `Pažymėta: ${selected.size}`;
+  $("bulk").classList.toggle("on", selected.size > 0);
+  if (selected.size) $("bulk-count").textContent = `Pažymėta: ${selected.size}`;
 }
 
 function renderRecipients() {
@@ -413,6 +728,8 @@ function render() {
   renderTable();
   renderAnswer($("q").value);
   renderRecipients();
+  renderRecent();
+  if (!$("overview").classList.contains("hidden")) renderChart();
 }
 
 // ---------------------------------------------------------------------------
@@ -424,8 +741,8 @@ function openGive(ids) {
   if (!giveIds.length) return;
   const first = byId(giveIds[0]);
   $("give-title").textContent = giveIds.length === 1
-    ? `Atiduoti ${first.vin || "liudijimą"}${first.model ? ` (${first.model})` : ""}`
-    : `Atiduoti ${giveIds.length} liudijimus`;
+    ? `${first.model || "Liudijimas"} · …${(first.vin || "").slice(-6)}`
+    : `${giveIds.length} liudijimai`;
   $("g-date").value = todayIso();
   $("g-to").value = "";
   $("g-note").value = "";
@@ -434,29 +751,31 @@ function openGive(ids) {
 }
 
 async function give() {
-  const changes = {
-    status: STATUS.OUT, given_date: $("g-date").value || todayIso(),
-    given_to: $("g-to").value.trim(),
-  };
+  const changes = { status: STATUS.OUT, given_date: $("g-date").value || todayIso(), given_to: $("g-to").value.trim() };
   const note = $("g-note").value.trim();
   for (const id of giveIds) {
     const record = byId(id);
     if (record) await update(record, note ? { ...changes, note } : changes);
   }
-  status(`Atiduota: ${giveIds.length}.`, true);
+  toast(giveIds.length === 1 ? `Atiduota: ${changes.given_to}.` : `Atiduota ${giveIds.length} CoC: ${changes.given_to}.`);
   giveIds.forEach((id) => selected.delete(id));
   giveIds = [];
+  animateRows = true;
   render();
 }
 
 async function returnRecords(ids) {
   const list = ids.map(byId).filter((record) => record && record.status === STATUS.OUT);
   if (!list.length) return;
-  if (!confirm(list.length === 1
-    ? `Grąžinti ${list[0].vin} į turimus? Atidavimo data ir gavėjas bus ištrinti.`
-    : `Grąžinti ${list.length} liudijimus į turimus?`)) return;
+  const ok = await ask(
+    list.length === 1 ? "Grąžinti į turimus?" : `Grąžinti ${list.length} CoC į turimus?`,
+    "Atidavimo data ir gavėjas bus ištrinti.", "Grąžinti",
+  );
+  if (!ok) return;
   for (const record of list) await update(record, { status: STATUS.IN, given_date: "", given_to: "" });
+  animateRows = true;
   render();
+  toast(`Grąžinta: ${list.length}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +795,7 @@ function detailVinHint() {
   const draft = { ...byId(detailId), vin: $("d-vin").value };
   const [kind, text] = vinHint(draft);
   $("d-vin-hint").className = `hint ${kind}`;
-  $("d-vin-hint").textContent = text;
+  $("d-vin-hint").innerHTML = hintHtml(kind, text);
 }
 
 async function openDetail(id) {
@@ -484,6 +803,9 @@ async function openDetail(id) {
   if (!record) return;
   detailId = id;
   $("detail-title").textContent = [record.make, record.model].filter(Boolean).join(" ") || "Liudijimas";
+  $("detail-pill").className = `pill ${record.status}`;
+  $("detail-pill").textContent = record.status === STATUS.OUT
+    ? `Atiduotas ${showDate(record.given_date)}` : statusName(record.status);
   for (const [input, key] of Object.entries(DETAIL_FIELDS)) $(input).value = record[key] || "";
   for (const [input, key] of Object.entries(COC_FIELDS)) $(input).value = (record.coc || {})[key] || "";
   $("detail-meta").textContent = [
@@ -513,14 +835,16 @@ async function saveDetail() {
   if (changes.status !== STATUS.REVIEW) Object.assign(changes, { thumb: "", snippets: {} });
   await update(record, changes);
   render();
+  toast("Išsaugota.");
 }
 
 // ---------------------------------------------------------------------------
-// PDF ir pažymos
+// PDF, pažymos, Excel
 // ---------------------------------------------------------------------------
 
 async function downloadPdfs(ids) {
   const list = ids.map(byId).filter(Boolean);
+  if (!list.length) return;
   if (list.length === 1) {
     download(await getPdf(list[0].id), pdfName(list[0]), "application/pdf");
     return;
@@ -532,6 +856,7 @@ async function downloadPdfs(ids) {
     files[name] = await getPdf(record.id);
   }
   download(zipSync(files, { level: 0 }), `coc_${todayIso()}.zip`, "application/zip");
+  toast(`Atsisiųsta PDF: ${list.length}.`);
 }
 
 async function templateBytes() {
@@ -554,9 +879,12 @@ async function makePazymos(ids) {
   const list = ids.map(byId).filter(Boolean);
   if (!list.length) return;
   const missing = list.filter((record) => !(record.coc || {}).colour || !(record.coc || {}).approval_number);
-  if (missing.length && !confirm(
-    `${missing.length === 1 ? "Šiame liudijime" : `${missing.length} liudijimuose`} trūksta spalvos arba tipo patvirtinimo Nr. `
-    + "(jie dažnai būna kitoje CoC pusėje). Pažymoje tie laukai liks tušti.\n\nVis tiek generuoti?")) return;
+  if (missing.length && !await ask(
+    "Trūksta pažymos duomenų",
+    `${missing.length === 1 ? "Šiame liudijime" : `${missing.length} liudijimuose`} nėra spalvos arba tipo patvirtinimo Nr. `
+      + "(jie dažnai būna kitoje CoC pusėje). Pažymoje tie laukai liks tušti.",
+    "Vis tiek generuoti",
+  )) return;
   const template = await templateBytes();
   const documents = list.map((record) => {
     const values = pazymaValues(record);
@@ -565,19 +893,24 @@ async function makePazymos(ids) {
   const type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   if (documents.length === 1) download(documents[0][1], documents[0][0], type);
   else download(zipDocuments(documents), "aiksteles.zip", "application/zip");
+  toast(documents.length === 1 ? "Pažyma sugeneruota." : `Sugeneruota pažymų: ${documents.length}.`);
+}
+
+function exportExcel(subset = null) {
+  const source = subset ? subset.map(byId).filter(Boolean) : records;
+  const sheets = excelSheets(source);
+  if (!sheets[2].rows.length) { toast("Nėra ką eksportuoti.", "warn"); return; }
+  download(buildXlsx(sheets, EXCEL_COLUMNS), `coc-sandelis_${todayIso()}.xlsx`,
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  toast(`Excel failas paruoštas (${sheets[2].rows.length} CoC).`);
 }
 
 // ---------------------------------------------------------------------------
 // Atsarginė kopija
 // ---------------------------------------------------------------------------
 
-function dataStatus(text) {
-  $("data-status").textContent = text;
-  delete $("data-status").dataset.auto;
-}
-
 async function backup() {
-  dataStatus("Ruošiama kopija…");
+  if (!records.length) { toast("Kol kas nėra ko kopijuoti.", "warn"); return; }
   const files = { "sandelis.json": strToU8(JSON.stringify({ version: 1, saved: now(), records }, null, 1)) };
   for (const record of records) {
     const bytes = await getPdf(record.id);
@@ -586,14 +919,13 @@ async function backup() {
   // PDF jau suspausti – spaudžiant dar kartą tik gaištamas laikas.
   download(zipSync(files, { level: 0 }), `coc-sandelis_${todayIso()}.zip`, "application/zip");
   await setMeta("lastBackup", now());
-  dataStatus(`Kopija atsisiųsta (${records.length} įraš.). Laikykite ją ne šiame kompiuteryje.`);
+  toast(`Kopija atsisiųsta (${records.length} įraš.). Laikykite ją ne šiame kompiuteryje.`);
   renderBackupState();
 }
 
 async function restore(file) {
   if (!file) return;
   try {
-    dataStatus("Skaitoma kopija…");
     const files = unzipSync(new Uint8Array(await file.arrayBuffer()));
     if (!files["sandelis.json"]) throw new Error("tai ne sandėlio kopija");
     const incoming = JSON.parse(strFromU8(files["sandelis.json"])).records || [];
@@ -601,62 +933,77 @@ async function restore(file) {
     for (const record of plan.add) await addRecord(record, files[`pdf/${record.id}.pdf`] || null);
     for (const record of plan.replace) await saveRecord(record);
     records = await allRecords();
+    animateRows = true;
+    chartKey = "";
     render();
-    dataStatus(`Kopija įkelta: pridėta ${plan.add.length}, atnaujinta ${plan.replace.length}, jau buvo ${plan.skip}.`);
+    toast(`Kopija įkelta: pridėta ${plan.add.length}, atnaujinta ${plan.replace.length}, jau buvo ${plan.skip}.`);
     runQueue();
   } catch (error) {
-    dataStatus(`Nepavyko įkelti kopijos: ${error.message || error}`);
+    toast(`Nepavyko įkelti kopijos: ${error.message || error}`, "err");
   }
 }
 
 async function renderBackupState() {
   const last = await getMeta("lastBackup").catch(() => null);
-  const due = backupDue(last, records.filter((record) => record.status !== STATUS.REVIEW).length);
-  $("backup-due").hidden = !due;
-  $("backup-due-text").textContent = last
-    ? `Paskutinė kopija – ${showDate(last)}. Visi duomenys yra tik šiame kompiuteryje.`
-    : "Kopija dar nedaryta. Visi duomenys yra tik šiame kompiuteryje.";
+  const ready = records.filter((record) => record.status !== STATUS.REVIEW).length;
+  const due = backupDue(last, ready);
+  const days = last ? Math.floor((Date.now() - new Date(last)) / 864e5) : null;
+  $("backup-card").classList.toggle("due", due);
+  $("backup-text").textContent = last
+    ? (days === 0 ? "Padaryta šiandien." : `Paskutinė prieš ${days} d.${due ? " Laikas naujai." : ""}`)
+    : ready ? "Dar nedaryta – duomenys tik šiame kompiuteryje." : "Bus galima, kai įkelsite CoC.";
+  $("backup-meter").style.width = last ? `${Math.max(6, 100 - (days / 7) * 100)}%` : "0%";
   const usage = await usageMb();
-  const parts = [
-    last ? `Paskutinė kopija: ${showDate(last)}.` : "Kopija dar nedaryta.",
-    usage !== null ? `Užimama vietos: ${usage.toFixed(0)} MB.` : "",
-  ];
-  if (!$("data-status").textContent || $("data-status").dataset.auto) {
-    $("data-status").textContent = parts.filter(Boolean).join(" ");
-    $("data-status").dataset.auto = "1";
-  }
+  $("usage").textContent = usage !== null ? `Užimama vietos: ${usage < 1 ? "<1" : usage.toFixed(0)} MB` : "";
 }
 
 // ---------------------------------------------------------------------------
 // Įvykiai
 // ---------------------------------------------------------------------------
 
-$("drop").addEventListener("click", () => $("files").click());
 $("files").addEventListener("change", (event) => { handleFiles(event.target.files); event.target.value = ""; });
-["dragenter", "dragover"].forEach((type) =>
-  $("drop").addEventListener(type, (event) => { event.preventDefault(); $("drop").classList.add("over"); }));
-["dragleave", "drop"].forEach((type) =>
-  $("drop").addEventListener(type, (event) => { event.preventDefault(); $("drop").classList.remove("over"); }));
-$("drop").addEventListener("drop", (event) => handleFiles(event.dataTransfer.files));
+
+// Failą galima nuvilkti bet kur į langą.
+let dragDepth = 0;
+const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes("Files");
+window.addEventListener("dragenter", (event) => {
+  if (!hasFiles(event)) return;
+  event.preventDefault();
+  dragDepth += 1;
+  $("drop-overlay").classList.add("on");
+});
+window.addEventListener("dragover", (event) => { if (hasFiles(event)) event.preventDefault(); });
+window.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (!dragDepth) $("drop-overlay").classList.remove("on");
+});
+window.addEventListener("drop", (event) => {
+  if (!hasFiles(event)) return;
+  event.preventDefault();
+  dragDepth = 0;
+  $("drop-overlay").classList.remove("on");
+  handleFiles(event.dataTransfer.files);
+});
 
 // Patikros kortelės
-let saveTimers = {};
+const saveTimers = {};
 $("review-list").addEventListener("input", (event) => {
   const input = event.target;
-  const card = input.closest(".card");
+  const card = input.closest(".rcard");
   if (!card || !input.dataset.field) return;
   const record = byId(card.dataset.id);
   if (!record) return;
   record[input.dataset.field] = input.value;
   record.touched = true;
+  input.classList.remove("loading");
   if (input.dataset.field === "vin") {
     const [kind, text] = vinHint(record);
     const hint = card.querySelector(".hint");
     hint.className = `hint ${kind}`;
-    hint.textContent = text;
+    hint.innerHTML = hintHtml(kind, text);
   }
   clearTimeout(saveTimers[record.id]);
-  saveTimers[record.id] = setTimeout(() => update(record, {}), 400);
+  saveTimers[record.id] = setTimeout(() => { update(record, {}); renderConfirmClean(); }, 400);
 });
 $("review-list").addEventListener("change", (event) => {
   // VIN pataisomas išėjus iš laukelio: mažosios raidės, tarpai, O → 0, I → 1.
@@ -670,7 +1017,7 @@ $("review-list").addEventListener("change", (event) => {
 $("review-list").addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || !event.target.dataset.field) return;
   event.preventDefault();
-  confirmRecord(event.target.closest(".card").dataset.id);
+  confirmRecord(event.target.closest(".rcard").dataset.id);
 });
 $("review-list").addEventListener("click", (event) => {
   const target = event.target.closest("button");
@@ -681,17 +1028,42 @@ $("review-list").addEventListener("click", (event) => {
 });
 
 // Paieška ir sąrašas
-$("q").addEventListener("input", () => { shown = PAGE; renderTable(); renderAnswer($("q").value); });
+let searchTimer = null;
+$("q").addEventListener("input", () => {
+  shown = PAGE;
+  renderAnswer($("q").value);
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { animateRows = true; renderTable(); }, 120);
+});
 $("q").addEventListener("keydown", (event) => {
   if (event.key === "Escape") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
+  if (event.key === "Enter") {
+    const first = visibleRecords()[0];
+    if (first && $("q").value.trim()) openDetail(first.id);
+  }
 });
-document.querySelectorAll(".tabs button").forEach((button) => button.addEventListener("click", () => {
-  tab = button.dataset.tab;
+document.addEventListener("keydown", (event) => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.querySelector("dialog[open]");
+  if (event.key === "/" && !typing) { event.preventDefault(); focusSearch(); }
+});
+
+function focusSearch() {
+  $("sidebar").classList.remove("open");
+  window.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" });
+  $("q").focus();
+  $("q").select();
+}
+
+function setTab(next) {
+  tab = next;
   shown = PAGE;
-  if ($("q").value) $("q").value = "";
+  if ($("q").value) { $("q").value = ""; renderAnswer(""); }
+  animateRows = true;
   renderTable();
-  renderAnswer("");
-}));
+}
+
+document.querySelectorAll("#tabs button").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
+
 $("rows").addEventListener("click", (event) => {
   const box = event.target.closest("[data-select]");
   if (box) {
@@ -706,20 +1078,49 @@ $("rows").addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-row]");
   if (row) openDetail(row.dataset.row);
 });
+$("recent").addEventListener("click", (event) => {
+  const row = event.target.closest("[data-row]");
+  if (row) openDetail(row.dataset.row);
+});
 $("check-all").addEventListener("change", (event) => {
   const ids = visibleRecords().slice(0, shown).map((record) => record.id);
   ids.forEach((id) => (event.target.checked ? selected.add(id) : selected.delete(id)));
   renderTable();
 });
 
+// Šoninis meniu
+document.querySelectorAll(".sidebar [data-nav]").forEach((link) => link.addEventListener("click", (event) => {
+  event.preventDefault();
+  $("sidebar").classList.remove("open");
+  if (link.dataset.tab) setTab(link.dataset.tab);
+  const target = link.dataset.nav === "top" ? null : $(link.dataset.nav);
+  if (target && target.classList.contains("hidden")) { toast("Patikrinti nėra ko – viskas patvirtinta."); return; }
+  if (target) target.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  else window.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" });
+}));
+
+/** Šoniniame meniu paryškinama ta vieta, kurią šiuo metu matote. */
+function highlightNav() {
+  const spots = ["review", "list"].map((id) => $(id)).filter((element) => !element.classList.contains("hidden"));
+  let current = "top";
+  for (const element of spots) if (element.getBoundingClientRect().top < window.innerHeight * 0.4) current = element.id;
+  document.querySelectorAll(".sidebar [data-nav]").forEach((link) => {
+    const on = link.dataset.nav === current && (current !== "list" || link.dataset.tab === tab);
+    link.classList.toggle("on", on);
+  });
+}
+window.addEventListener("scroll", () => requestAnimationFrame(highlightNav), { passive: true });
+
 // Mygtukai su data-action
 const ACTIONS = {
+  upload: () => $("files").click(),
   backup,
   restore: () => $("restore-file").click(),
-  csv: () => {
-    const list = records.filter((record) => record.status !== STATUS.REVIEW).sort(newestFirst);
-    download(strToU8(toCsv(list)), `coc-sandelis_${todayIso()}.csv`, "text/csv;charset=utf-8");
-  },
+  excel: () => exportExcel(),
+  "excel-selected": () => exportExcel([...selected]),
+  menu: () => $("sidebar").classList.toggle("open"),
+  "focus-search": focusSearch,
+  "confirm-clean": confirmClean,
   more: () => { shown += PAGE; renderTable(); },
   "give-selected": () => openGive([...selected]),
   "return-selected": () => returnRecords([...selected]),
@@ -741,6 +1142,12 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-action]");
   if (button && ACTIONS[button.dataset.action]) ACTIONS[button.dataset.action]();
 });
+document.addEventListener("click", (event) => {
+  // Paspaudus šalia atidaryto meniu (telefone), jis užsidaro.
+  if ($("sidebar").classList.contains("open") && !event.target.closest(".sidebar, .menu-btn")) {
+    $("sidebar").classList.remove("open");
+  }
+});
 $("restore-file").addEventListener("change", (event) => { restore(event.target.files[0]); event.target.value = ""; });
 
 $("give-form").addEventListener("submit", (event) => {
@@ -756,40 +1163,58 @@ $("d-status").addEventListener("change", () => {
 });
 $("detail-preview").addEventListener("click", () => openPdf(detailId));
 $("detail").addEventListener("close", () => { detailId = null; });
+// Paspaudus už lango ribų, langas užsidaro.
+document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener("click", (event) => {
+  if (event.target !== dialog) return;
+  const box = dialog.getBoundingClientRect();
+  const inside = event.clientX >= box.left && event.clientX <= box.right && event.clientY >= box.top && event.clientY <= box.bottom;
+  if (!inside) dialog.close();
+}));
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { chartKey = ""; renderChart(); moveIndicator(); }, 150);
+});
 
 // ---------------------------------------------------------------------------
 // Paleidimas
 // ---------------------------------------------------------------------------
 
+function renderToday() {
+  const text = new Intl.DateTimeFormat("lt-LT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+    .format(new Date());
+  $("today").textContent = text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 async function start() {
+  renderToday();
   try {
     records = await allRecords();
   } catch (error) {
-    status(`Nepavyko atidaryti duomenų: ${error.message || error}`);
+    toast(`Nepavyko atidaryti duomenų: ${error.message || error}`, "err");
     records = [];
   }
   // Puslapį uždarius vidury skaitymo, tas lapas skaitomas iš naujo.
   for (const record of records) if (record.ocr === "skaitoma") record.ocr = "laukia";
   render();
+  requestAnimationFrame(moveIndicator);
   renderBackupState();
-  if (records.some((record) => record.ocr === "laukia")) {
-    status("Tęsiamas neperskaitytų lapų atpažinimas…");
-    runQueue();
-  } else {
-    warmUp();
-  }
+  if (records.some((record) => record.ocr === "laukia")) runQueue();
+  else warmUp();
   if (records.length) askPersistence();
 }
 
 start();
+if (document.fonts) document.fonts.ready.then(moveIndicator);
 
 /** Ar serveryje yra naujesnė versija (kaip ir pažymų puslapyje). */
 async function checkVersion() {
-  $("version").textContent = `versija ${VERSION.replace("aikstele-", "")}`;
+  $("version").textContent = `· versija ${VERSION.replace("aikstele-", "")}`;
   try {
     const response = await fetch(new URL("../../version.js", import.meta.url), { cache: "no-store" });
     const latest = ((await response.text()).match(/VERSION = "([^"]+)"/) || [])[1];
-    if (latest && latest !== VERSION) $("update").hidden = false;
+    if (latest && latest !== VERSION) $("update").classList.remove("hidden");
   } catch {
     // neprisijungus nepatikrinsime
   }

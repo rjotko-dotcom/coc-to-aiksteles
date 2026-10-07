@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  STATUS, backupDue, cleanVin, counts, duplicatesOf, matches, mergePlan, pdfName, toCsv, vinProblems,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, initials, matches, mergePlan,
+  monthlyActivity, pdfName, vinProblems,
 } from "../js/sandelis/logic.js";
+import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
+import { strFromU8, unzipSync } from "../vendor/fflate/fflate.mjs";
 
 const record = (fields) => ({
   id: fields.vin || Math.random().toString(36), status: STATUS.IN, make: "", model: "", ...fields,
@@ -47,12 +50,41 @@ test("skaičiai pagal būseną", () => {
   assert.deepEqual(counts(list), { all: 3, turimas: 1, atiduotas: 1, tikrinti: 1 });
 });
 
-test("CSV Excel'iui: kabliataškiai, BOM, kabutės", () => {
-  const csv = toCsv([record({ vin: "SJNJ12TD3U2000001", model: 'QASHQAI "N-Connecta"', status: STATUS.OUT,
-    given_date: "2026-10-07", given_to: "UAB; Autos" })]);
-  assert.ok(csv.startsWith("﻿\"VIN\";"));
-  assert.ok(csv.includes('"QASHQAI ""N-Connecta"""'));
-  assert.ok(csv.includes('"2026.10.07";"UAB; Autos"'));
+test("Excel: trys lapai, datos kaip Excel datos, specialūs ženklai saugūs", () => {
+  const list = [
+    record({ id: "a", vin: "SJNJ12TD3U2000001", model: 'QASHQAI <"N-Connecta">', status: STATUS.OUT,
+      added: "2026-10-01T08:00:00Z", given_date: "2026-10-07", given_to: "UAB „Autos“ & Co" }),
+    record({ id: "b", vin: "KMHK381GFMU123456", model: "KONA", added: "2026-10-02T08:00:00Z" }),
+    record({ id: "c", vin: "X", status: STATUS.REVIEW }),
+  ];
+  const sheets = excelSheets(list);
+  assert.deepEqual(sheets.map((sheet) => [sheet.name, sheet.rows.length]), [["Turimi", 1], ["Atiduoti", 1], ["Visi", 2]]);
+  const files = unzipSync(buildXlsx(sheets, EXCEL_COLUMNS));
+  assert.ok(files["xl/workbook.xml"] && files["xl/styles.xml"] && files["xl/worksheets/sheet3.xml"]);
+  const given = strFromU8(files["xl/worksheets/sheet2.xml"]);
+  assert.ok(given.includes("QASHQAI &lt;&quot;N-Connecta&quot;&gt;"));
+  assert.ok(given.includes("UAB „Autos“ &amp; Co"));
+  assert.ok(given.includes(`<v>${excelDate("2026-10-07")}</v>`));
+  assert.equal(excelDate("2026-10-07"), 46302);
+});
+
+test("mėnesių aktyvumas grafikui", () => {
+  const now = new Date(2026, 9, 15);
+  const list = [
+    record({ id: 1, added: "2026-10-01T08:00:00Z" }),
+    record({ id: 2, added: "2026-09-03T08:00:00Z", status: STATUS.OUT, given_date: "2026-10-05" }),
+    record({ id: 3, added: "2025-01-03T08:00:00Z" }),
+  ];
+  const months = monthlyActivity(list, 6, now);
+  assert.deepEqual(months.map((m) => m.label), ["Geg", "Bir", "Lie", "Rgp", "Rgs", "Spa"]);
+  assert.deepEqual(months.at(-1), { key: "2026-10", label: "Spa", added: 1, given: 1 });
+  assert.equal(months.at(-2).added, 1);
+});
+
+test("inicialai", () => {
+  assert.equal(initials("Jonas Jonaitis"), "JJ");
+  assert.equal(initials("Ūla"), "ŪL");
+  assert.equal(initials(""), "?");
 });
 
 test("PDF pavadinimas iš VIN ir modelio", () => {
