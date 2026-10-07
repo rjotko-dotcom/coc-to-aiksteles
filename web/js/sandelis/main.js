@@ -1,7 +1,7 @@
 // Sandėlio sąsaja: skenų priėmimas, patikra, paieška, atidavimas, kopijos.
 
 import { readCertificate } from "../read.js";
-import { warmUp } from "../ocr.js";
+import { inBackground, parallelism as ocrParallelism, warmUp } from "../ocr.js";
 import { buildValues, fillTemplate, suggestedFilename, zipDocuments } from "../docx.js";
 import { getTemplate } from "../store.js";
 import { strFromU8, strToU8, unzipSync, zipSync } from "../../vendor/fflate/fflate.mjs";
@@ -250,72 +250,102 @@ async function handleFiles(fileList) {
   if (!candidates.length) { toast("Pasirinkite PDF failą.", "warn"); return; }
 
   // Tas pats PDF antrą kartą? Atpažįstama pagal turinį, ne pavadinimą.
-  const files = [];
+  // Jei anksčiau įkelta tik dalis lapų (pvz. uždarius langą), pridedami tik trūkstami.
+  const jobs = [];
   for (const file of candidates) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const hash = await fileHash(bytes);
-    const earlier = records.filter((record) => record.file_hash === hash);
-    if (earlier.length && !await ask(
-      "Šis PDF jau įkeltas",
-      `„${file.name}“ jau buvo įkeltas ${showDate(earlier[0].added)} (${earlier.length} lap.).\nĮkėlus dar kartą, atsiras dublikatai.`,
-      "Vis tiek įkelti",
-    )) continue;
-    files.push({ file, bytes, hash });
-  }
-  if (!files.length) return;
-
-  const folder = await chooseFolder(files.length);
-  if (folder === null) return;
-  askPersistence();
-
-  let added = 0;
-  for (const { file, bytes: fileBytes, hash } of files) {
     let pages;
     try {
-      pages = await splitPages(fileBytes);
+      pages = await splitPages(bytes);
     } catch (error) {
       toast(`Nepavyko atidaryti ${file.name}: ${error.message || error}`, "err");
       continue;
     }
-    const batch = now();
-    const batchId = crypto.randomUUID();
-    for (const [index, bytes] of pages.entries()) {
+    const earlier = records.filter((record) => record.file_hash === hash);
+    const have = new Set(earlier.map((record) => record.page));
+    const missing = pages.map((_, index) => index + 1).filter((number) => !have.has(number));
+    if (earlier.length && missing.length) {
+      jobs.push({ file, hash, pages, numbers: missing, resume: earlier[0] });
+      continue;
+    }
+    if (earlier.length && !await ask(
+      "Šis PDF jau įkeltas",
+      `„${file.name}“ jau buvo įkeltas ${showDate(earlier[0].added)} (visi ${pages.length} lap.).\nĮkėlus dar kartą, atsiras dublikatai.`,
+      "Vis tiek įkelti",
+    )) continue;
+    jobs.push({ file, hash, pages, numbers: pages.map((_, index) => index + 1), resume: null });
+  }
+  if (!jobs.length) return;
+
+  // Aplanko klausiama tik dėl naujų skenų – papildomi lapai eina ten, kur jų skenas.
+  let folder = "";
+  if (jobs.some((job) => !job.resume)) {
+    folder = await chooseFolder(jobs.filter((job) => !job.resume).length);
+    if (folder === null) return;
+  }
+  askPersistence();
+
+  // Pirma visi lapai įrašomi į įrenginį (greita), tik paskui peržiūros ir skaitymas.
+  // Taip net uždarius langą vidury darbo nė vienas lapas nedingsta.
+  const fresh = [];
+  for (const job of jobs) {
+    const batch = job.resume ? job.resume.added : now();
+    const batchId = job.resume ? (job.resume.batch || crypto.randomUUID()) : crypto.randomUUID();
+    for (const number of job.numbers) {
       const record = {
         id: crypto.randomUUID(),
         status: STATUS.REVIEW,
         ocr: "laukia",
         vin: "", make: "", model: "", tvv: "",
         coc: {},
-        folder,
+        folder: job.resume ? (job.resume.folder || "") : folder,
         batch: batchId,
-        file_hash: hash,
-        source_file: file.name,
-        page: index + 1,
-        pages: pages.length,
+        file_hash: job.hash,
+        source_file: job.file.name,
+        page: number,
+        pages: job.pages.length,
         added: batch,
-        updated: batch,
+        updated: now(),
         given_date: "", given_to: "", note: "",
+        thumb: "",
       };
-      try {
-        record.thumb = await thumbnail(bytes);
-      } catch {
-        record.thumb = "";
-      }
-      await addRecord(record, bytes);
+      await addRecord(record, job.pages[number - 1]);
       records.push(record);
-      scheduleSync();
-      added += 1;
-      // Skaityti pradedama iškart, kol kiti lapai dar karpomi.
-      renderReview();
-      renderCounts();
-      runQueue();
+      fresh.push([record, job.pages[number - 1]]);
+    }
+    if (job.resume) toast(`„${job.file.name}“: pridėti trūkstami ${job.numbers.length} lap. iš ${job.pages.length}.`);
+  }
+  scheduleSync();
+  render();
+  runQueue();
+  toast(`Įkelta lapų: ${fresh.length}. VIN ir modeliai skaitomi…`);
+  $("review").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+
+  // Peržiūros paveikslėliai – kai lapai jau saugūs.
+  for (const [record, bytes] of fresh) {
+    if (!byId(record.id) || record.status !== STATUS.REVIEW) continue;
+    try {
+      record.thumb = await thumbnail(bytes);
+      await saveRecord(record);
+      renderCard(record);
+    } catch {
+      // be peržiūros – PDF vis tiek galima atsidaryti
     }
   }
-  render();
-  if (added) {
-    toast(`Įkelta lapų: ${added}. VIN ir modeliai skaitomi…`);
-    $("review").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+}
+
+/** Skenai, iš kurių įkelta tik dalis lapų (pvz. langas uždarytas vidury įkėlimo). */
+function incompleteScans() {
+  const scans = new Map();
+  for (const record of records) {
+    if (!record.pages || record.pages < 2) continue;
+    const key = record.file_hash || batchOf(record);
+    const entry = scans.get(key) || { name: record.source_file, total: record.pages, pages: new Set() };
+    entry.pages.add(record.page);
+    scans.set(key, entry);
   }
+  return [...scans.values()].filter((scan) => scan.pages.size < scan.total);
 }
 
 /** PDF turinio atspaudas (SHA-256) – tam pačiam failui atpažinti. */
@@ -344,77 +374,108 @@ async function readPage(file, onStatus) {
 }
 
 /** Atpažįsta laukiančius lapus po vieną. Tęsiama ir po puslapio perkrovimo. */
+let activeLanes = 0;
+
+/**
+ * Paleidžia skaitymą. Galima kviesti bet kada – jei laukiančių lapų atsirado
+ * daugiau, prijungiama papildoma „juosta“ (iki tiek, kiek leidžia kompiuteris).
+ */
 async function runQueue() {
-  if (queueRunning) return;
-  queueRunning = true;
-  try {
-    for (;;) {
-      const waiting = records.filter((record) => record.ocr === "laukia")
-        .sort((a, b) => String(a.added).localeCompare(String(b.added)) || a.page - b.page);
-      if (!waiting.length) break;
-      const record = waiting[0];
-      const started = performance.now();
-      await update(record, { ocr: "skaitoma" });
-      renderCard(record);
-      renderProgress(waiting.length, record);
-      try {
-        const bytes = await getPdf(record.id);
-        const file = new File([bytes], `${record.source_file} (${record.page} lapas).pdf`, { type: "application/pdf" });
-        const data = await readPage(file, (message) => { $("progress-text").textContent = message; });
-        const changes = {
-          coc: {
-            approval_number: data.approval_number, approval_date: data.approval_date,
-            commercial_name: data.commercial_name, colour: data.colour, colour_raw: data.colour_raw, category: data.category,
-            manufacture_date: data.manufacture_date, manufacturer: data.manufacturer,
-          },
-          snippets: {
-            vin: (data.snippets || {}).vin || "",
-            model: (data.snippets || {}).commercial_name || "",
-          },
-          ocr: "baigta",
-          upside_down: Boolean(data.upside_down),
-        };
-        // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
-        if (!record.touched) {
-          Object.assign(changes, {
-            vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
-          });
-        }
-        await update(record, changes);
-      } catch (error) {
-        await update(record, { ocr: "klaida", ocr_error: error.message || String(error) });
-      }
-      session.done += 1;
-      session.times.push(performance.now() - started);
-      if (byId(record.id)) renderCard(record);
-      renderCounts();
-      renderConfirmClean();
-    }
-  } finally {
-    queueRunning = false;
-    renderProgress(0);
-    if (session.done) {
-      const review = records.filter((record) => record.status === STATUS.REVIEW).length;
-      if (review) toast(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`);
-      const flipped = records.filter((record) => record.status === STATUS.REVIEW && record.upside_down).length;
-      if (flipped) toast(`${flipped} lap. nuskenuoti aukštyn kojom – jie pažymėti patikroje.`, "warn");
-      session.done = 0;
-      session.times = [];
-    }
+  const lanes = await parallelism();
+  session.lanes = lanes;
+  while (activeLanes < lanes && records.some((record) => record.ocr === "laukia")) {
+    activeLanes += 1;
+    queueRunning = true;
+    readLane().finally(laneFinished);
   }
 }
 
-function renderProgress(left, record = null) {
+function laneFinished() {
+  activeLanes -= 1;
+  if (activeLanes > 0) return;
+  queueRunning = false;
+  renderProgress();
+  if (!session.done) return;
+  const review = records.filter((record) => record.status === STATUS.REVIEW).length;
+  if (review) toast(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`);
+  const flipped = records.filter((record) => record.status === STATUS.REVIEW && record.upside_down).length;
+  if (flipped) toast(`${flipped} lap. nuskenuoti aukštyn kojom – jie pažymėti patikroje.`, "warn");
+  session.done = 0;
+  session.times = [];
+}
+
+/** Kiek lapų skaityti vienu metu (jei foninis procesas neveikia – po vieną). */
+async function parallelism() {
+  return await inBackground() ? ocrParallelism() : 1;
+}
+
+/** Viena skaitymo „juosta“: ima kitą laukiantį lapą, kol jų nebelieka. */
+async function readLane() {
+  for (;;) {
+    const record = records.filter((item) => item.ocr === "laukia")
+      .sort((a, b) => String(a.added).localeCompare(String(b.added)) || a.page - b.page)[0];
+    if (!record) return;
+    // Pažymima iškart (dar prieš laukiant), kad kita juosta to paties lapo nepaimtų.
+    record.ocr = "skaitoma";
+    const started = performance.now();
+    await update(record, { ocr: "skaitoma" });
+    renderCard(record);
+    renderProgress(record);
+    try {
+      const bytes = await getPdf(record.id);
+      const file = new File([bytes], `${record.source_file} (${record.page} lapas).pdf`, { type: "application/pdf" });
+      const data = await readPage(file, () => {});
+      const changes = {
+        coc: {
+          approval_number: data.approval_number, approval_date: data.approval_date,
+          commercial_name: data.commercial_name, colour: data.colour, colour_raw: data.colour_raw, category: data.category,
+          manufacture_date: data.manufacture_date, manufacturer: data.manufacturer,
+        },
+        snippets: {
+          vin: (data.snippets || {}).vin || "",
+          model: (data.snippets || {}).commercial_name || "",
+        },
+        ocr: "baigta",
+        upside_down: Boolean(data.upside_down),
+      };
+      // Ką žmogus jau spėjo įrašyti pats, atpažinimas neperrašo.
+      if (!record.touched) {
+        Object.assign(changes, {
+          vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
+        });
+      }
+      await update(record, changes);
+    } catch (error) {
+      await update(record, { ocr: "klaida", ocr_error: error.message || String(error) });
+    }
+    session.done += 1;
+    session.times.push(performance.now() - started);
+    if (byId(record.id)) renderCard(record);
+    renderCounts();
+    renderConfirmClean();
+    renderProgress();
+  }
+}
+
+function renderProgress(record = null) {
   const box = $("progress");
+  const reading = records.filter((item) => item.ocr === "skaitoma").length;
+  const left = records.filter((item) => item.ocr === "laukia").length + reading;
   if (!left) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
   const total = session.done + left;
-  $("progress-title").textContent = `Skaitomas ${session.done + 1} lapas iš ${total}`;
-  $("progress-text").textContent = record ? `${record.source_file} · ${record.page} lapas` : "";
+  const lanes = session.lanes || 1;
+  $("progress-title").textContent = `Perskaityta ${session.done} iš ${total} lap.`;
+  if (record) {
+    $("progress-text").textContent = lanes > 1
+      ? `Skaitoma po ${lanes} lapus vienu metu · ${record.source_file}`
+      : `${record.source_file} · ${record.page} lapas`;
+  }
   $("progress-bar").style.width = `${Math.max(4, (session.done / total) * 100)}%`;
-  const recent = session.times.slice(-5);
+  const recent = session.times.slice(-6);
   if (recent.length) {
-    const seconds = Math.round((recent.reduce((a, b) => a + b, 0) / recent.length / 1000) * left);
+    const perPage = recent.reduce((a, b) => a + b, 0) / recent.length / 1000 / lanes;
+    const seconds = Math.round(perPage * left);
     $("progress-eta").textContent = seconds > 90 ? `liko ~${Math.round(seconds / 60)} min.` : `liko ~${seconds} s`;
   } else {
     $("progress-eta").textContent = "";
@@ -841,7 +902,17 @@ function render() {
   renderRecipients();
   renderFolders();
   renderBackupState();
+  renderIncomplete();
   highlightNav();
+}
+
+function renderIncomplete() {
+  $("incomplete").innerHTML = incompleteScans().map((scan) => `
+    <div class="answer warn"><span class="mark">${icon("file")}</span>
+      <div><b>„${esc(scan.name)}“: įkelta tik ${scan.pages.size} iš ${scan.total} lap.</b>
+        <span class="where">Įkelkite tą patį PDF dar kartą – bus pridėti tik trūkstami lapai, be dublikatų.</span></div>
+      <div class="actions"><button type="button" class="btn primary sm" data-action="upload">${icon("upload")}Įkelti dar kartą</button></div>
+    </div>`).join("");
 }
 
 // ---------------------------------------------------------------------------

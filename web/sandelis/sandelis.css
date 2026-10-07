@@ -203,6 +203,9 @@ h3 { margin: 22px 0 10px; font-size: 11.5px; letter-spacing: .08em; text-transfo
 .answer.warn { background: var(--amber-bg); border-color: rgba(251, 191, 36, .25); }
 .answer.warn .mark { background: rgba(251, 191, 36, .18); color: var(--amber); }
 
+#incomplete:not(:empty) { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+#incomplete .answer { animation: none; }
+
 /* ===== Kortelės ===== */
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px;
