@@ -70,10 +70,72 @@ function fromBox(entry) {
   };
 }
 
+// --- Foninis procesas -------------------------------------------------------
+//
+// Atpažinimas užima procesorių po kelias sekundes iš eilės. Pagrindiniame lange
+// tai „užšaldo“ puslapį, todėl pirmiausia bandoma foniniame procese
+// (`ocr-worker.js`). Jei jo paleisti nepavyksta, skaitoma kaip anksčiau – lange.
+
+let workerPromise = null;
+const pending = new Map();
+let sequence = 0;
+
+function call(worker, message, transfer = []) {
+  return new Promise((resolve, reject) => {
+    sequence += 1;
+    pending.set(sequence, { resolve, reject });
+    worker.postMessage({ ...message, id: sequence }, transfer);
+  });
+}
+
+function getWorker() {
+  if (!workerPromise) {
+    workerPromise = (async () => {
+      if (typeof Worker === "undefined" || typeof OffscreenCanvas === "undefined"
+          || typeof createImageBitmap === "undefined") return null;
+      const worker = new Worker(new URL("./ocr-worker.js", import.meta.url));
+      worker.onmessage = ({ data }) => {
+        const job = pending.get(data.id);
+        if (!job) return;
+        pending.delete(data.id);
+        if (data.error) job.reject(new Error(data.error)); else job.resolve(data.result);
+      };
+      worker.onerror = (event) => {
+        for (const job of pending.values()) job.reject(new Error(event.message || "Foninis procesas sustojo."));
+        pending.clear();
+      };
+      await call(worker, {
+        type: "start", bundle: BUNDLE, models: MODELS, wasmPaths: asset("ort/"), threads: threadCount(),
+      });
+      return worker;
+    })().catch(() => null);
+  }
+  return workerPromise;
+}
+
+/** Atpažįsta drobę: foniniame procese, o nepavykus – lange. */
+async function detect(canvas) {
+  const worker = await getWorker();
+  if (worker) {
+    try {
+      const bitmap = await createImageBitmap(canvas);
+      return await call(worker, { type: "detect", bitmap }, [bitmap]);
+    } catch {
+      // skaitysime lange
+    }
+  }
+  const engine = await getEngine();
+  return engine.detect(canvas.toDataURL("image/png"));
+}
+
+/** Ar atpažinimas vyksta foniniame procese (langas tada nestringa). */
+export async function inBackground() {
+  return Boolean(await getWorker());
+}
+
 /** Atpažįsta vieną puslapio vaizdą ir grąžina fragmentus su koordinatėmis. */
 export async function recognise(canvas) {
-  const engine = await getEngine();
-  const result = await engine.detect(canvas.toDataURL("image/png"));
+  const result = await detect(canvas);
   return (result || [])
     .filter((entry) => entry && entry.text && entry.text.trim() && entry.box)
     .map(fromBox);
@@ -81,14 +143,13 @@ export async function recognise(canvas) {
 
 /** Perskaito vieną iškarpą ir grąžina jos tekstą (naudojama tikslinant). */
 export async function recogniseLine(canvas) {
-  const engine = await getEngine();
-  const result = await engine.detect(canvas.toDataURL("image/png"));
+  const result = await detect(canvas);
   return (result || []).map((entry) => entry.text).join(" ").trim();
 }
 
 /** Iš anksto paruošia variklį (kad pirmas failas nelauktų). */
 export function warmUp() {
-  return getEngine().then(() => true).catch(() => false);
+  return getWorker().then((worker) => worker || getEngine()).then(() => true).catch(() => false);
 }
 
 /** Ar jau veikia keliomis gijomis (rodoma sąsajoje). */
