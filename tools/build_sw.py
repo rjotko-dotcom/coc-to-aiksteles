@@ -55,6 +55,15 @@ function isolate(response) {{
 
 self.addEventListener("fetch", (event) => {{
   if (event.request.method !== "GET") return;
+  // Naujos versijos patikrinimas (`version.js?patikra`) visada klausia
+  // svetainės: tik taip programa sužino, kad yra naujesnė versija, ir parodo
+  // „Atnaujinti“. Pats programos kodas (ir jo `version.js`) imamas iš įrašytos
+  // kopijos, kad sena programa nemanytų esanti nauja. Be interneto – kopija.
+  const url = new URL(event.request.url);
+  if (url.pathname.endsWith("/version.js") && url.searchParams.has("patikra")) {{
+    event.respondWith(fetch(event.request, {{ cache: "no-store" }}).catch(() => caches.match(event.request, {{ ignoreSearch: true }})));
+    return;
+  }}
   event.respondWith(
     caches.match(event.request, {{ ignoreSearch: true }}).then((cached) => {{
       if (cached) return isolate(cached);

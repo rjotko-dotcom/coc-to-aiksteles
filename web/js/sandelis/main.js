@@ -1377,7 +1377,7 @@ if (document.fonts) document.fonts.ready.then(moveIndicator);
 async function checkVersion() {
   $("version").textContent = `· versija ${VERSION.replace("aikstele-", "")}`;
   try {
-    const response = await fetch(new URL("../../version.js", import.meta.url), { cache: "no-store" });
+    const response = await fetch(new URL("../../version.js?patikra", import.meta.url), { cache: "no-store" });
     const latest = ((await response.text()).match(/VERSION = "([^"]+)"/) || [])[1];
     if (latest && latest !== VERSION) $("update").classList.remove("hidden");
   } catch {

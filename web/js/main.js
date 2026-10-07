@@ -309,7 +309,7 @@ warmUp();
 async function checkVersion() {
   $("version").textContent = `versija ${VERSION.replace("aikstele-", "")}`;
   try {
-    const response = await fetch("./version.js", { cache: "no-store" });
+    const response = await fetch("./version.js?patikra", { cache: "no-store" });
     const text = await response.text();
     const latest = (text.match(/VERSION = "([^"]+)"/) || [])[1];
     if (latest && latest !== VERSION) {
