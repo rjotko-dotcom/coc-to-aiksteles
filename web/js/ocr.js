@@ -7,11 +7,13 @@
 // Visi failai – variklis ir modeliai – guli šalia puslapio, todėl atpažinimas
 // veikia ir be interneto, o vaizdai niekur nesiunčiami.
 
-const BUNDLE = "./vendor/ppocr/ppocr.js";
+// Keliai – nuo šio failo, kad variklis veiktų ir iš sandėlio puslapio.
+const asset = (path) => new URL(`../vendor/ppocr/${path}`, import.meta.url).href;
+const BUNDLE = asset("ppocr.js");
 const MODELS = {
-  detectionPath: "./vendor/ppocr/models/det.onnx",
-  recognitionPath: "./vendor/ppocr/models/rec.onnx",
-  dictionaryPath: "./vendor/ppocr/models/keys.txt",
+  detectionPath: asset("models/det.onnx"),
+  recognitionPath: asset("models/rec.onnx"),
+  dictionaryPath: asset("models/keys.txt"),
 };
 
 let enginePromise = null;
@@ -35,7 +37,7 @@ function getEngine() {
       const ort = window.__ort;
       // Kelias nurodomas pilnas: kitaip vykdymo aplinka jį pridėtų prie savo
       // scenarijaus adreso ir gautųsi „vendor/ppocr/vendor/ppocr/…“.
-      ort.env.wasm.wasmPaths = new URL("./vendor/ppocr/ort/", document.baseURI).href;
+      ort.env.wasm.wasmPaths = asset("ort/");
       ort.env.wasm.numThreads = threadCount();
       ort.env.logLevel = "error";
       return window.GutenOcr.create({ models: MODELS });

@@ -1,0 +1,108 @@
+/* Sandėlio puslapis: tie patys pagrindai kaip `app.css`, plius sąrašas ir langai. */
+
+h2 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+h3 { margin: 22px 0 10px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.head .note { margin: 0; }
+.count { color: var(--muted); font-weight: 500; }
+kbd { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+.banner-panel { padding: 18px 28px; background: var(--warn-bg); }
+
+/* --- tikrinimo kortelės --- */
+.card {
+  display: grid; grid-template-columns: 170px 1fr; gap: 20px;
+  padding: 18px 0; border-top: 1px solid var(--line);
+}
+.card:first-child { border-top: none; padding-top: 0; }
+@media (max-width: 640px) { .card { grid-template-columns: 1fr; } }
+.thumb {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 0;
+  background: var(--field); cursor: zoom-in; overflow: hidden; min-height: 120px;
+}
+.thumb img { display: block; width: 100%; height: auto; }
+.thumb span { display: block; padding: 40px 8px; font-size: 12px; color: var(--muted); }
+.card .fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px 14px; align-content: start; }
+@media (max-width: 900px) { .card .fields { grid-template-columns: 1fr 1fr; } .card .fields .vin { grid-column: 1 / -1; } }
+.card .snippet-box { grid-column: 1 / -1; margin-top: 0; }
+.card .snippet { height: 40px; }
+.card .row { grid-column: 1 / -1; }
+.card .fileline { grid-column: 1 / -1; margin-bottom: 0; }
+.hint { font-size: 12.5px; margin-top: 5px; min-height: 0; }
+.hint.err { color: #a3231c; }
+.hint.warn { color: var(--warn-ink); }
+.hint.ok { color: var(--ok-ink); }
+.card .banner { grid-column: 1 / -1; margin: 0; }
+.working { color: var(--muted); font-size: 13px; }
+.working::before {
+  content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 7px;
+  border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%;
+  animation: spin .8s linear infinite; vertical-align: -1px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- paieška --- */
+.search input {
+  width: 100%; padding: 16px 20px; border-radius: 16px; border: 1px solid transparent;
+  background: var(--field); font: inherit; font-size: 18px; color: var(--ink);
+}
+.search input:focus { outline: none; border-color: var(--ink); background: #fff; }
+#answer:not(:empty) { margin-top: 12px; }
+#answer .banner { margin: 0; font-size: 15px; }
+
+.tabs { display: flex; gap: 6px; margin: 22px 0 14px; flex-wrap: wrap; }
+.tabs button { padding: 8px 16px; font-size: 14px; }
+.tabs button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.tabs button span { opacity: .6; margin-left: 4px; }
+.tabs.searching button { opacity: .45; }
+
+.bulk {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: var(--field); border-radius: 16px; padding: 10px 12px; margin-bottom: 12px;
+}
+.bulk strong { margin: 0 8px 0 6px; font-size: 14px; }
+.bulk button { padding: 8px 16px; font-size: 14px; }
+
+/* --- lentelė --- */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: #fafafb; }
+tbody tr.selected { background: #f1f1f4; }
+th.check, td.check { width: 34px; padding-right: 0; }
+td.vin { font-family: var(--mono); white-space: nowrap; letter-spacing: .02em; }
+td.vin b { font-weight: 700; }
+td.actions { text-align: right; white-space: nowrap; }
+td.actions button { padding: 6px 14px; font-size: 13px; }
+td .sub { display: block; font-size: 12px; color: var(--muted); }
+.pill { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.pill.turimas { background: var(--ok-bg); color: var(--ok-ink); }
+.pill.atiduotas { background: var(--field); color: var(--muted); }
+.pill.tikrinti { background: var(--warn-bg); color: var(--warn-ink); }
+.empty { text-align: center; color: var(--muted); padding: 34px 10px; cursor: default; }
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--ink); cursor: pointer; }
+
+/* --- langai --- */
+dialog {
+  border: none; border-radius: 26px; padding: 30px 34px; max-width: min(1000px, calc(100vw - 32px));
+  width: 100%; max-height: calc(100vh - 32px); color: var(--ink);
+}
+#give { max-width: 520px; }
+dialog::backdrop { background: rgba(12, 12, 14, .55); }
+.dialog-grid { display: grid; grid-template-columns: minmax(240px, 380px) 1fr; gap: 28px; }
+@media (max-width: 760px) { .dialog-grid { grid-template-columns: 1fr; } }
+.preview { display: flex; flex-direction: column; gap: 10px; }
+.preview img { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--field); min-height: 200px; cursor: zoom-in; }
+dialog .grid { grid-template-columns: 1fr 1fr; gap: 12px 14px; margin-top: 14px; }
+dialog .grid .wide { grid-column: 1 / -1; }
+dialog h2 { margin-bottom: 4px; }
+input[type=date], select {
+  width: 100%; padding: 10px 12px; border: 1px solid transparent; border-radius: 12px;
+  background: var(--field); font: inherit; color: var(--ink);
+}
+input[type=date]:focus, select:focus { outline: none; border-color: var(--ink); background: #fff; }
+.pazyma-fields { margin-top: 20px; }
+.dialog-actions { margin-top: 22px; }
+button.danger { color: #a3231c; }
+button.danger:hover { background: #fdecec; }

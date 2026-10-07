@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "CoC sandėlis",
+  "short_name": "CoC sandėlis",
+  "description": "Turimų atitikties liudijimų (CoC) sąrašas: nuskenuoti, surasti, atiduoti.",
+  "lang": "lt",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    { "src": "../icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

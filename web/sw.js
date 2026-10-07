@@ -3,10 +3,11 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-b29340014d55";
+const VERSION = "aikstele-437cfdc29e22";
 const ASSETS = [
   "./",
   "./version.js",
+  "./sandelis/",
   "./app.css",
   "./blank-template.docx",
   "./icons/icon-192.png",
@@ -20,9 +21,18 @@ const ASSETS = [
   "./js/ocr.js",
   "./js/read.js",
   "./js/refine.js",
+  "./js/sandelis/db.js",
+  "./js/sandelis/logic.js",
+  "./js/sandelis/main.js",
+  "./js/sandelis/split.js",
   "./js/store.js",
   "./manifest.webmanifest",
+  "./sandelis/index.html",
+  "./sandelis/manifest.webmanifest",
+  "./sandelis/sandelis.css",
   "./vendor/fflate/fflate.mjs",
+  "./vendor/pdf-lib/LICENSE.md",
+  "./vendor/pdf-lib/pdf-lib.esm.min.js",
   "./vendor/pdfjs/pdf.min.mjs",
   "./vendor/pdfjs/pdf.worker.min.mjs",
   "./vendor/ppocr/models/det.onnx",

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="lt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Turimų atitikties liudijimų (CoC) sąrašas: nuskenuoti, surasti, atiduoti.">
+<meta name="theme-color" content="#0c0c0e">
+<title>CoC sandėlis</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../app.css">
+<link rel="stylesheet" href="./sandelis.css">
+</head>
+<body>
+<div class="shell">
+
+  <section class="panel banner-panel" id="backup-due" hidden>
+    <div class="row">
+      <strong>Seniai darėte atsarginę kopiją.</strong>
+      <span class="note" id="backup-due-text">Visi duomenys yra tik šiame kompiuteryje.</span>
+      <button class="primary" data-action="backup">Atsisiųsti kopiją</button>
+    </div>
+  </section>
+
+  <main class="panel">
+    <span class="eyebrow"><i></i><b>Sandėlis</b> · <a href="../">pažymų generatorius</a></span>
+    <h1>CoC sandėlis</h1>
+    <p class="lede">
+      Įmeskite skenerio atsiųstą PDF – kiekvienas lapas taps atskiru liudijimu.
+      VIN ir modelis perskaitomi automatiškai, Jūs tik patikrinate. Viskas lieka
+      šiame kompiuteryje ir veikia be interneto.
+    </p>
+
+    <div class="intake">
+      <button id="drop" type="button">
+        <span class="sheet"></span>
+        <strong>Įmesti nuskenuotą PDF</strong>
+        <span>arba nuvilkite failą čia</span>
+      </button>
+      <input id="files" type="file" accept="application/pdf" multiple hidden>
+
+      <div class="intake-copy">
+        <p class="status" id="status">Vienas PDF gali turėti kiek nori lapų – po vieną CoC lape.</p>
+        <div class="stats">
+          <div class="stat"><b id="n-in">0</b><span>turimi</span></div>
+          <div class="stat"><b id="n-review">0</b><span>laukia patikros</span></div>
+          <div class="stat"><b id="n-out">0</b><span>atiduoti</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <section class="panel hidden" id="review">
+    <div class="head">
+      <h2>Patikrinkite nuskenuotus <span class="count" id="review-count"></span></h2>
+      <p class="note">Sulyginkite VIN ir modelį su lapu. <kbd>Enter</kbd> – patvirtinti ir pereiti prie kito.</p>
+    </div>
+    <div id="review-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="search">
+      <input type="search" id="q" placeholder="Ieškoti: VIN (pakanka paskutinių 6), modelis, kam atiduota…"
+             autocomplete="off" spellcheck="false" aria-label="Paieška">
+    </div>
+    <div id="answer"></div>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="turimas" class="on">Turimi <span id="t-in"></span></button>
+      <button role="tab" data-tab="atiduotas">Atiduoti <span id="t-out"></span></button>
+      <button role="tab" data-tab="visi">Visi <span id="t-all"></span></button>
+    </div>
+
+    <div class="bulk hidden" id="bulk">
+      <strong id="bulk-count"></strong>
+      <button class="primary" data-action="give-selected">Atiduoti</button>
+      <button data-action="return-selected">Grąžinti į turimus</button>
+      <button data-action="pdf-selected">Atsisiųsti PDF</button>
+      <button data-action="pazyma-selected">Pažymos (.docx)</button>
+      <button data-action="clear-selection">Atžymėti</button>
+    </div>
+
+    <div class="table-wrap">
+      <table id="table">
+        <thead>
+          <tr>
+            <th class="check"><input type="checkbox" id="check-all" aria-label="Pažymėti visus"></th>
+            <th>VIN</th>
+            <th>Markė</th>
+            <th>Modelis</th>
+            <th>Įkelta</th>
+            <th>Būsena</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="note" id="list-note"></p>
+  </section>
+
+  <section class="panel">
+    <details id="data-panel">
+      <summary>Atsarginė kopija ir eksportas</summary>
+      <p class="note" style="margin:0 0 16px; max-width:70ch">
+        Liudijimai ir sąrašas laikomi tik šiame kompiuteryje (Chrome duomenyse). Išvalius
+        naršyklės duomenis ar sugedus kompiuteriui jie dingtų – todėl kartą per savaitę
+        atsisiųskite kopiją ir laikykite ją kitur (USB, tinklo diske). Kopiją galima įkelti
+        ir į kitą kompiuterį: esami įrašai nedubliuojami.
+      </p>
+      <div class="row">
+        <button class="primary" data-action="backup">Atsisiųsti kopiją (.zip)</button>
+        <button data-action="restore">Įkelti kopiją</button>
+        <input id="restore-file" type="file" accept=".zip,application/zip" hidden>
+        <button data-action="csv">Sąrašas Excel'iui (.csv)</button>
+      </div>
+      <p class="note" id="data-status" style="margin:12px 0 0"></p>
+    </details>
+  </section>
+
+  <section class="panel" id="update" hidden>
+    <div class="row">
+      <strong>Yra naujesnė versija.</strong>
+      <button class="primary" id="update-now">Atnaujinti dabar</button>
+      <span class="note">Sąrašas ir liudijimai išliks.</span>
+    </div>
+  </section>
+
+  <footer>
+    Liudijimai niekur nesiunčiami – nei į internetą, nei į jokį AI. Atpažinimas vyksta šiame
+    kompiuteryje. Įdiegti kaip atskirą programą: Chrome adreso juostoje → „Įdiegti“.
+    <span id="version"></span>
+  </footer>
+</div>
+
+<dialog id="detail">
+  <form method="dialog" id="detail-form">
+    <div class="dialog-grid">
+      <div class="preview">
+        <img id="detail-preview" alt="Liudijimo lapas">
+        <button type="button" data-action="open-pdf">Atidaryti PDF</button>
+      </div>
+      <div>
+        <h2 id="detail-title">Liudijimas</h2>
+        <div class="grid">
+          <div class="wide"><label for="d-vin">VIN</label>
+            <input type="text" id="d-vin" class="code" autocomplete="off" spellcheck="false">
+            <div class="hint" id="d-vin-hint"></div></div>
+          <div><label for="d-make">Markė</label><input type="text" id="d-make" autocomplete="off"></div>
+          <div><label for="d-model">Modelis</label><input type="text" id="d-model" autocomplete="off"></div>
+          <div class="wide"><label for="d-tvv">Tipas / Variantas / Versija</label>
+            <input type="text" id="d-tvv" class="code" autocomplete="off" spellcheck="false"></div>
+        </div>
+
+        <h3>Atidavimas</h3>
+        <div class="grid">
+          <div><label for="d-status">Būsena</label>
+            <select id="d-status">
+              <option value="turimas">Turimas</option>
+              <option value="atiduotas">Atiduotas</option>
+              <option value="tikrinti">Netikrintas</option>
+            </select></div>
+          <div><label for="d-given-date">Atidavimo data</label><input type="date" id="d-given-date"></div>
+          <div class="wide"><label for="d-given-to">Kam atiduota</label>
+            <input type="text" id="d-given-to" list="recipients" autocomplete="off"></div>
+          <div class="wide"><label for="d-note">Pastaba</label><input type="text" id="d-note" autocomplete="off"></div>
+        </div>
+
+        <details class="pazyma-fields">
+          <summary>Pažymos laukai</summary>
+          <p class="note" style="margin:0 0 12px">Skenuojama tik pirma CoC pusė, todėl spalvos ar
+            patvirtinimo duomenų gali trūkti – įrašykite prieš generuodami pažymą.</p>
+          <div class="grid">
+            <div><label for="d-approval">Tipo patvirtinimo Nr.</label>
+              <input type="text" id="d-approval" class="code" autocomplete="off" spellcheck="false"></div>
+            <div><label for="d-approval-date">Patvirtinimo data</label>
+              <input type="text" id="d-approval-date" class="code" autocomplete="off" placeholder="DD.MM.MMMM"></div>
+            <div><label for="d-national">Nacionalinis patvirtinimo Nr.</label>
+              <input type="text" id="d-national" class="code" autocomplete="off"></div>
+            <div><label for="d-colour">Spalva</label><input type="text" id="d-colour" autocomplete="off"></div>
+          </div>
+        </details>
+
+        <p class="note" id="detail-meta"></p>
+        <div class="row dialog-actions">
+          <button type="submit" class="primary" value="save">Išsaugoti</button>
+          <button type="button" data-action="detail-pazyma">Generuoti pažymą</button>
+          <button type="button" data-action="detail-pdf">Atsisiųsti PDF</button>
+          <button type="button" class="danger" data-action="detail-delete">Ištrinti</button>
+          <button type="button" data-action="detail-close">Uždaryti</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="give">
+  <form method="dialog" id="give-form">
+    <h2 id="give-title">Atiduoti</h2>
+    <div class="grid">
+      <div><label for="g-date">Data</label><input type="date" id="g-date" required></div>
+      <div class="wide"><label for="g-to">Kam atiduota</label>
+        <input type="text" id="g-to" list="recipients" autocomplete="off" required></div>
+      <div class="wide"><label for="g-note">Pastaba</label><input type="text" id="g-note" autocomplete="off"></div>
+    </div>
+    <div class="row dialog-actions">
+      <button type="submit" class="primary" value="give">Atiduoti</button>
+      <button type="button" data-action="give-cancel">Atšaukti</button>
+    </div>
+  </form>
+</dialog>
+
+<datalist id="recipients"></datalist>
+
+<script type="module" src="../js/sandelis/main.js"></script>
+</body>
+</html>
