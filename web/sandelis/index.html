@@ -67,10 +67,10 @@
 
     <div class="backup-card" id="backup-card">
       <span class="backup-icon"><svg><use href="#i-shield"/></svg></span>
-      <b>Atsarginė kopija</b>
-      <p id="backup-text">Kopija dar nedaryta.</p>
-      <div class="meter"><i id="backup-meter"></i></div>
-      <button type="button" class="btn block" data-action="backup"><svg><use href="#i-download"/></svg>Atsisiųsti kopiją</button>
+      <b id="store-title">Duomenų aplankas</b>
+      <p id="backup-text">Duomenys kol kas tik naršyklėje.</p>
+      <button type="button" class="btn block" id="store-btn" data-action="folder-connect"><svg><use href="#i-folder"/></svg><span>Pasirinkti aplanką</span></button>
+      <button type="button" class="link-btn" data-action="backup">Atsisiųsti kopiją (.zip)</button>
       <small id="usage"></small>
     </div>
   </aside>
@@ -113,6 +113,9 @@
         <span>arba nuvilkite jį bet kur į šį langą</span>
       </button>
       <ol class="steps">
+        <li class="restore-step" id="restore-step"><i>↺</i><div><b>Jau naudojote programą?</b>
+          <span>Jei išvalėte Chrome duomenis, viską atkursite iš savo duomenų aplanko.</span>
+          <button type="button" class="btn sm" data-action="folder-restore"><svg><use href="#i-folder"/></svg>Atkurti iš aplanko</button></div></li>
         <li><i>1</i><div><b>Nuskenuokite</b><span>Visus CoC vienu kartu – po vieną lapą. Skeneris atsiųs vieną PDF.</span></div></li>
         <li><i>2</i><div><b>Patikrinkite</b><span>Kiekvienas lapas taps atskiru CoC. VIN ir modelis perskaitomi automatiškai.</span></div></li>
         <li><i>3</i><div><b>Raskite ir atiduokite</b><span>Paieška atsako „turime / neturime“, atidavimas įrašomas su data ir gavėju.</span></div></li>

@@ -163,7 +163,16 @@ pačios virsta 1 ir 0, o mažosios raidės ir tarpai sutvarkomi. Programa persp�
 jei VIN ne 17 ženklų, jei nesutampa kontrolinis skaitmuo ir jei toks VIN jau yra
 sąraše (pvz. tas pats lapas nuskenuotas dukart).
 
-**Duomenys laikomi tik šiame kompiuteryje** (Chrome IndexedDB), todėl
+**Duomenų aplankas (rekomenduojama).** Kairėje apačioje – **„Pasirinkti
+aplanką“** (pvz. `Dokumentai\CoC sandėlis`). Po kiekvieno pakeitimo programa
+pati įrašo į jį `sandelis.json` (visas sąrašas), `pdf\` (visi liudijimai) ir
+`coc-sandelis.xlsx` (sąrašas Excel'iui – atsidaro ir be programos). Išvalius
+Chrome duomenis aplanko failai lieka: tuščioje programoje spauskite **„Atkurti
+iš aplanko“** ir pasirinkite tą patį aplanką. Chrome kartais po perkrovimo
+paprašo vėl patvirtinti prieigą – kortelėje atsiranda mygtukas **„Leisti“**.
+Veikia Chrome ir Edge naršyklėse.
+
+**Duomenys laikomi šiame kompiuteryje** (Chrome IndexedDB ir, jei pasirinktas, duomenų aplanke), todėl
 skiltyje „Atsarginė kopija“ kartą per savaitę atsisiųskite kopiją (`.zip` su
 sąrašu ir visais PDF) ir laikykite ją kitur. Programa pati primena, jei kopija
 senesnė nei 7 dienos. Kopiją galima įkelti ir į kitą kompiuterį – esami įrašai
