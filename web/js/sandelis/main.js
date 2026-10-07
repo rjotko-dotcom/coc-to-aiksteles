@@ -571,7 +571,10 @@ async function makePazymos(ids) {
 // Atsarginė kopija
 // ---------------------------------------------------------------------------
 
-function dataStatus(text) { $("data-status").textContent = text; }
+function dataStatus(text) {
+  $("data-status").textContent = text;
+  delete $("data-status").dataset.auto;
+}
 
 async function backup() {
   dataStatus("Ruošiama kopija…");
