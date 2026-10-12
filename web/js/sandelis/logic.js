@@ -137,6 +137,26 @@ export function vinHits(records, query) {
   return atEnd.length ? atEnd : withVin.filter((record) => record.vin.includes(part));
 }
 
+/**
+ * Turimi CoC, sugrupuoti pagal fizinį aplanką – aplanko lapui spausdinti.
+ * Aplankai abėcėlės tvarka, juose – pagal modelį ir VIN.
+ */
+export function folderGroups(records) {
+  const groups = new Map();
+  for (const record of records) {
+    if (record.status !== STATUS.IN) continue;
+    const name = folderOf(record);
+    if (!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(record);
+  }
+  return [...groups].map(([name, items]) => ({
+    name,
+    special: items.some(inSpecialFolder),
+    records: items.sort((a, b) => String(a.model || "").localeCompare(String(b.model || ""), "lt")
+      || String(a.vin || "").localeCompare(String(b.vin || ""))),
+  })).sort((a, b) => a.name.localeCompare(b.name, "lt"));
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 

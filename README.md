@@ -202,6 +202,11 @@ nedubliuojami.
 datos įrašomos kaip Excel datos, antraštė užšaldyta, stulpeliuose filtrai.
 Galima eksportuoti viską arba tik pažymėtas eilutes.
 
+**Aplanko lapas.** Sąrašo viršuje – **„Spausdinti sąrašą“**: pasirinkto aplanko
+turimų CoC sąrašas (aplanko pavadinimas, data, kiekis, VIN su paryškintais 6
+paskutiniais ženklais, markė, modelis ir langelis varnelei), kurį galima įdėti
+į patį aplanką. Pasirinkus „Visi aplankai“ – kiekvienas aplankas atskirame lape.
+
 Spartieji klavišai: `/` – paieška, `Enter` paieškoje – atidaryti pirmą
 rastą, `Esc` – išvalyti.
 

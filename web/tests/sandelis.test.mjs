@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits, folderGroups,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -137,4 +137,20 @@ test("paieška pagal 4 paskutinius VIN ženklus", () => {
   assert.deepEqual(vinHits(list, "420"), [], "per trumpa");
   assert.deepEqual(vinHits(list, "QASHQAI"), [], "ne VIN");
   assert.deepEqual(vinHits(list, "9999"), []);
+});
+
+test("aplankų lapai: tik turimi, sugrupuoti ir surūšiuoti", () => {
+  const list = [
+    record({ id: 1, vin: "B2", model: "QASHQAI" }),
+    record({ id: 2, vin: "A1", model: "QASHQAI" }),
+    record({ id: 3, vin: "C3", model: "JUKE", folder: "Nėra moderoje" }),
+    record({ id: 4, vin: "D4", model: "LEAF", folder: "Nėra moderoje" }),
+    record({ id: 5, vin: "E5", model: "QASHQAI", status: STATUS.OUT }),
+    record({ id: 6, vin: "F6", model: "MICRA", status: STATUS.REVIEW }),
+  ];
+  const groups = folderGroups(list);
+  assert.deepEqual(groups.map((g) => [g.name, g.special, g.records.map((r) => r.vin)]), [
+    ["Nėra moderoje", true, ["C3", "D4"]],
+    ["QASHQAI", false, ["A1", "B2"]],
+  ]);
 });
