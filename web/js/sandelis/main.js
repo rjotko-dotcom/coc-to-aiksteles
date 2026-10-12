@@ -266,7 +266,8 @@ async function handleFiles(fileList) {
     const earlier = records.filter((record) => record.file_hash === hash);
     const have = new Set(earlier.map((record) => record.page));
     const missing = pages.map((_, index) => index + 1).filter((number) => !have.has(number));
-    if (earlier.length && missing.length) {
+    // „Nerodyti“ paspaustas ar lapas ištrintas sąmoningai – trūkstamų lapų nebepridedame.
+    if (earlier.length && missing.length && !ignoredScans.includes(hash)) {
       jobs.push({ file, hash, pages, numbers: missing, resume: earlier[0] });
       continue;
     }
@@ -337,12 +338,24 @@ async function handleFiles(fileList) {
 }
 
 /** Skenai, iš kurių įkelta tik dalis lapų (pvz. langas uždarytas vidury įkėlimo). */
+const scanKey = (record) => record.file_hash || batchOf(record);
+
+/** Skenai, apie kuriuos „nepilnai įkelta“ nebeprimenama (paspausta „Nerodyti“ arba lapas ištrintas sąmoningai). */
+let ignoredScans = [];
+
+async function ignoreScan(key) {
+  if (!key || ignoredScans.includes(key)) return;
+  ignoredScans = [...ignoredScans, key];
+  await setMeta("ignoredScans", ignoredScans);
+}
+
 function incompleteScans() {
   const scans = new Map();
   for (const record of records) {
     if (!record.pages || record.pages < 2) continue;
-    const key = record.file_hash || batchOf(record);
-    const entry = scans.get(key) || { name: record.source_file, total: record.pages, pages: new Set() };
+    const key = scanKey(record);
+    if (ignoredScans.includes(key)) continue;
+    const entry = scans.get(key) || { key, name: record.source_file, total: record.pages, pages: new Set() };
     entry.pages.add(record.page);
     scans.set(key, entry);
   }
@@ -761,6 +774,8 @@ async function removeRecord(id) {
   if (!record) return;
   const label = record.vin || `${record.source_file}, ${record.page} lapas`;
   if (!await ask("Ištrinti liudijimą?", `${label}\nBus ištrintas ir jo PDF.`, "Ištrinti", true)) return;
+  // Lapas ištrintas sąmoningai – skenas dėl to nebelaikomas „nepilnai įkeltu“.
+  if (record.pages > 1) await ignoreScan(scanKey(record));
   await deleteRecord(id);
   if (store.state === "ok") disk.removePdf(store.handle, id);
   scheduleSync();
@@ -1014,7 +1029,10 @@ function renderIncomplete() {
     <div class="answer warn"><span class="mark">${icon("file")}</span>
       <div><b>„${esc(scan.name)}“: įkelta tik ${scan.pages.size} iš ${scan.total} lap.</b>
         <span class="where">Įkelkite tą patį PDF dar kartą – bus pridėti tik trūkstami lapai, be dublikatų.</span></div>
-      <div class="actions"><button type="button" class="btn primary sm" data-action="upload">${icon("upload")}Įkelti dar kartą</button></div>
+      <div class="actions">
+        <button type="button" class="btn primary sm" data-action="upload">${icon("upload")}Įkelti dar kartą</button>
+        <button type="button" class="btn sm" data-ignore-scan="${esc(scan.key)}" title="Nebeprimint apie šį skeną">${icon("x")}Nerodyti</button>
+      </div>
     </div>`).join("");
 }
 
@@ -1404,6 +1422,13 @@ $("rows").addEventListener("click", (event) => {
   const row = event.target.closest("tr[data-row]");
   if (row) openDetail(row.dataset.row);
 });
+$("incomplete").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-ignore-scan]");
+  if (!button) return;
+  await ignoreScan(button.dataset.ignoreScan);
+  renderIncomplete();
+  toast("Daugiau neprimins.");
+});
 $("folder-filter").addEventListener("change", (event) => setFolderFilter(event.target.value));
 $("folder-nav").addEventListener("click", (event) => {
   const button = event.target.closest("[data-folder]");
@@ -1528,6 +1553,7 @@ window.addEventListener("resize", () => {
 
 async function start() {
   savedFolders = (await getMeta("folders").catch(() => null)) || [];
+  ignoredScans = (await getMeta("ignoredScans").catch(() => null)) || [];
   await loadFolderState();
   try {
     records = await allRecords();
