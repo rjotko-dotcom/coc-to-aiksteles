@@ -11,7 +11,7 @@ import {
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
-import { printFolderSheets } from "./print.js";
+import { PER_PAGE, printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
@@ -970,10 +970,11 @@ async function printFolders() {
   if (!groups.length) { toast("Šiame aplanke turimų CoC nėra.", "warn"); return; }
   if (groups.length > 1 && !await ask(
     "Spausdinti aplankų sąrašus?",
-    `Bus išspausdinti ${groups.length} aplankų sąrašai – kiekvienas atskirame lape.`,
+    `Bus išspausdinti ${groups.length} aplankų sąrašai – iš viso ${groups.reduce((sum, group) => sum + Math.max(1, Math.ceil(group.records.length / PER_PAGE)), 0)} lap. (iki ${PER_PAGE} CoC lape).`,
     "Spausdinti",
   )) return;
-  printFolderSheets(groups, showDate(todayIso()));
+  const time = new Date().toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" });
+  printFolderSheets(groups, `${showDate(todayIso())} ${time}`);
 }
 
 function renderPrintButton() {

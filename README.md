@@ -205,7 +205,10 @@ Galima eksportuoti viską arba tik pažymėtas eilutes.
 **Aplanko lapas.** Sąrašo viršuje – **„Spausdinti sąrašą“**: pasirinkto aplanko
 turimų CoC sąrašas (aplanko pavadinimas, data, kiekis, VIN su paryškintais 6
 paskutiniais ženklais, markė, modelis ir langelis varnelei), kurį galima įdėti
-į patį aplanką. Pasirinkus „Visi aplankai“ – kiekvienas aplankas atskirame lape.
+į patį aplanką. Viename lape – iki 30 CoC; didesnis aplankas tęsiamas kitame
+lape („lapas 1 iš 2“) su ištisine numeracija. Pasirinkus „Visi aplankai“ –
+kiekvienas aplankas nuo naujo lapo. Naršyklės antraštės (data, adresas) į lapą
+nepatenka.
 
 Spartieji klavišai: `/` – paieška, `Enter` paieškoje – atidaryti pirmą
 rastą, `Esc` – išvalyti.
