@@ -357,6 +357,14 @@ async function fileHash(bytes) {
 /** Ar laukelį žmogus jau įrašė pats (seniems įrašams – `touched` reiškė visus). */
 const typedByHand = (record, key) => Boolean(record.touched || (record.typed || {})[key]);
 
+/**
+ * Lapo juostos (dalimis nuo aukščio), kuriose Nissan CoC pirmoje pusėje yra
+ * 0.1 markė, 0.2 tipas ir 0.2.1 modelis (~0,07–0,10) bei 0.10 VIN (~0,345).
+ * Išmatuota su tikrais X-Trail, Leaf ir Micra lapais; paraštė palieka vietos
+ * šiek tiek paslinktam skenui. Neradus VIN, skaitoma didesnė lapo dalis.
+ */
+const VIN_BANDS = [[0.035, 0.135], [0.315, 0.385]];
+
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
 const PAGE_TIMEOUT = 20 * 60_000;
 const PAGE_TIMEOUT_TEXT = "lapas skaitomas per ilgai";
@@ -370,6 +378,11 @@ const found = (data) => NEEDED.filter((key) => data[key]).length;
  */
 async function readPage(file, onStatus, job = {}) {
   const stop = () => { if (job.cancelled) throw new Error("atšaukta"); };
+  // Pirmiausia – tik dvi siauros juostos, kuriose Nissan CoC visada yra markė,
+  // modelis ir VIN. Tai ~4 kartus greičiau nei skaityti didelę lapo dalį.
+  const banded = await readCertificate(file, onStatus, { required: NEEDED, bands: VIN_BANDS, retry: false });
+  if (banded.vin || !banded.ocr_used) return banded;
+  stop();
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
   // VIN – svarbiausia. Jį radus lapas laikomas perskaitytu: modelis, jei jo nėra,
   // įrašomas ranka (iš failo pavadinimo neimamas – partijoje gali būti įvairių). Visas lapas (ir didesne
