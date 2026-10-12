@@ -345,6 +345,12 @@ input[type=checkbox]:checked::after {
 }
 .segmented.searching { opacity: .5; }
 
+/* Išskleidžiami sąrašai: Windows rodo jų pasirinkimus atskirame lange, kuris
+   pats tamsios temos nepaima – be šito tekstas būna baltas ant balto. */
+select { color-scheme: dark; }
+select option, select optgroup { background-color: #19191c; color: #f4f4f5; }
+select option:checked { background-color: #2e2e33; color: #fff; }
+
 /* Aplankai */
 .filter-row { display: flex; gap: 10px; margin: -4px 0 12px; flex-wrap: wrap; }
 .folder-filter {
