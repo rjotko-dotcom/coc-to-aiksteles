@@ -11,9 +11,10 @@ import {
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
+import { printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  EXCEL_COLUMNS, STATUS, backupDue, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
@@ -954,12 +955,32 @@ function renderFolders() {
     ...folders.map((folder) => `<option value="${esc(folder.name)}">${esc(folder.name)} (${folder.count})</option>`),
   ].join("");
   $("folder-filter").value = folderFilter;
+  renderPrintButton();
   $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
   $("folder-nav").innerHTML = folders.length
     ? folders.map((folder) => `<button type="button" class="nav ${folderFilter === folder.name ? "on-folder" : ""}"
         data-folder="${esc(folder.name)}">${icon("folder")}${esc(folder.name)}<span class="badge">${folder.count || ""}</span></button>`).join("")
     : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
   $("folders").innerHTML = folders.map((folder) => `<option value="${esc(folder.name)}">`).join("");
+}
+
+/** Spausdina pasirinkto aplanko (arba visų aplankų) turimų CoC sąrašą. */
+async function printFolders() {
+  const groups = folderGroups(records.filter(inFolderFilter));
+  if (!groups.length) { toast("Šiame aplanke turimų CoC nėra.", "warn"); return; }
+  if (groups.length > 1 && !await ask(
+    "Spausdinti aplankų sąrašus?",
+    `Bus išspausdinti ${groups.length} aplankų sąrašai – kiekvienas atskirame lape.`,
+    "Spausdinti",
+  )) return;
+  printFolderSheets(groups, showDate(todayIso()));
+}
+
+function renderPrintButton() {
+  const label = !folderFilter ? "Spausdinti aplankų sąrašus"
+    : folderFilter === MODEL_FOLDERS ? "Spausdinti modelių aplankus"
+      : `Spausdinti „${folderFilter}“ sąrašą`;
+  $("print-folders").querySelector("span").textContent = label;
 }
 
 function setFolderFilter(value) {
@@ -1448,6 +1469,7 @@ const ACTIONS = {
   "folder-connect": () => connectFolder(),
   "folder-restore": () => connectFolder(true),
   "folder-allow": allowFolder,
+  "print-folders": printFolders,
   "open-pdf": () => openPdf(detailId),
   "detail-close": () => $("detail").close(),
   "detail-pdf": () => downloadPdfs([detailId]),
