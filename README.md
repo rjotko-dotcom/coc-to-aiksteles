@@ -162,7 +162,11 @@ visus paruoštus“ nepatvirtina – peržiūrite patys). Tas pats PDF antrą ka
 atpažįstamas pagal turinį (ne pavadinimą) ir prieš įkeliant perspėjama.
 Mygtukas **„Ištrinti visą skeną“** išmeta visus to PDF lapus iš karto.
 
-**Greitis.** Keli lapai skaitomi vienu metu (2–3, pagal kompiuterio branduolių
+**Greitis.** Pirmiausia skaitomos tik dvi siauros lapo juostos, kuriose Nissan
+CoC yra markė, modelis (~10 % lapo aukščio) ir VIN (~34 %) – išmatuota su
+tikrais X-Trail, Leaf ir Micra lapais; tai ~4 kartus greičiau. Jei VIN ten
+nerastas (kitokia forma, paslinktas ar apverstas lapas), skaitoma didesnė
+lapo dalis, kaip anksčiau. Keli lapai skaitomi vienu metu (2–3, pagal kompiuterio branduolių
 skaičių). Įkeliant visi PDF lapai pirmiausia išsaugomi įrenginyje ir tik tada
 skaitomi – net uždarius langą vidury darbo nė vienas lapas nedingsta. Jei
 skenas vis dėlto įkeltas nepilnai, programa tai parodo („įkelta 11 iš 33

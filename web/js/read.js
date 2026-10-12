@@ -161,17 +161,46 @@ function addSnippets(data, lines, canvases) {
   return data;
 }
 
-/** `top` – kokią puslapio dalį nuo viršaus skaityti (1 – visą); `rotation` – papildomas pasukimas laipsniais. */
-async function ocrPage(page, dpi = OCR_DPI, top = 1, rotation = 0) {
+/**
+ * Atpažįsta puslapį arba jo dalį.
+ *
+ * `area` – skaičius (kokią dalį nuo viršaus skaityti, 1 – visą) arba juostų
+ * sąrašas `[[nuo, iki], …]` (dalimis nuo puslapio aukščio): tada skaitomos tik
+ * tos juostos, o rastų fragmentų koordinatės lieka viso puslapio – iškarpos
+ * ir eilučių atkūrimas veikia kaip įprastai. `rotation` – papildomas pasukimas.
+ */
+async function ocrPage(page, dpi = OCR_DPI, area = 1, rotation = 0) {
   const viewport = page.getViewport({ scale: dpi / 72, rotation: (page.rotate + rotation) % 360 });
+  const bands = Array.isArray(area) ? area : null;
+  const top = bands ? Math.min(1, Math.max(...bands.map(([, end]) => end))) : area;
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
   // Kas netelpa į drobę, tiesiog nepiešiama – atpažinimas trunka trumpiau.
   canvas.height = Math.round(viewport.height * top);
   const context = canvas.getContext("2d", { alpha: false });
   await page.render({ canvasContext: context, viewport }).promise;
-  const lines = linesFromBoxes(await recognise(canvas));
-  return { lines, canvas };
+  if (!bands) return { lines: linesFromBoxes(await recognise(canvas)), canvas };
+
+  const boxes = [];
+  for (const [start, end] of bands) {
+    const y0 = Math.max(0, Math.round(viewport.height * start));
+    const y1 = Math.min(canvas.height, Math.round(viewport.height * end));
+    if (y1 - y0 < 8) continue;
+    // Variklis vaizdą perskaičiuoja į 32 taškų kartotinius; siauros juostos
+    // aukštis tada iškreipiamas ir koordinatės pasislenka. Todėl juosta
+    // papildoma baltu fonu iki tikslaus kartotinio – mastelis lieka 1:1.
+    const piece = document.createElement("canvas");
+    piece.width = Math.ceil(canvas.width / 32) * 32;
+    piece.height = Math.ceil((y1 - y0) / 32) * 32;
+    const pieceContext = piece.getContext("2d", { alpha: false });
+    pieceContext.fillStyle = "#fff";
+    pieceContext.fillRect(0, 0, piece.width, piece.height);
+    pieceContext.drawImage(canvas, 0, y0, canvas.width, y1 - y0, 0, 0, canvas.width, y1 - y0);
+    for (const box of await recognise(piece)) boxes.push({ ...box, y: box.y + y0 });
+    piece.width = 0;
+    piece.height = 0;
+  }
+  return { lines: linesFromBoxes(boxes), canvas };
 }
 
 /** Kiek privalomų laukų rasta (pagal tai renkamės geresnį bandymą). */
@@ -211,21 +240,23 @@ async function readWithOcr(pdf, file, dpi, onStatus, label, top = 1, rotation = 
  * pirmiausia ieško VIN ir modelio, o viso lapo imasi tik jei jų ten nėra.
  * `retry: false` – neskaityti antrą kartą didesne raiška (tam greitam bandymui).
  * `rotation: 180` – skaityti apvertus (lapui, nuskenuotam aukštyn kojom).
+ * `dpi` – kokia raiška piešti lapą pirmam skaitymui (numatyta 200).
+ * `bands: [[nuo, iki], …]` – skaityti tik šias lapo juostas (dalimis nuo aukščio).
  */
 export async function readCertificate(file, onStatus = () => {}, {
-  required = REQUIRED, top = 1, retry = true, rotation = 0,
+  required = REQUIRED, top = 1, retry = true, rotation = 0, dpi = OCR_DPI, bands = null,
 } = {}) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdf = await openPdf(bytes);
   // PDF uždaromas visada – ir kai skaitymas nepavyksta ar nutraukiamas.
   try {
-    return await readOpened(pdf, file, onStatus, { required, top, retry, rotation });
+    return await readOpened(pdf, file, onStatus, { required, top: bands || top, retry, rotation, dpi });
   } finally {
     await pdf.destroy().catch(() => {});
   }
 }
 
-async function readOpened(pdf, file, onStatus, { required, top, retry, rotation }) {
+async function readOpened(pdf, file, onStatus, { required, top, retry, rotation, dpi }) {
   const pages = [];
   for (let number = 1; number <= pdf.numPages; number += 1) {
     const page = await pdf.getPage(number);
@@ -236,7 +267,7 @@ async function readOpened(pdf, file, onStatus, { required, top, retry, rotation 
   let ocrUsed = text.replace(/\s/g, "").length < TEXT_THRESHOLD;
 
   if (ocrUsed) {
-    let best = await readWithOcr(pdf, file, OCR_DPI, onStatus, "Atpažįstamas ", top, rotation);
+    let best = await readWithOcr(pdf, file, dpi, onStatus, "Atpažįstamas ", top, rotation);
 
     // Jei kažko trūksta, tas pats liudijimas perskaitomas didesne raiška.
     if (retry && score(best.data, required) < required.length) {
