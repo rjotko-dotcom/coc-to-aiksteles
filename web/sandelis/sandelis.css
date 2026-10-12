@@ -36,7 +36,9 @@
   --amber: #fbbf24; --amber-bg: rgba(251, 191, 36, .1);
   --red: #f87171; --red-bg: rgba(248, 113, 113, .1);
   --blue: #60a5fa; --blue-bg: rgba(96, 165, 250, .1);
-  --violet: #a78bfa; --violet-bg: rgba(167, 139, 250, .1);
+  /* Nissan: juoda, balta, pilka ir raudona akcentams. Specialūs aplankai – balti. */
+  --accent: #c3002f; --accent-hi: #e2143f; --accent-bg: rgba(195, 0, 47, .14);
+  --violet: #f4f4f5; --violet-bg: rgba(255, 255, 255, .07);
   --sans: "Inter", -apple-system, "Segoe UI", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", Consolas, monospace;
   --r: 16px;
@@ -59,9 +61,14 @@ kbd {
 .hidden, [hidden] { display: none !important; }
 .muted { color: var(--muted); margin: 4px 0 0; }
 .small { font-size: 12.5px; }
-::selection { background: rgba(255, 255, 255, .18); }
+::selection { background: rgba(195, 0, 47, .45); color: #fff; }
 
 /* ===== Išdėstymas ===== */
+/* Plona Nissan raudona linija viršuje. */
+body::before {
+  content: ""; position: fixed; z-index: 100; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-hi) 60%, var(--accent));
+}
 .app { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; }
 .sidebar {
   position: sticky; top: 0; height: 100vh; overflow: hidden;
@@ -71,15 +78,16 @@ kbd {
 .main { padding: 0 32px 40px; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
 
 /* ===== Šoninis meniu ===== */
-.brand { display: flex; align-items: center; gap: 11px; padding: 6px 8px 4px; }
-.brand b { display: block; font-size: 15px; letter-spacing: -.01em; }
-.brand small { display: block; color: var(--dim); font-size: 11.5px; }
-.logo {
-  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
-  background: linear-gradient(145deg, #fafafa, #a1a1aa); color: #0a0a0b;
-  box-shadow: 0 6px 20px -8px rgba(255, 255, 255, .45);
+/* Prekės ženklas: Nissan emblema + FAKTO auto. */
+.brand {
+  display: flex; align-items: center; gap: 12px; padding: 8px 8px 14px; margin: 0 -14px; padding-inline: 22px;
+  border-bottom: 1px solid var(--line);
 }
-.logo svg { width: 20px; height: 20px; stroke-width: 2; }
+.logo { display: grid; place-items: center; width: 46px; height: 46px; color: #fff; flex: none; }
+.logo svg { width: 46px; height: 46px; stroke-width: 0; }
+.brand-text { display: flex; align-items: baseline; gap: 6px; line-height: 1; }
+.brand-text b { font-size: 21px; font-weight: 800; letter-spacing: .06em; }
+.brand-text em { font-style: normal; font-size: 19px; font-weight: 300; letter-spacing: .02em; color: var(--soft); }
 /* Meniu slenka atskirai – kortelė „Duomenų aplankas“ apačioje lieka visada matoma,
    kad ir kiek būtų specialių aplankų. */
 nav {
@@ -89,7 +97,7 @@ nav {
 nav::-webkit-scrollbar { width: 6px; }
 nav::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; }
 nav .nav { flex: none; }
-.nav-title { margin: 14px 10px 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.nav-title { margin: 16px 10px 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
 .nav {
   display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 10px;
   color: var(--muted); text-decoration: none; font: 500 14px var(--sans); background: none; border: 0;
@@ -98,8 +106,8 @@ nav .nav { flex: none; }
 .nav:hover { background: var(--card); color: var(--text); }
 .nav.on { background: var(--card-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
 .nav.on::before {
-  content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0;
-  background: var(--text);
+  content: ""; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0;
+  background: var(--accent);
 }
 .nav-empty { margin: 0 10px 4px; color: var(--dim); font-size: 12.5px; }
 .nav.on-folder { background: var(--violet-bg); color: var(--violet); }
@@ -161,8 +169,8 @@ nav .nav { flex: none; }
 .btn:hover { background: var(--card-3); border-color: #3a3a40; }
 .btn:active { transform: scale(.97); }
 .btn svg { width: 16px; height: 16px; }
-.btn.primary { background: var(--text); color: #0a0a0b; border-color: var(--text); font-weight: 600; }
-.btn.primary:hover { background: #fff; box-shadow: 0 8px 24px -10px rgba(255, 255, 255, .55); }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; letter-spacing: .01em; }
+.btn.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); box-shadow: 0 10px 26px -12px rgba(226, 20, 63, .8); }
 .btn.ghost { background: transparent; }
 .btn.danger { color: var(--red); background: transparent; border-color: rgba(248, 113, 113, .25); }
 .btn.danger:hover { background: var(--red-bg); }
@@ -179,16 +187,23 @@ nav .nav { flex: none; }
 
 /* ===== Pagrindinė antraštė ir paieška ===== */
 .hero { padding-top: 14px; }
-h1 { margin: 10px 0 4px; font-size: clamp(26px, 3.2vw, 34px); font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
+/* Antraštės – kaip Nissan: didžiosios raidės, griežtos, su plonu raudonu brūkšniu. */
+h1 {
+  margin: 10px 0 6px; font-size: clamp(26px, 3.2vw, 36px); font-weight: 800; letter-spacing: .01em; line-height: 1.1;
+  text-transform: uppercase;
+}
+h1::after { content: ""; display: block; width: 44px; height: 3px; background: var(--accent); margin-top: 12px; }
 h1 + .summary { margin: 0 0 18px; color: var(--muted); font-size: 15px; min-height: 22px; }
 h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.card-head h2 { font-size: 13px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.crumb span { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 h3 { margin: 22px 0 10px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 .search-box {
   position: relative; display: flex; align-items: center; gap: 12px;
   background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 0 16px;
   transition: border-color .25s, box-shadow .25s;
 }
-.search-box:focus-within { border-color: #4a4a52; box-shadow: 0 0 0 4px rgba(255, 255, 255, .05), 0 20px 50px -30px rgba(255, 255, 255, .25); }
+.search-box:focus-within { border-color: rgba(226, 20, 63, .6); box-shadow: 0 0 0 4px var(--accent-bg), 0 20px 50px -30px rgba(226, 20, 63, .35); }
 .search-box svg { color: var(--dim); width: 20px; height: 20px; }
 .search-box input {
   flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text);
@@ -254,11 +269,11 @@ h3 { margin: 22px 0 10px; font-size: 11.5px; letter-spacing: .08em; text-transfo
 .bar { height: 6px; border-radius: 6px; background: var(--card-3); overflow: hidden; }
 .bar i {
   display: block; height: 100%; width: 0; border-radius: 6px; transition: width .6s var(--ease);
-  background: linear-gradient(90deg, #a1a1aa, #fafafa, #a1a1aa); background-size: 200% 100%;
+  background: linear-gradient(90deg, #8e0022, var(--accent-hi), #8e0022); background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
 }
 .spinner {
-  width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--text);
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent-hi);
   animation: spin .8s linear infinite; flex: none;
 }
 
@@ -319,9 +334,9 @@ input[type=checkbox] {
   appearance: none; width: 17px; height: 17px; border-radius: 5px; border: 1.5px solid #4a4a52; background: transparent;
   display: grid; place-items: center; cursor: pointer; margin: 0; transition: background .15s, border-color .15s;
 }
-input[type=checkbox]:checked { background: var(--text); border-color: var(--text); }
+input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
 input[type=checkbox]:checked::after {
-  content: ""; width: 9px; height: 5px; border: 2px solid #0a0a0b; border-top: 0; border-right: 0;
+  content: ""; width: 9px; height: 5px; border: 2px solid #fff; border-top: 0; border-right: 0;
   transform: rotate(-45deg) translate(1px, -1px);
 }
 .hint { font-size: 12.5px; margin-top: 6px; min-height: 18px; display: flex; align-items: center; gap: 6px; }
@@ -359,13 +374,13 @@ select option:checked { background-color: #2e2e33; color: #fff; }
 }
 .folder-filter select { border: 0; background: transparent; padding: 8px 6px; width: auto; min-width: 180px; }
 .folder-filter select:focus { box-shadow: none; }
-.folder-filter.on { border-color: rgba(167, 139, 250, .45); color: var(--violet); }
+.folder-filter.on { border-color: rgba(255, 255, 255, .35); color: var(--violet); }
 .folder {
   display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap;
 }
 .folder svg { width: 15px; height: 15px; }
 .folder.special {
-  color: var(--violet); background: var(--violet-bg); border: 1px solid rgba(167, 139, 250, .25);
+  color: var(--violet); background: var(--violet-bg); border: 1px solid rgba(255, 255, 255, .2);
   padding: 2px 9px; border-radius: 8px;
 }
 .rhead select { width: auto; padding: 5px 9px; font-size: 13px; border-radius: 8px; }

@@ -170,7 +170,9 @@ lapo dalis, kaip anksčiau. Keli lapai skaitomi vienu metu (2–3, pagal kompiut
 skaičių). Įkeliant visi PDF lapai pirmiausia išsaugomi įrenginyje ir tik tada
 skaitomi – net uždarius langą vidury darbo nė vienas lapas nedingsta. Jei
 skenas vis dėlto įkeltas nepilnai, programa tai parodo („įkelta 11 iš 33
-lap.“), o įkėlus tą patį PDF dar kartą pridedami tik trūkstami lapai.
+lap.“), o įkėlus tą patį PDF dar kartą pridedami tik trūkstami lapai. Jei lapas
+ištrintas sąmoningai, apie tą skeną nebeprimenama; pranešimą galima uždaryti ir
+mygtuku **„Nerodyti“**.
 
 **Aplankai.** Specialaus aplanko CoC lieka tame aplanke, net jei modelis
 skiriasi – su modelių aplankais nesimaišo. Šoniniame meniu matyti visi

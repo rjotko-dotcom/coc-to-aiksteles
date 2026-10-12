@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" stroke="currentColor" color="#ffffff">
+  <!-- Nissan ženklas (2020 m. forma): plonas apskritimas, kurį kerta užrašas.
+       Piešta pagal formą; turint oficialų failą, galima tiesiog pakeisti šį. -->
+  <path d="M10.8 42 A40 40 0 0 1 89.2 42 M10.8 58 A40 40 0 0 0 89.2 58" stroke-width="3.2" stroke-linecap="butt"/>
+  <path d="M3.5 42 H10.8 M89.2 42 H96.5 M3.5 58 H10.8 M89.2 58 H96.5" stroke-width="3.2"/>
+  <text x="50" y="54.6" fill="currentColor" stroke="none" text-anchor="middle" textLength="80" lengthAdjust="spacingAndGlyphs"
+        font-family="Inter, 'Segoe UI', Arial, sans-serif" font-weight="700" font-size="13.5" letter-spacing="2">NISSAN</text>
+</svg>

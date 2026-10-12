@@ -6,16 +6,23 @@
 <meta name="description" content="Turimų atitikties liudijimų (CoC) sąrašas: nuskenuoti, surasti, atiduoti.">
 <meta name="theme-color" content="#0a0a0b">
 <meta name="color-scheme" content="dark">
-<title>CoC sandėlis</title>
+<title>FAKTO auto · CoC sandėlis</title>
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="icon" href="../icons/icon-192.png">
-<link rel="apple-touch-icon" href="../icons/icon-192.png">
+<link rel="icon" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="stylesheet" href="./sandelis.css">
 </head>
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
+    <!-- Nissan ženklas (tas pats kaip brand/nissan.svg) -->
+    <symbol id="nissan" viewBox="0 0 100 100">
+      <path d="M10.8 42 A40 40 0 0 1 89.2 42 M10.8 58 A40 40 0 0 0 89.2 58" fill="none" stroke="currentColor" stroke-width="3.2"/>
+      <path d="M3.5 42 H10.8 M89.2 42 H96.5 M3.5 58 H10.8 M89.2 58 H96.5" fill="none" stroke="currentColor" stroke-width="3.2"/>
+      <text x="50" y="54.6" fill="currentColor" stroke="none" text-anchor="middle" textLength="80" lengthAdjust="spacingAndGlyphs"
+            font-family="Inter, 'Segoe UI', Arial, sans-serif" font-weight="700" font-size="13.5" letter-spacing="2">NISSAN</text>
+    </symbol>
     <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
     <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10"/></symbol>
@@ -47,8 +54,8 @@
 <div class="app">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <span class="logo"><svg><use href="#i-box"/></svg></span>
-      <span><b>CoC sandėlis</b><small>Veikia be interneto</small></span>
+      <span class="logo" aria-label="Nissan"><svg viewBox="0 0 100 100"><use href="#nissan"/></svg></span>
+      <span class="brand-text"><b>FAKTO</b><em>auto</em></span>
     </div>
 
     <nav>
@@ -79,7 +86,7 @@
   <main class="main" id="top">
     <header class="topbar">
       <button class="icon-btn menu-btn" type="button" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
-      <div class="crumb"><svg><use href="#i-box"/></svg><span>CoC sandėlis</span></div>
+      <div class="crumb"><span>CoC sandėlis</span></div>
       <div class="top-actions">
         <button class="btn ghost" type="button" data-action="excel"><svg><use href="#i-sheet"/></svg><span>Excel</span></button>
         <button class="btn primary" type="button" data-action="upload"><svg><use href="#i-upload"/></svg><span>Įkelti skeną</span></button>
