@@ -468,7 +468,15 @@ async function readLane() {
       }
       await update(record, changes);
     } catch (error) {
-      await update(record, { ocr: "klaida", ocr_error: error.message || String(error) });
+      const message = error.message || String(error);
+      // Atsitiktinė klaida (pvz. nepavyko atidaryti PDF) – lapas grąžinamas į
+      // eilės galą vieną kartą; tik antrą kartą nepavykus prašoma įrašyti ranka.
+      const attempts = (record.ocr_attempts || 0) + 1;
+      if (attempts < 2 && message !== PAGE_TIMEOUT_TEXT) {
+        await update(record, { ocr: "laukia", ocr_attempts: attempts });
+      } else {
+        await update(record, { ocr: "klaida", ocr_error: message, ocr_attempts: attempts });
+      }
     }
     session.done += 1;
     session.times.push(performance.now() - started);
@@ -644,7 +652,7 @@ async function retryReading(ids) {
   for (const id of ids) {
     const record = byId(id);
     if (!record || record.status !== STATUS.REVIEW) continue;
-    await update(record, { ocr: "laukia", ocr_error: "" });
+    await update(record, { ocr: "laukia", ocr_error: "", ocr_attempts: 0 });
     renderCard(record);
   }
   renderConfirmClean();

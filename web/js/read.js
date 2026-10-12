@@ -1,14 +1,10 @@
 // CoC PDF skaitymas naršyklėje: teksto sluoksnis arba atpažinimas (OCR).
 
-import * as pdfjs from "../vendor/pdfjs/pdf.min.mjs";
+import { openPdf } from "./pdf.js";
 import { linesFromBoxes } from "./layout.js";
 import { recognise } from "./ocr.js";
 import { parseCocText } from "./coc.js";
 import { refineValues } from "./refine.js";
-
-// Keliai skaičiuojami nuo šio failo, o ne nuo puslapio – tą patį skaitytuvą
-// naudoja ir sandėlio puslapis kitame kataloge.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL("../vendor/pdfjs/pdf.worker.min.mjs", import.meta.url).href;
 
 /** Kokia raiška piešiami puslapiai atpažinimui (PDF taškas = 1/72 colio).
  *  PP-OCR smulkų CoC šriftą patikimai perskaito ir iš 200 dpi. */
@@ -220,8 +216,16 @@ export async function readCertificate(file, onStatus = () => {}, {
   required = REQUIRED, top = 1, retry = true, rotation = 0,
 } = {}) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+  const pdf = await openPdf(bytes);
+  // PDF uždaromas visada – ir kai skaitymas nepavyksta ar nutraukiamas.
+  try {
+    return await readOpened(pdf, file, onStatus, { required, top, retry, rotation });
+  } finally {
+    await pdf.destroy().catch(() => {});
+  }
+}
 
+async function readOpened(pdf, file, onStatus, { required, top, retry, rotation }) {
   const pages = [];
   for (let number = 1; number <= pdf.numPages; number += 1) {
     const page = await pdf.getPage(number);
@@ -246,10 +250,8 @@ export async function readCertificate(file, onStatus = () => {}, {
     }
 
     best.canvases.forEach((canvas) => { canvas.width = 0; canvas.height = 0; });
-    await pdf.destroy();
     return best.data;
   }
 
-  await pdf.destroy();
   return parseCocText(text, { sourceFile: file.name, ocrUsed });
 }
