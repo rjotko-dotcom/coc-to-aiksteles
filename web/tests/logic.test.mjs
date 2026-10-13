@@ -242,3 +242,13 @@ test("nežinomas pavadinimas neliečiamas", () => {
     { ocrUsed: true });
   assert.equal(data.commercial_name, "NISSAN TEKNA SPORT");
 });
+
+test("tipo patvirtinimas randamas ir suliejus žodžius (tikras X-Trail OCR)", () => {
+  const data = parseCocText([
+    "0.10. Vehicle identification number ：JN1T33TB7U0062538",
+    "Conforms in allrespects to thetype describedin approvale13*2018/858*00293*07grantedon",
+    "26/05/2025 and can be permanently registered in Member States having right hand traffic and",
+  ].join("\n"));
+  assert.equal(data.approval_number, "e13*2018/858*00293*07");
+  assert.equal(data.approval_date, "26.05.2025");
+});

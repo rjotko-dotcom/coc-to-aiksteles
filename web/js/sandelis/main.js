@@ -2,8 +2,8 @@
 
 import { readCertificate } from "../read.js";
 import { inBackground, parallelism as ocrParallelism, warmUp } from "../ocr.js";
-import { buildValues, fillTemplate, suggestedFilename, zipDocuments } from "../docx.js";
-import { getTemplate } from "../store.js";
+import { analyseTemplate, buildValues, fillTemplate, suggestedFilename, zipDocuments } from "../docx.js";
+import { getTemplate, saveTemplate } from "../store.js";
 import { strFromU8, strToU8, unzipSync, zipSync } from "../../vendor/fflate/fflate.mjs";
 import { VERSION } from "../../version.js";
 import {
@@ -13,9 +13,10 @@ import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
 import { PER_PAGE, printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
+import { CARS, carImage, carKeyOf, creditUrl, cssColour, generationOf, paintOf, yearOf } from "./cars.js";
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
-  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
+  STATUS, assignFolderCodes, backupDue, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
 
@@ -44,6 +45,12 @@ let folderFilter = "";
 const MODEL_FOLDERS = "\u0000modeliai";
 /** Sukurti, bet dar tušti specialūs aplankai (kad nedingtų iš sąrašo). */
 let savedFolders = [];
+/** Aplankų kodai: { „X-TRAIL“: „A-01“, … }. */
+let folderCodes = {};
+/** Šablonas pasikeitė – įrašyti ir į duomenų aplanką. */
+let templateDirty = false;
+/** Kuris CoC rodomas automobilio skydelyje. */
+let stageId = null;
 
 const $ = (id) => document.getElementById(id);
 const esc = (value) => String(value ?? "").replace(/[&<>"]/g, (ch) =>
@@ -126,9 +133,11 @@ async function syncNow() {
   if (store.busy) { store.again = true; return; }
   store.busy = true;
   try {
+    const template = templateDirty ? (await getTemplate())?.bytes || null : null;
     await disk.save(store.handle, records, {
-      getPdf, xlsx: buildXlsx(excelSheets(records), EXCEL_COLUMNS),
+      getPdf, xlsx: buildXlsx(excelSheets(records), excelColumns(folderCodes)), settings: { folderCodes }, template,
     });
+    if (template) templateDirty = false;
     store.saved = new Date();
   } catch (error) {
     // Dažniausiai – Chrome atšaukė leidimą (pvz. po perkrovimo). Užteks paspausti „Leisti“.
@@ -149,7 +158,24 @@ async function mergeFromFolder(handle) {
   for (const record of plan.add) await addRecord(record, await data.pdf(record.id));
   for (const record of plan.replace) await saveRecord(record);
   records = await allRecords();
+  await mergeSettings(data.settings);
+  // Šablonas iš aplanko – jei naršyklėje jo nebėra (pvz. išvalius Chrome).
+  if (!await getTemplate()) {
+    const template = await data.template();
+    if (template) await saveTemplate(disk.TEMPLATE_FILE, template);
+  } else {
+    templateDirty = true;
+  }
   return plan;
+}
+
+/** Aplankų kodai iš aplanko ar kopijos: esami čia nekeičiami, trūkstami pridedami. */
+async function mergeSettings(settings = {}) {
+  const incoming = settings.folderCodes || {};
+  const merged = { ...incoming, ...folderCodes };
+  if (JSON.stringify(merged) === JSON.stringify(folderCodes)) return;
+  folderCodes = merged;
+  await setMeta("folderCodes", folderCodes);
 }
 
 async function connectFolder(restoreOnly = false) {
@@ -373,11 +399,13 @@ const typedByHand = (record, key) => Boolean(record.touched || (record.typed || 
 
 /**
  * Lapo juostos (dalimis nuo aukščio), kuriose Nissan CoC pirmoje pusėje yra
- * 0.1 markė, 0.2 tipas ir 0.2.1 modelis (~0,07–0,10) bei 0.10 VIN (~0,345).
- * Išmatuota su tikrais X-Trail, Leaf ir Micra lapais; paraštė palieka vietos
- * šiek tiek paslinktam skenui. Neradus VIN, skaitoma didesnė lapo dalis.
+ * viskas, ko reikia pažymai: 0.1 markė, 0.2 tipas/variantas/versija ir 0.2.1
+ * modelis (~0,07–0,10); 0.10 VIN, 0.11 pagaminimo data ir tipo patvirtinimo
+ * Nr. su data (~0,345–0,39); 40 spalva (~0,94). Išmatuota su tikrais X-Trail,
+ * Leaf ir Micra lapais; paraštė palieka vietos šiek tiek paslinktam skenui.
+ * Neradus VIN, skaitoma didesnė lapo dalis.
  */
-const VIN_BANDS = [[0.035, 0.135], [0.315, 0.385]];
+const VIN_BANDS = [[0.035, 0.135], [0.315, 0.405], [0.905, 0.97]];
 
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
 const PAGE_TIMEOUT = 20 * 60_000;
@@ -490,6 +518,10 @@ async function readLane() {
       const readValues = {
         vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
       };
+      // Modelio (ar markės) lape neperskaityta – Nissan VIN'e yra modelio kodas (J12 → QASHQAI).
+      const fromVin = modelFromVin(readValues.vin);
+      if (fromVin && !readValues.model) readValues.model = fromVin.model;
+      if (fromVin && !readValues.make) readValues.make = fromVin.make;
       for (const [key, value] of Object.entries(readValues)) {
         if (!typedByHand(record, key)) changes[key] = value;
       }
@@ -855,7 +887,7 @@ function renderAnswer(query) {
         : `Atiduotas ${esc(showDate(one.given_date))}${one.given_to ? ` – ${esc(one.given_to)}` : ""}.`;
     html = `<div class="answer ${kind}"><span class="mark">${icon(one.status === STATUS.IN ? "check" : one.status === STATUS.OUT ? "send" : "scan")}</span>
       <div><b>${title}</b> <span>${vinLabel(one, part)}</span>
-        <span class="where">${icon("folder")} Aplanke <b>${esc(folderOf(one))}</b></span></div>
+        <span class="where">${icon("folder")} Aplanke ${codeOf(folderOf(one)) ? `<b class="code">${esc(codeOf(folderOf(one)))}</b> ` : ""}<b>${esc(folderOf(one))}</b></span></div>
       <div class="actions">${answerButtons(one)}</div></div>`;
   } else {
     // Keli CoC su tokia VIN pabaiga – parodomi visi, kad išsirinktumėte.
@@ -868,13 +900,60 @@ function renderAnswer(query) {
         <b>Rasta ${hits.length} CoC su „${esc(part)}“${have ? ` (turime ${have})` : ""} – kurio ieškote?</b>
         <ul>${shown.map((record) => `
           <li><span class="opt-main">${vinLabel(record, part)}</span>
-            <span class="opt-where">${icon("folder")}${esc(folderOf(record))}</span>
+            <span class="opt-where">${folderChip(record)}</span>
             <span class="opt-status">${statusLine(record)}</span>
             <span class="opt-actions">${answerButtons(record)}</span></li>`).join("")}</ul>
         ${hits.length > shown.length ? `<span class="where">Ir dar ${hits.length - shown.length} – įveskite daugiau VIN ženklų.</span>` : ""}
       </div></div>`;
   }
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+}
+
+/** Kodai naujiems aplankams (A-01, A-02…) – kad kiekvienas aplankas turėtų savo. */
+function ensureFolderCodes() {
+  const next = assignFolderCodes(folderNames(records, savedFolders), folderCodes);
+  if (Object.keys(next).length === Object.keys(folderCodes).length) return;
+  folderCodes = next;
+  setMeta("folderCodes", folderCodes).catch(() => {});
+  scheduleSync();
+}
+
+const codeOf = (name) => folderCodes[name] || "";
+
+/** Aplanko žymė: kodas + pavadinimas. */
+function folderChip(record) {
+  const name = folderOf(record);
+  const code = codeOf(name);
+  return `<span class="folder ${inSpecialFolder(record) ? "special" : ""}">${code ? `<b class="code">${esc(code)}</b>` : icon("folder")}${esc(name)}</span>`;
+}
+
+/** Spalvos taškas ir pavadinimas. */
+function colourTag(record) {
+  const paint = paintOf(record);
+  const name = (record.coc || {}).colour;
+  if (!name) return "";
+  return `<span class="colour-tag"><i style="${paint ? `--paint:${cssColour(paint)}` : ""}"></i>${esc(name)}</span>`;
+}
+
+/** Mažas automobilio paveikslėlis eilutėje (nuspalvinamas po atvaizdavimo). */
+function thumbHtml(record) {
+  const key = carKeyOf(record);
+  if (!key) return `<span class="model-icon">${icon("file")}</span>`;
+  return `<span class="car-thumb" data-car="${key}" data-id="${record.id}"><img alt="" hidden></span>`;
+}
+
+function hydrateThumbs(root = document) {
+  root.querySelectorAll(".car-thumb[data-id]").forEach((box) => {
+    const record = byId(box.dataset.id);
+    const image = box.querySelector("img");
+    if (!record || image.dataset.ready === box.dataset.id) return;
+    image.dataset.ready = box.dataset.id;
+    carImage(box.dataset.car, paintOf(record), 200).then((url) => {
+      if (!url || image.dataset.ready !== box.dataset.id) return;
+      image.src = url;
+      image.hidden = false;
+    }).catch(() => {});
+  });
 }
 
 function vinCell(vin) {
@@ -925,16 +1004,16 @@ function renderTable() {
     const action = record.status === STATUS.OUT
       ? `<button type="button" class="btn sm" data-return="${record.id}">${icon("undo")}Grąžinti</button>`
       : `<button type="button" class="btn sm" data-give="${record.id}">${icon("send")}Atiduoti</button>`;
-    const sub = [record.make, record.note].filter(Boolean).join(" · ");
-    return `<tr data-row="${record.id}" class="${selected.has(record.id) ? "selected" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
+    const sub = [record.make, record.note].filter(Boolean).map(esc).join(" · ");
+    const generation = generationOf(record);
+    return `<tr data-row="${record.id}" class="${selected.has(record.id) ? "selected" : ""} ${record.id === stageId ? "staged" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
       <td class="check"><input type="checkbox" data-select="${record.id}" ${selected.has(record.id) ? "checked" : ""}
           aria-label="Pažymėti ${esc(record.vin)}"></td>
       <td class="vin">${vinCell(record.vin)}</td>
-      <td><div class="model"><span class="model-icon">${icon("file")}</span>
-        <div><b>${esc(record.model || "—")}</b>${sub ? `<small>${esc(sub)}</small>` : ""}</div></div></td>
-      <td>${inSpecialFolder(record)
-        ? `<span class="folder special">${icon("folder")}${esc(record.folder)}</span>`
-        : `<span class="folder">${icon("folder")}${esc(folderOf(record))}</span>`}</td>
+      <td><div class="model">${thumbHtml(record)}
+        <div><b>${esc(record.model || "—")}${generation ? ` <em class="gen">${esc(generation)}</em>` : ""}</b>
+          <small>${[sub, colourTag(record)].filter(Boolean).join(" · ")}</small></div></div></td>
+      <td>${folderChip(record)}</td>
       <td class="date hide-sm">${esc(showDate(record.added))}</td>
       <td class="status-cell">${statusText}</td>
       <td class="actions">${action}</td>
@@ -953,6 +1032,114 @@ function renderTable() {
   const visibleIds = list.slice(0, shown).map((record) => record.id);
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   renderBulk();
+  hydrateThumbs($("rows"));
+  // Skydelyje – pasirinktas CoC; jei jo sąraše nebėra, pirmas sąrašo.
+  if (!stageId || !list.some((record) => record.id === stageId)) setStage(list[0]?.id || null, false);
+  else renderStage();
+}
+
+// ---------------------------------------------------------------------------
+// Automobilio skydelis
+// ---------------------------------------------------------------------------
+
+const PAZYMA_NEEDS = [
+  ["make", "markės", (r) => r.make], ["tvv", "tipo", (r) => r.tvv], ["model", "modelio", (r) => r.model],
+  ["vin", "VIN", (r) => r.vin], ["approval_number", "patvirtinimo Nr.", (r) => (r.coc || {}).approval_number],
+  ["approval_date", "patvirtinimo datos", (r) => (r.coc || {}).approval_date], ["colour", "spalvos", (r) => (r.coc || {}).colour],
+];
+
+/** Ko trūksta pažymai (tušti laukai). */
+const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim()).map(([, name]) => name);
+
+/** Ar skydelis matomas šalia sąrašo (plačiame ekrane). */
+const stageBeside = () => window.matchMedia("(min-width: 1360px)").matches;
+
+function setStage(id, animate = true) {
+  const changed = id !== stageId;
+  stageId = id;
+  document.querySelectorAll("#rows tr.staged").forEach((row) => row.classList.toggle("staged", row.dataset.row === id));
+  if (id) document.querySelector(`#rows tr[data-row="${CSS.escape(id)}"]`)?.classList.add("staged");
+  renderStage(changed && animate);
+}
+
+let stageShown = "";
+
+function renderStage(animate = false) {
+  const record = byId(stageId);
+  const stage = $("stage");
+  stage.classList.toggle("empty", !record);
+  if (!record) {
+    $("stage-model").textContent = records.length ? "Pasirinkite CoC" : "Sandėlis tuščias";
+    $("stage-kicker").textContent = "NISSAN";
+    $("stage-facts").innerHTML = "";
+    $("stage-actions").innerHTML = "";
+    $("stage-ready").innerHTML = "";
+    $("stage-credit").innerHTML = "";
+    $("stage-img").hidden = true;
+    stageShown = "";
+    return;
+  }
+  const key = carKeyOf(record);
+  const car = CARS[key];
+  const paint = paintOf(record);
+  const generation = generationOf(record);
+  const year = yearOf(record);
+  $("stage-kicker").textContent = [record.make || "NISSAN", generation, year].filter(Boolean).join(" · ");
+  $("stage-model").textContent = record.model || car?.name || "—";
+  stage.style.setProperty("--paint", paint ? cssColour(paint) : "rgb(120 124 130)");
+
+  const vin = record.vin || "";
+  const coc = record.coc || {};
+  const status = record.status === STATUS.OUT
+    ? `<span class="pill out">Atiduotas ${esc(showDate(record.given_date))}</span>${record.given_to ? `<small>${esc(record.given_to)}</small>` : ""}`
+    : `<span class="pill ${record.status}">${esc(statusName(record.status))}</span>`;
+  $("stage-facts").innerHTML = `
+    <div class="wide"><dt>VIN</dt><dd class="mono-vin">${vin ? `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>` : "—"}</dd></div>
+    <div><dt>Aplankas</dt><dd>${folderChip(record)}</dd></div>
+    <div><dt>Būsena</dt><dd>${status}</dd></div>
+    <div><dt>Spalva</dt><dd>${colourTag(record) || `<span class="muted-inline">neperskaityta</span>`}</dd></div>
+    <div><dt>Pagaminta</dt><dd>${esc(coc.manufacture_date || "—")}</dd></div>
+    <div class="wide"><dt>Tipo patvirtinimas</dt><dd class="mono-small">${esc(coc.approval_number || "—")}${coc.approval_date ? ` <span class="muted-inline">${esc(coc.approval_date)}</span>` : ""}</dd></div>`;
+  const missing = pazymaMissing(record);
+  $("stage-ready").className = `stage-ready ${missing.length ? "warn" : "ok"}`;
+  $("stage-ready").innerHTML = missing.length
+    ? `${icon("doc")}<span>Pažymai trūksta ${esc(missing.join(", "))}</span>`
+    : `${icon("check")}<span>Pažymai viskas perskaityta</span>`;
+  const give = record.status === STATUS.IN
+    ? `<button type="button" class="btn primary" data-stage="give">${icon("send")}Atiduoti</button>`
+    : record.status === STATUS.OUT ? `<button type="button" class="btn" data-stage="return">${icon("undo")}Grąžinti</button>` : "";
+  $("stage-actions").innerHTML = `${give}
+    <button type="button" class="btn" data-stage="pazyma">${icon("doc")}Pažyma</button>
+    <button type="button" class="btn" data-stage="pdf">${icon("eye")}PDF</button>
+    <button type="button" class="btn ghost" data-stage="detail">Atidaryti</button>`;
+  $("stage-credit").innerHTML = car
+    ? `Nuotr.: <a href="${creditUrl(car)}" target="_blank" rel="noopener">${esc(car.author)}</a>, CC BY-SA 4.0 · spalva pakeista pagal CoC`
+    : "";
+
+  const shownKey = `${key}|${paint ? paint.rgb.join(",") : "-"}`;
+  const image = $("stage-img");
+  if (!car) {
+    image.hidden = true;
+    stageShown = "";
+    $("stage-car").classList.add("none");
+    return;
+  }
+  $("stage-car").classList.remove("none");
+  if (shownKey === stageShown && !animate) return;
+  const sameCar = shownKey === stageShown;
+  stageShown = shownKey;
+  carImage(key, paint, 960).then((url) => {
+    if (!url || stageShown !== shownKey) return;
+    image.src = url;
+    image.hidden = false;
+    $("stage-car").style.setProperty("--car", `url("${url}")`);
+    $("stage-car").style.setProperty("--ratio", `${car.w} / ${car.h}`);
+    if (animate && !sameCar && !reduceMotion()) {
+      $("stage-car").classList.remove("enter");
+      void $("stage-car").offsetWidth;
+      $("stage-car").classList.add("enter");
+    }
+  }).catch(() => { image.hidden = true; });
 }
 
 function renderBulk() {
@@ -967,16 +1154,46 @@ function renderFolders() {
   $("folder-filter").innerHTML = [
     `<option value="">Visi aplankai</option>`,
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
-    ...folders.map((folder) => `<option value="${esc(folder.name)}">${esc(folder.name)} (${folder.count})</option>`),
+    ...folders.map((folder) => `<option value="${esc(folder.name)}">${codeOf(folder.name) ? `${esc(codeOf(folder.name))} · ` : ""}${esc(folder.name)} (${folder.count})</option>`),
   ].join("");
   $("folder-filter").value = folderFilter;
   renderPrintButton();
   $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
   $("folder-nav").innerHTML = folders.length
     ? folders.map((folder) => `<button type="button" class="nav ${folderFilter === folder.name ? "on-folder" : ""}"
-        data-folder="${esc(folder.name)}">${icon("folder")}${esc(folder.name)}<span class="badge">${folder.count || ""}</span></button>`).join("")
+        data-folder="${esc(folder.name)}">${codeOf(folder.name) ? `<b class="code">${esc(codeOf(folder.name))}</b>` : icon("folder")}${esc(folder.name)}<span class="badge">${folder.count || ""}</span></button>`).join("")
     : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
   $("folders").innerHTML = folders.map((folder) => `<option value="${esc(folder.name)}">`).join("");
+}
+
+/** Aplankų kodų langas: kodą galima pakeisti, kad atitiktų lipduką ant aplanko. */
+function openCodes() {
+  const names = folderNames(records, savedFolders);
+  const count = (name) => records.filter((record) => record.status === STATUS.IN && folderOf(record) === name).length;
+  $("codes-list").innerHTML = names.map((name) => `
+    <label class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(name)}" value="${esc(codeOf(name))}">
+      <span>${esc(name)}</span><small>${count(name)} CoC</small></label>`).join("")
+    || `<p class="muted">Aplankų dar nėra.</p>`;
+  $("codes").showModal();
+}
+
+async function saveCodes() {
+  const next = { ...folderCodes };
+  for (const input of $("codes-list").querySelectorAll("[data-code-for]")) {
+    const code = cleanFolderCode(input.value);
+    if (code) next[input.dataset.codeFor] = code; else delete next[input.dataset.codeFor];
+  }
+  const seen = new Map();
+  for (const [name, code] of Object.entries(next)) {
+    if (seen.has(code)) { toast(`Kodas ${code} jau naudojamas aplankui „${seen.get(code)}“.`, "err"); return false; }
+    seen.set(code, name);
+  }
+  folderCodes = assignFolderCodes(folderNames(records, savedFolders), next);
+  await setMeta("folderCodes", folderCodes);
+  scheduleSync();
+  render();
+  toast("Aplankų kodai išsaugoti.");
+  return true;
 }
 
 /** Spausdina pasirinkto aplanko (arba visų aplankų) turimų CoC sąrašą. */
@@ -989,7 +1206,7 @@ async function printFolders() {
     "Spausdinti",
   )) return;
   const time = new Date().toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" });
-  printFolderSheets(groups, `${showDate(todayIso())} ${time}`);
+  printFolderSheets(groups.map((group) => ({ ...group, code: codeOf(group.name) })), `${showDate(todayIso())} ${time}`);
 }
 
 function renderPrintButton() {
@@ -1013,6 +1230,7 @@ function renderRecipients() {
 }
 
 function render() {
+  ensureFolderCodes();
   renderCounts();
   renderReview();
   renderTable();
@@ -1172,11 +1390,61 @@ async function downloadPdfs(ids) {
   toast(`Atsisiųsta PDF: ${list.length}.`);
 }
 
+/**
+ * Pažymos šablonas – Jūsų aikštelės .docx (bendras su pažymų generatoriumi).
+ * Jame pakeičiamos tik reikšmės; jei šablono dar nėra, paprašoma jį įkelti.
+ */
 async function templateBytes() {
   const stored = await getTemplate();
   if (stored) return stored.bytes;
-  const response = await fetch(new URL("../../blank-template.docx", import.meta.url));
-  return new Uint8Array(await response.arrayBuffer());
+  const ok = await ask(
+    "Įkelkite pažymos šabloną",
+    "Pažymos daromos iš Jūsų aikštelės pažymos (.docx) – joje pakeičiami tik duomenys. "
+      + "Šabloną reikia įkelti vieną kartą, jis liks šiame kompiuteryje.",
+    "Pasirinkti .docx",
+  );
+  if (!ok) return null;
+  return (await pickTemplate())?.bytes || null;
+}
+
+let templateResolve = null;
+
+/** Atidaro failo pasirinkimą ir įrašo šabloną. Grąžina { name, bytes } arba null. */
+function pickTemplate() {
+  return new Promise((resolve) => {
+    templateResolve = resolve;
+    $("template-file").click();
+  });
+}
+
+async function useTemplate(file) {
+  const done = templateResolve;
+  templateResolve = null;
+  if (!file) { done?.(null); return; }
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const analysis = analyseTemplate(bytes);
+    const found = Object.keys(analysis.recognised || {}).length;
+    if (!found && !(analysis.placeholders || []).length) throw new Error("šablone nerasta pažymos lentelės");
+    await saveTemplate(file.name, bytes);
+    templateDirty = true;
+    scheduleSync(0);
+    renderTemplateState();
+    const missing = analysis.missing || [];
+    toast(missing.length
+      ? `Šablonas įkeltas, bet neatpažinta: ${missing.join(", ")}.`
+      : `Šablonas „${file.name}“ įkeltas – atpažintos visos ${found} eilutės.`, missing.length ? "warn" : "ok");
+    done?.({ name: file.name, bytes });
+  } catch (error) {
+    toast(`Nepavyko perskaityti šablono: ${error.message || error}`, "err");
+    done?.(null);
+  }
+}
+
+async function renderTemplateState() {
+  const stored = await getTemplate();
+  $("template-name").textContent = stored ? stored.name : "neįkeltas";
+  $("template-nav").classList.toggle("warn", !stored);
 }
 
 function pazymaValues(record) {
@@ -1194,14 +1462,16 @@ function pazymaValues(record) {
 async function makePazymos(ids) {
   const list = ids.map(byId).filter(Boolean);
   if (!list.length) return;
-  const missing = list.filter((record) => !(record.coc || {}).colour || !(record.coc || {}).approval_number);
+  const missing = list.filter((record) => pazymaMissing(record).length);
   if (missing.length && !await ask(
     "Trūksta pažymos duomenų",
-    `${missing.length === 1 ? "Šiame liudijime" : `${missing.length} liudijimuose`} nėra spalvos arba tipo patvirtinimo Nr. `
-      + "(jie dažnai būna kitoje CoC pusėje). Pažymoje tie laukai liks tušti.",
+    missing.length === 1
+      ? `Neperskaityta: ${pazymaMissing(missing[0]).join(", ")}. Įrašykite liudijimo lange („Pažymos laukai“) arba generuokite – tie laukai liks tušti.`
+      : `${missing.length} liudijimuose kai kurie pažymos laukai neperskaityti – pažymose jie liks tušti.`,
     "Vis tiek generuoti",
   )) return;
   const template = await templateBytes();
+  if (!template) return;
   const documents = list.map((record) => {
     const values = pazymaValues(record);
     return [suggestedFilename(values), fillTemplate(template, values).bytes];
@@ -1216,7 +1486,7 @@ function exportExcel(subset = null) {
   const source = subset ? subset.map(byId).filter(Boolean) : records;
   const sheets = excelSheets(source);
   if (!sheets[2].rows.length) { toast("Nėra ką eksportuoti.", "warn"); return; }
-  download(buildXlsx(sheets, EXCEL_COLUMNS), `coc-sandelis_${todayIso()}.xlsx`,
+  download(buildXlsx(sheets, excelColumns(folderCodes)), `coc-sandelis_${todayIso()}.xlsx`,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   toast(`Excel failas paruoštas (${sheets[2].rows.length} CoC).`);
 }
@@ -1227,7 +1497,9 @@ function exportExcel(subset = null) {
 
 async function backup() {
   if (!records.length) { toast("Kol kas nėra ko kopijuoti.", "warn"); return; }
-  const files = { "sandelis.json": strToU8(JSON.stringify({ version: 1, saved: now(), records }, null, 1)) };
+  const files = { "sandelis.json": strToU8(JSON.stringify({ version: 1, saved: now(), settings: { folderCodes }, records }, null, 1)) };
+  const template = await getTemplate();
+  if (template) files[disk.TEMPLATE_FILE] = template.bytes;
   for (const record of records) {
     const bytes = await getPdf(record.id);
     if (bytes) files[`pdf/${record.id}.pdf`] = bytes;
@@ -1244,11 +1516,17 @@ async function restore(file) {
   try {
     const files = unzipSync(new Uint8Array(await file.arrayBuffer()));
     if (!files["sandelis.json"]) throw new Error("tai ne sandėlio kopija");
-    const incoming = JSON.parse(strFromU8(files["sandelis.json"])).records || [];
+    const parsed = JSON.parse(strFromU8(files["sandelis.json"]));
+    const incoming = parsed.records || [];
     const plan = mergePlan(records, incoming);
     for (const record of plan.add) await addRecord(record, files[`pdf/${record.id}.pdf`] || null);
     for (const record of plan.replace) await saveRecord(record);
     records = await allRecords();
+    await mergeSettings(parsed.settings);
+    if (files[disk.TEMPLATE_FILE] && !await getTemplate()) {
+      await saveTemplate(disk.TEMPLATE_FILE, files[disk.TEMPLATE_FILE]);
+      renderTemplateState();
+    }
     scheduleSync(0);
     animateRows = true;
     render();
@@ -1420,8 +1698,23 @@ $("rows").addEventListener("click", (event) => {
   if (button?.dataset.give) { openGive([button.dataset.give]); return; }
   if (button?.dataset.return) { returnRecords([button.dataset.return]); return; }
   const row = event.target.closest("tr[data-row]");
-  if (row) openDetail(row.dataset.row);
+  if (!row) return;
+  // Plačiame ekrane paspaudus – CoC parodomas skydelyje, antrą kartą – atidaromas.
+  if (stageBeside() && row.dataset.row !== stageId) { setStage(row.dataset.row); return; }
+  setStage(row.dataset.row, false);
+  openDetail(row.dataset.row);
 });
+$("stage-actions").addEventListener("click", (event) => {
+  const action = event.target.closest("[data-stage]")?.dataset.stage;
+  if (!action || !stageId) return;
+  if (action === "give") openGive([stageId]);
+  if (action === "return") returnRecords([stageId]);
+  if (action === "pazyma") makePazymos([stageId]);
+  if (action === "pdf") openPdf(stageId);
+  if (action === "detail") openDetail(stageId);
+});
+$("template-file").addEventListener("change", (event) => { useTemplate(event.target.files[0]); event.target.value = ""; });
+$("template-file").addEventListener("cancel", () => useTemplate(null));
 $("incomplete").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-ignore-scan]");
   if (!button) return;
@@ -1491,11 +1784,14 @@ const ACTIONS = {
   "pazyma-selected": () => makePazymos([...selected]),
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
+  "codes-cancel": () => $("codes").close(),
   "folder-cancel": () => $("folder-dialog").close(),
   "folder-connect": () => connectFolder(),
   "folder-restore": () => connectFolder(true),
   "folder-allow": allowFolder,
   "print-folders": printFolders,
+  template: async () => { await pickTemplate(); },
+  codes: openCodes,
   "open-pdf": () => openPdf(detailId),
   "detail-close": () => $("detail").close(),
   "detail-pdf": () => downloadPdfs([detailId]),
@@ -1517,6 +1813,12 @@ document.addEventListener("click", (event) => {
   }
 });
 $("restore-file").addEventListener("change", (event) => { restore(event.target.files[0]); event.target.value = ""; });
+
+$("codes-form").addEventListener("submit", async (event) => {
+  if (event.submitter?.value !== "save") return;
+  event.preventDefault();
+  if (await saveCodes()) $("codes").close();
+});
 
 $("give-form").addEventListener("submit", (event) => {
   if (event.submitter && event.submitter.value === "give") give();
@@ -1554,6 +1856,8 @@ window.addEventListener("resize", () => {
 async function start() {
   savedFolders = (await getMeta("folders").catch(() => null)) || [];
   ignoredScans = (await getMeta("ignoredScans").catch(() => null)) || [];
+  folderCodes = (await getMeta("folderCodes").catch(() => null)) || {};
+  renderTemplateState();
   await loadFolderState();
   try {
     records = await allRecords();

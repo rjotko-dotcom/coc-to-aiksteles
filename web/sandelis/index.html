@@ -68,6 +68,9 @@
       <p class="nav-title">Specialūs aplankai</p>
       <div id="folder-nav"></div>
       <p class="nav-title">Įrankiai</p>
+      <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
+        <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
+      <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
       <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
       <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
       <button type="button" class="nav" data-action="restore"><svg><use href="#i-upload"/></svg>Įkelti kopiją</button>
@@ -147,6 +150,24 @@
       <div id="review-list"></div>
     </section>
 
+    <div class="showroom">
+    <aside class="stage empty" id="stage" aria-live="polite">
+      <div class="stage-head">
+        <span class="stage-kicker" id="stage-kicker">NISSAN</span>
+        <h2 id="stage-model">Pasirinkite CoC</h2>
+      </div>
+      <div class="stage-car" id="stage-car">
+        <span class="stage-glow"></span>
+        <span class="stage-floor"></span>
+        <img id="stage-img" alt="" hidden>
+        <span class="stage-sweep"></span>
+      </div>
+      <div class="stage-ready" id="stage-ready"></div>
+      <dl class="stage-facts" id="stage-facts"></dl>
+      <div class="stage-actions" id="stage-actions"></div>
+      <small class="stage-credit" id="stage-credit"></small>
+    </aside>
+
     <section class="card" id="list">
       <header class="card-head">
         <h2>Liudijimai</h2>
@@ -193,6 +214,7 @@
       </div>
       <p class="list-note" id="list-note"></p>
     </section>
+    </div>
 
     <section class="card update hidden" id="update">
       <svg><use href="#i-sparkle"/></svg>
@@ -217,6 +239,7 @@
 
 <input id="files" type="file" accept="application/pdf" multiple hidden>
 <input id="restore-file" type="file" accept=".zip,application/zip" hidden>
+<input id="template-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
 <datalist id="recipients"></datalist>
 <datalist id="folders"></datalist>
 
@@ -280,8 +303,7 @@
 
         <details class="more">
           <summary>Pažymos laukai</summary>
-          <p class="muted">Skenuojama tik pirma CoC pusė, todėl spalvos ar patvirtinimo duomenų gali
-            trūkti – įrašykite prieš generuodami pažymą.</p>
+          <p class="muted">Perskaityta iš CoC skenuojant. Jei kas nors neperskaityta – įrašykite prieš generuodami pažymą.</p>
           <div class="form-grid">
             <div><label for="d-approval">Tipo patvirtinimo Nr.</label>
               <input type="text" id="d-approval" class="mono" autocomplete="off" spellcheck="false"></div>
@@ -302,6 +324,22 @@
           <button type="button" class="btn danger" data-action="detail-delete"><svg><use href="#i-trash"/></svg>Ištrinti</button>
         </div>
       </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="codes" class="small-dialog">
+  <form method="dialog" id="codes-form">
+    <header class="dialog-head">
+      <div><span class="pill">Lentyna</span><h2>Aplankų kodai</h2></div>
+      <button type="button" class="icon-btn" data-action="codes-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Kodą užrašykite ant aplanko nugarėlės – paieška parodys, kuriame aplanke CoC guli.
+      Naujiems aplankams kodas suteikiamas automatiškai.</p>
+    <div class="codes-list" id="codes-list"></div>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="save"><svg><use href="#i-check"/></svg>Išsaugoti</button>
+      <button type="button" class="btn" data-action="codes-cancel">Atšaukti</button>
     </div>
   </form>
 </dialog>

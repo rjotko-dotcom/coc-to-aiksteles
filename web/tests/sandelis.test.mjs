@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits, folderGroups,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits, folderGroups, modelFromVin,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -153,4 +153,37 @@ test("aplankų lapai: tik turimi, sugrupuoti ir surūšiuoti", () => {
     ["Nėra moderoje", true, ["C3", "D4"]],
     ["QASHQAI", false, ["A1", "B2"]],
   ]);
+});
+
+test("modelis ir karta iš VIN (tikri Nissan VIN)", () => {
+  assert.deepEqual(modelFromVin("SJNJ12TA9U2374201"), { make: "NISSAN", model: "QASHQAI", generation: "J12" });
+  assert.equal(modelFromVin("JN1T33TB7U0062538").model, "X-TRAIL");
+  assert.equal(modelFromVin("SJNF16FA2U2194020").model, "JUKE");
+  assert.equal(modelFromVin("SJNZE2TB8U1005299").generation, "ZE2");
+  assert.equal(modelFromVin("VNVK1500X76353558").model, "MICRA");
+  assert.equal(modelFromVin("WVWZZZ1KZAW000001"), null);
+  assert.equal(modelFromVin(""), null);
+});
+
+test("aplankų kodai: nauji gauna kitą laisvą, esami nesikeičia", async () => {
+  const { assignFolderCodes, cleanFolderCode, folderNames } = await import("../js/sandelis/logic.js");
+  const codes = assignFolderCodes(["JUKE", "QASHQAI", "Nėra moderoje"], { QASHQAI: "A-03" });
+  assert.deepEqual(codes, { QASHQAI: "A-03", JUKE: "A-04", "Nėra moderoje": "A-05" });
+  assert.deepEqual(assignFolderCodes(["A"], { B: "A-01" }), { B: "A-01", A: "A-02" });
+  assert.equal(cleanFolderCode(" b7 "), "B-07");
+  assert.equal(cleanFolderCode("a-12"), "A-12");
+  assert.deepEqual(folderNames([{ model: "Juke" }, { model: "Leaf", folder: "Nėra moderoje" }], ["Tuščias"]),
+    ["JUKE", "Nėra moderoje", "Tuščias"]);
+});
+
+test("automobilio paveikslas: modelis iš VIN, spalva iš CoC", async () => {
+  const { carKeyOf, paintOf, generationOf, yearOf } = await import("../js/sandelis/cars.js");
+  assert.equal(carKeyOf({ vin: "JN1T33TB7U0062538", model: "" }), "x-trail");
+  assert.equal(carKeyOf({ vin: "", model: "QASHQAI" }), "qashqai");
+  assert.equal(carKeyOf({ vin: "", model: "NOTE" }), null);
+  assert.equal(generationOf({ vin: "SJNZE2TB8U1005299" }), "ZE2");
+  assert.equal(yearOf({ coc: { manufacture_date: "12.05.2025" } }), 2025);
+  assert.deepEqual(paintOf({ coc: { colour: "PILKA/JUODA" } }).rgb, [104, 108, 112]);
+  assert.ok(paintOf({ coc: { colour: "PILKA", colour_raw: "Dark Grey" } }).rgb[0] < 104);
+  assert.equal(paintOf({ coc: {} }), null);
 });

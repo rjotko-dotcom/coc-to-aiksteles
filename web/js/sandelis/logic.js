@@ -157,6 +157,41 @@ export function folderGroups(records) {
   })).sort((a, b) => a.name.localeCompare(b.name, "lt"));
 }
 
+/**
+ * Nissan modelio kodai VIN'e (4–6 ženklai, pvz. SJN**J12**…) – kartu ir karta.
+ * Tikrinta su tikrais CoC: SJNJ12… Qashqai, JN1T33… X-Trail, SJNF16… Juke,
+ * SJNZE2… Leaf, VNVK15… Micra.
+ */
+export const NISSAN_CODES = {
+  J10: { model: "QASHQAI", generation: "J10" },
+  J11: { model: "QASHQAI", generation: "J11" },
+  J12: { model: "QASHQAI", generation: "J12" },
+  T31: { model: "X-TRAIL", generation: "T31" },
+  T32: { model: "X-TRAIL", generation: "T32" },
+  T33: { model: "X-TRAIL", generation: "T33" },
+  F15: { model: "JUKE", generation: "F15" },
+  F16: { model: "JUKE", generation: "F16" },
+  ZE0: { model: "LEAF", generation: "ZE0" },
+  ZE1: { model: "LEAF", generation: "ZE1" },
+  ZE2: { model: "LEAF", generation: "ZE2" },
+  K13: { model: "MICRA", generation: "K13" },
+  K14: { model: "MICRA", generation: "K14" },
+  K15: { model: "MICRA", generation: "K15" },
+  FE0: { model: "ARIYA", generation: "FE0" },
+};
+
+/** Modelis ir karta iš VIN (null, jei kodas nežinomas). */
+export function modelFromVin(vin) {
+  const value = cleanVin(vin);
+  if (value.length < 9) return null;
+  // Dažniausiai kodas yra 4–6 ženkluose; kai kuriuose VIN – kiek toliau (iki 9-o).
+  for (let start = 3; start <= 6; start += 1) {
+    const hit = NISSAN_CODES[value.slice(start, start + 3)];
+    if (hit) return { make: "NISSAN", ...hit };
+  }
+  return null;
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 
@@ -206,20 +241,64 @@ const STATUS_NAMES = {
 };
 export const statusName = (status) => STATUS_NAMES[status] || status;
 
-/** Excel stulpeliai (žr. `xlsx.js`). */
-export const EXCEL_COLUMNS = [
-  { title: "VIN", get: (r) => r.vin, width: 22, kind: "mono" },
-  { title: "Markė", get: (r) => r.make, width: 14 },
-  { title: "Modelis", get: (r) => r.model, width: 22 },
-  { title: "Tipas/Variantas/Versija", get: (r) => r.tvv, width: 24 },
-  { title: "Aplankas", get: (r) => folderOf(r), width: 20 },
-  { title: "Būsena", get: (r) => statusName(r.status), width: 12 },
-  { title: "Įkelta", get: (r) => localDay(r.added), width: 12, kind: "date" },
-  { title: "Atiduota", get: (r) => r.given_date, width: 12, kind: "date" },
-  { title: "Kam atiduota", get: (r) => r.given_to, width: 26 },
-  { title: "Pastaba", get: (r) => r.note, width: 30 },
-  { title: "Failas", get: (r) => r.source_file, width: 24 },
-];
+/** Excel stulpeliai (žr. `xlsx.js`). `codes` – aplankų kodai (`assignFolderCodes`). */
+export function excelColumns(codes = {}) {
+  return [
+    { title: "VIN", get: (r) => r.vin, width: 22, kind: "mono" },
+    { title: "Markė", get: (r) => r.make, width: 14 },
+    { title: "Modelis", get: (r) => r.model, width: 22 },
+    { title: "Tipas/Variantas/Versija", get: (r) => r.tvv, width: 24 },
+    { title: "Spalva", get: (r) => (r.coc || {}).colour, width: 14 },
+    { title: "Aplanko kodas", get: (r) => codes[folderOf(r)] || "", width: 10 },
+    { title: "Aplankas", get: (r) => folderOf(r), width: 20 },
+    { title: "Būsena", get: (r) => statusName(r.status), width: 12 },
+    { title: "Įkelta", get: (r) => localDay(r.added), width: 12, kind: "date" },
+    { title: "Atiduota", get: (r) => r.given_date, width: 12, kind: "date" },
+    { title: "Kam atiduota", get: (r) => r.given_to, width: 26 },
+    { title: "Pastaba", get: (r) => r.note, width: 30 },
+    { title: "Failas", get: (r) => r.source_file, width: 24 },
+  ];
+}
+export const EXCEL_COLUMNS = excelColumns();
+
+/** Visi aplankai (modelių ir specialūs), kuriuose yra ar buvo CoC. */
+export function folderNames(records, extra = []) {
+  const names = new Set();
+  for (const record of records) names.add(folderOf(record));
+  for (const name of extra) if (String(name || "").trim()) names.add(String(name).trim());
+  return [...names].sort((a, b) => a.localeCompare(b, "lt"));
+}
+
+const CODE_RE = /^([A-Z]+)-(\d+)$/;
+
+/** Švarus aplanko kodas: „a1“ → „A-01“, „b-7“ → „B-07“; kitaip – didžiosiomis kaip įvesta. */
+export function cleanFolderCode(text) {
+  const value = String(text || "").trim().toUpperCase().replace(/\s+/g, "");
+  const match = value.match(/^([A-Z]+)-?(\d+)$/);
+  return match ? `${match[1]}-${match[2].padStart(2, "0")}` : value;
+}
+
+/**
+ * Trumpi aplankų kodai (A-01, A-02…), kad aplanką lentynoje rastumėte iš karto.
+ * Jau turimi kodai nekeičiami; naujiems aplankams duodamas kitas laisvas numeris.
+ */
+export function assignFolderCodes(names, codes = {}) {
+  const result = { ...codes };
+  const used = new Set(Object.values(result));
+  let next = 1;
+  for (const code of used) {
+    const match = CODE_RE.exec(code);
+    if (match && match[1] === "A") next = Math.max(next, Number(match[2]) + 1);
+  }
+  for (const name of names) {
+    if (result[name]) continue;
+    let code;
+    do { code = `A-${String(next).padStart(2, "0")}`; next += 1; } while (used.has(code));
+    result[name] = code;
+    used.add(code);
+  }
+  return result;
+}
 
 /** Excel lapai: turimi, atiduoti ir visi kartu (nepatikrinti neįtraukiami). */
 export function excelSheets(records) {
