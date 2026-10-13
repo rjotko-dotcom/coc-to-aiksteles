@@ -1127,7 +1127,7 @@ function renderStage(animate = false) {
     <button type="button" class="skew-btn" data-stage="pazyma"><span>${icon("doc")}Pažyma</span></button>
     ${record.status === STATUS.IN ? `<button type="button" class="skew-btn red" data-stage="give"><span>${icon("send")}Atiduoti</span></button>`
       : record.status === STATUS.OUT ? `<button type="button" class="skew-btn" data-stage="return"><span>${icon("undo")}Grąžinti</span></button>` : ""}`;
-  $("stage-credit").innerHTML = car
+  $("stage-credit").innerHTML = car?.author
     ? `Nuotr.: <a href="${creditUrl(car)}" target="_blank" rel="noopener">${esc(car.author)}</a>, CC BY-SA 4.0 · spalva pagal CoC`
     : "";
 
