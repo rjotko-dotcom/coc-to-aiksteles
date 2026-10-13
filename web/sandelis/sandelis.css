@@ -452,7 +452,7 @@ td .model-icon {
 }
 td .model-icon svg { width: 15px; height: 15px; }
 td .model b { display: block; font-weight: 500; }
-td .model small { display: block; color: var(--dim); font-size: 12px; }
+td .model small { display: block; color: var(--dim); font-size: 12px; white-space: nowrap; }
 td.date { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 td.actions { text-align: right; white-space: nowrap; }
 td.actions .btn { opacity: .75; }
@@ -543,6 +543,144 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); an
 @keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes toast-out { to { opacity: 0; transform: translateX(30px); } }
 @keyframes pulse-border { 50% { border-color: var(--text); } }
+
+/* ===== Automobilio skydelis ===== */
+/* Plačiame ekrane – kairėje pasirinkto CoC automobilis (nuspalvintas pagal CoC), dešinėje – sąrašas. */
+.showroom { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.stage {
+  --paint: rgb(120 124 130);
+  position: relative; overflow: hidden; border-radius: var(--r); border: 1px solid var(--line);
+  padding: 22px 22px 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(255, 255, 255, .06), transparent 60%),
+    linear-gradient(180deg, #17171a, #0f0f11 70%);
+}
+.stage::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent-hi) 70%, transparent);
+}
+.stage-head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stage-kicker { font-size: 11px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+.stage-head h2 {
+  margin: 0; font-size: 34px; line-height: 1.05; font-weight: 800; letter-spacing: .01em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.stage-car { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: end center; isolation: isolate; margin: 0 -10px; }
+.stage-car img {
+  position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; object-position: center bottom;
+  filter: drop-shadow(0 18px 18px rgba(0, 0, 0, .55));
+}
+/* Spalvos švytėjimas už automobilio ir šešėlis po juo. */
+.stage-glow {
+  position: absolute; z-index: 0; inset: 12% 6% 8%; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--paint) 55%, transparent), transparent);
+  filter: blur(30px); opacity: .7; transition: background .6s;
+}
+.stage-floor {
+  position: absolute; z-index: 1; left: 8%; right: 8%; bottom: -2%; height: 16%; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .75), transparent); animation: breathe 6s ease-in-out infinite;
+}
+/* Šviesos juosta, perbėganti per kėbulą (tik per automobilį – kaukė iš paveikslo). */
+.stage-sweep {
+  position: absolute; z-index: 3; inset: 0; pointer-events: none; opacity: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 48%, transparent 60%) no-repeat;
+  background-size: 250% 100%; background-position: 130% 0;
+  -webkit-mask: var(--car) center bottom / contain no-repeat; mask: var(--car) center bottom / contain no-repeat;
+  mix-blend-mode: overlay;
+}
+.stage-car.enter img { animation: car-in .9s var(--ease) both; }
+.stage-car.enter .stage-sweep { animation: sweep 1.6s .45s var(--ease) both; }
+.stage-car.enter .stage-glow { animation: fade 1s both; }
+.stage-car.none::after {
+  content: "Šio modelio paveikslo dar nėra"; position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--dim); font-size: 13px;
+}
+.stage.empty .stage-car::after {
+  content: ""; position: absolute; inset: 18% 14% 14%; border-radius: 18px;
+  border: 1px dashed var(--line-2);
+}
+@keyframes car-in { from { opacity: 0; transform: translateX(60px) scale(.96); filter: blur(6px) drop-shadow(0 18px 18px rgba(0, 0, 0, .55)); } }
+@keyframes sweep { 0% { opacity: 0; background-position: 130% 0; } 15% { opacity: 1; } 100% { opacity: 0; background-position: -40% 0; } }
+@keyframes breathe { 50% { transform: scaleX(.94); opacity: .8; } }
+.stage-ready {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid;
+}
+.stage-ready:empty { display: none; }
+.stage-ready svg { width: 16px; height: 16px; }
+.stage-ready.ok { color: var(--green); background: var(--green-bg); border-color: rgba(74, 222, 128, .2); }
+.stage-ready.warn { color: var(--amber); background: var(--amber-bg); border-color: rgba(251, 191, 36, .2); }
+.stage-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 0; }
+.stage-facts > div { min-width: 0; }
+.stage-facts .wide { grid-column: 1 / -1; }
+.stage-facts dt { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); margin-bottom: 3px; }
+.stage-facts dd { margin: 0; color: var(--soft); overflow: hidden; text-overflow: ellipsis; }
+.stage-facts dd small { display: block; color: var(--dim); font-size: 12px; margin-top: 3px; }
+.stage-facts .mono-vin { font-size: 16px; color: var(--muted); letter-spacing: .04em; }
+.stage-facts .mono-vin b { color: var(--text); font-weight: 700; }
+.mono-small { font-family: var(--mono); font-size: 12.5px; }
+.stage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.stage-actions .btn { flex: 1 1 0; justify-content: center; padding-inline: 10px; white-space: nowrap; }
+.stage-actions:empty { display: none; }
+.stage-credit { color: var(--dim); font-size: 11px; }
+.stage-credit a { color: var(--muted); }
+@media (min-width: 1360px) {
+  .showroom { grid-template-columns: minmax(380px, 34%) minmax(0, 1fr); }
+  .stage { position: sticky; top: 76px; }
+}
+/* „Įkelta“ data – tik labai plačiame ekrane (ji matoma ir liudijimo lange). */
+@media (max-width: 1919px) {
+  .showroom td.date, .showroom th.hide-sm { display: none; }
+}
+@media (max-width: 1359px) {
+  .stage { display: grid; grid-template-columns: minmax(260px, 44%) 1fr; grid-template-areas: "head head" "car facts" "car ready" "car actions" "credit credit"; }
+  .stage-head { grid-area: head; }
+  .stage-car { grid-area: car; align-self: center; }
+  .stage-facts { grid-area: facts; }
+  .stage-ready { grid-area: ready; align-self: start; }
+  .stage-actions { grid-area: actions; align-self: end; }
+  .stage-credit { grid-area: credit; }
+}
+@media (max-width: 760px) {
+  .stage { display: flex; }
+  .stage-head h2 { font-size: 26px; }
+}
+
+/* Mažas automobilis sąraše */
+td .car-thumb {
+  width: 64px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 8px;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .06), transparent);
+}
+td .car-thumb img { width: 64px; height: 36px; object-fit: contain; animation: fade .4s both; }
+td .model em.gen {
+  font-style: normal; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; color: var(--dim);
+  border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; margin-left: 4px; vertical-align: 1px;
+}
+tbody tr.staged { background: var(--card-2); box-shadow: inset 3px 0 0 var(--accent); }
+.colour-tag { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.colour-tag i {
+  width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--paint, transparent);
+  border: 1px solid rgba(255, 255, 255, .35); box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .35);
+}
+
+/* Aplankų kodai */
+b.code {
+  font: 700 11.5px var(--mono); letter-spacing: .02em; color: #fff; background: var(--card-3);
+  border: 1px solid var(--line-2); border-radius: 6px; padding: 1px 6px; white-space: nowrap;
+}
+.folder.special b.code { background: rgba(255, 255, 255, .12); }
+#folder-nav .nav b.code { font-size: 10.5px; padding: 0 5px; }
+.answer .where b.code { font-size: 12px; }
+.codes-list { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; max-height: 50vh; overflow-y: auto; }
+.code-row {
+  display: grid; grid-template-columns: 92px 1fr auto; gap: 12px; align-items: center; margin: 0;
+  padding: 6px 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line-2); color: var(--text);
+}
+.code-row input { padding: 6px 8px; text-transform: uppercase; }
+.code-row small { color: var(--dim); }
+.nav-two { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.nav-two small { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
+#template-nav.warn small { color: var(--amber); }
 
 /* ===== Mažesni ekranai ===== */
 /* Žemas ekranas (nešiojamas kompiuteris): kortelė kompaktiška. */

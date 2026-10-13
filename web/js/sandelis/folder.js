@@ -6,6 +6,7 @@
 //   sandelis.json        – visas sąrašas (tas pats formatas kaip kopijos ZIP)
 //   pdf/<id>.pdf         – kiekvieno liudijimo PDF
 //   coc-sandelis.xlsx    – sąrašas Excel'iui (atsidaro ir be programos)
+//   pazymos-sablonas.docx – aikštelės pažymos šablonas (jei įkeltas)
 //
 // Aplanko failai naršyklės valymo nepaliečia – iš jų viską galima atkurti.
 // Naudojama Chrome / Edge „File System Access“ galimybė.
@@ -54,14 +55,18 @@ async function exists(directory, name) {
 /** Įrašai be peržiūros paveikslėlių – jie tik padidintų failą. */
 const lean = (records) => records.map(({ thumb, snippets, ...rest }) => rest);
 
+export const TEMPLATE_FILE = "pazymos-sablonas.docx";
+
 /**
  * Įrašo sąrašą, Excel ir trūkstamus PDF.
- * `getPdf(id)` – iš kur paimti PDF; `xlsx` – paruoštas Excel failas.
+ * `getPdf(id)` – iš kur paimti PDF; `xlsx` – paruoštas Excel failas;
+ * `settings` – aplankų kodai ir pan.; `template` – pažymos šablonas (jei pasikeitė).
  */
-export async function save(handle, records, { getPdf, xlsx }) {
-  const json = JSON.stringify({ version: 1, saved: new Date().toISOString(), records: lean(records) }, null, 1);
+export async function save(handle, records, { getPdf, xlsx, settings = {}, template = null }) {
+  const json = JSON.stringify({ version: 1, saved: new Date().toISOString(), settings, records: lean(records) }, null, 1);
   await writeFile(handle, "sandelis.json", strToU8(json));
   if (xlsx) await writeFile(handle, "coc-sandelis.xlsx", xlsx);
+  if (template) await writeFile(handle, TEMPLATE_FILE, template);
   const folder = await handle.getDirectoryHandle("pdf", { create: true });
   for (const record of records) {
     const name = `${record.id}.pdf`;
@@ -81,7 +86,7 @@ export async function removePdf(handle, id) {
   }
 }
 
-/** Perskaito aplanke esantį sąrašą: { records, pdf(id) } arba null, jei aplankas tuščias. */
+/** Perskaito aplanke esantį sąrašą: { records, settings, pdf(id), template() } arba null, jei aplankas tuščias. */
 export async function load(handle) {
   let text;
   try {
@@ -90,7 +95,9 @@ export async function load(handle) {
   } catch {
     return null;
   }
-  const records = JSON.parse(text).records || [];
+  const parsed = JSON.parse(text);
+  const records = parsed.records || [];
+  const settings = parsed.settings || {};
   const pdf = async (id) => {
     try {
       const folder = await handle.getDirectoryHandle("pdf");
@@ -100,5 +107,13 @@ export async function load(handle) {
       return null;
     }
   };
-  return { records, pdf };
+  const template = async () => {
+    try {
+      const file = await (await handle.getFileHandle(TEMPLATE_FILE)).getFile();
+      return new Uint8Array(await file.arrayBuffer());
+    } catch {
+      return null;
+    }
+  };
+  return { records, settings, pdf, template };
 }

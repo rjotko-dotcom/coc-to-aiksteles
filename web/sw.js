@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-f8cc20f459e5";
+const VERSION = "aikstele-a8d8121d888d";
 const ASSETS = [
   "./",
   "./version.js",
@@ -23,6 +23,7 @@ const ASSETS = [
   "./js/pdf.js",
   "./js/read.js",
   "./js/refine.js",
+  "./js/sandelis/cars.js",
   "./js/sandelis/db.js",
   "./js/sandelis/folder.js",
   "./js/sandelis/logic.js",
@@ -33,6 +34,19 @@ const ASSETS = [
   "./js/store.js",
   "./manifest.webmanifest",
   "./sandelis/brand/nissan.svg",
+  "./sandelis/cars/CREDITS.md",
+  "./sandelis/cars/ariya-mask.webp",
+  "./sandelis/cars/ariya.webp",
+  "./sandelis/cars/juke-mask.webp",
+  "./sandelis/cars/juke.webp",
+  "./sandelis/cars/leaf-mask.webp",
+  "./sandelis/cars/leaf.webp",
+  "./sandelis/cars/micra-mask.webp",
+  "./sandelis/cars/micra.webp",
+  "./sandelis/cars/qashqai-mask.webp",
+  "./sandelis/cars/qashqai.webp",
+  "./sandelis/cars/x-trail-mask.webp",
+  "./sandelis/cars/x-trail.webp",
   "./sandelis/icons/icon-192.png",
   "./sandelis/icons/icon-512.png",
   "./sandelis/icons/icon-maskable.png",

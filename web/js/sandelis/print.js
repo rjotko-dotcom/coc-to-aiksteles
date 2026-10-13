@@ -16,7 +16,11 @@ const STYLE = `
   .page { position: relative; width: 210mm; height: 296mm; padding: 13mm 13mm 0; overflow: hidden; break-after: page; }
   .page:last-child { break-after: auto; }
   header { display: flex; justify-content: space-between; align-items: stretch; gap: 10mm; height: 18mm; margin-bottom: 5mm; }
+  .lead { display: flex; align-items: stretch; gap: 4mm; }
+  .code { display: flex; align-items: center; justify-content: center; min-width: 26mm; padding: 0 3mm; background: #111; color: #fff;
+    font-size: 20pt; font-weight: 800; letter-spacing: .02em; border-radius: 1.5mm; }
   .title { border-left: 2.2mm solid #111; padding-left: 4mm; }
+  .code + .title { border-left: 0; padding-left: 0; display: flex; flex-direction: column; justify-content: center; }
   .kind { font-size: 7.5pt; font-weight: 600; text-transform: uppercase; letter-spacing: .16em; color: #666; }
   h1 { margin: 1mm 0 0; font-size: 24pt; line-height: 1.05; letter-spacing: -.02em; font-weight: 700; }
   .stat { text-align: right; display: flex; flex-direction: column; justify-content: flex-end; }
@@ -81,10 +85,10 @@ function sheet(group, stamp) {
   const pages = pagesFor(records);
   return pages.map((chunk, index) => `<div class="page">
     <header>
-      <div class="title">
+      <div class="lead">${group.code ? `<div class="code">${esc(group.code)}</div>` : ""}<div class="title">
         <div class="kind">${group.special ? "Specialus aplankas" : "Modelio aplankas"}${brand ? ` · ${esc(brand)}` : ""}</div>
         <h1>${esc(group.name)}</h1>
-      </div>
+      </div></div>
       <div class="stat"><b>${records.length}</b><span>CoC aplanke${pages.length > 1 ? ` · lapas ${index + 1} iš ${pages.length}` : ""}</span></div>
     </header>
     ${table(chunk, index * PER_PAGE, showMake)}
@@ -92,7 +96,7 @@ function sheet(group, stamp) {
   </div>`).join("");
 }
 
-/** Išspausdina aplankų lapus. `groups` – iš `folderGroups()`. Grąžina rėmelį (bandymams). */
+/** Išspausdina aplankų lapus. `groups` – iš `folderGroups()` (+ `code`). Grąžina rėmelį (bandymams). */
 export function printFolderSheets(groups, stamp, { print = true } = {}) {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
