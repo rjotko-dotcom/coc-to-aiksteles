@@ -7,14 +7,15 @@ import { cleanVin, modelFromVin } from "./logic.js";
 
 /**
  * Turimi modeliai. `lmed` – vidutinis dažų šviesumas originalioje nuotraukoje
- * (nuo jo skaičiuojami šešėliai ir atspindžiai). Nuotraukos – Wikimedia Commons,
+ * (nuo jo skaičiuojami šešėliai ir atspindžiai). `exact` – spalvos, kurių
+ * nuotrauka tikra (rodoma be perdažymo). `author` – Commons nuotraukoms. Nuotraukos – Wikimedia Commons,
  * CC BY-SA 4.0: fonas pašalintas, dažai perdažomi (žr. `web/sandelis/cars/CREDITS.md`).
  */
 export const CARS = {
   qashqai: { name: "Qashqai", generation: "J12", lmed: 81.5, w: 960, h: 502,
     author: "Alexander Migl", file: "Nissan Qashqai (J12) Automesse Ludwigsburg 2022 1X7A5875.jpg" },
-  "x-trail": { name: "X-Trail", generation: "T33", lmed: 87.5, w: 960, h: 460,
-    author: "Alexander-93", file: "Nissan X-Trail (T33) 1X7A7179.jpg" },
+  // Oficiali pilka nuotrauka: pilka rodoma tokia, kokia yra, kitos spalvos – perdažomos.
+  "x-trail": { name: "X-Trail", generation: "T33", lmed: 98.9, w: 960, h: 600, exact: ["PILKA"] },
   juke: { name: "Juke", generation: "F16", lmed: 87.9, w: 960, h: 659,
     author: "Damian B Oh", file: "Nissan Juke N Design F16 Flame Red (1).jpg" },
   ariya: { name: "Ariya", generation: "FE0", lmed: 131.6, w: 960, h: 525,
@@ -71,7 +72,7 @@ export function paintOf(record) {
 }
 
 /** Nuoroda į nuotraukos puslapį Commons (autorystei nurodyti). */
-export const creditUrl = (car) => `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(car.file.replace(/ /g, "_"))}`;
+export const creditUrl = (car) => !car.file ? "" : `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(car.file.replace(/ /g, "_"))}`;
 
 export const cssColour = (paint) => (paint ? `rgb(${paint.rgb.join(" ")})` : "");
 
@@ -143,7 +144,8 @@ export function carImage(key, paint, width = 960) {
       const canvas = document.createElement("canvas");
       canvas.width = w; canvas.height = h;
       const context = canvas.getContext("2d", { willReadFrequently: true });
-      if (paint) {
+      const exact = !paint || (car.exact || []).includes(String(paint.name || "").split("/")[0].trim().toUpperCase());
+      if (!exact) {
         context.drawImage(mask, 0, 0, w, h);
         const maskData = context.getImageData(0, 0, w, h).data;
         context.clearRect(0, 0, w, h);
