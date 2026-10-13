@@ -16,7 +16,7 @@ import * as disk from "./folder.js";
 import { CARS, carImage, carKeyOf, creditUrl, cssColour, generationOf, paintOf, yearOf } from "./cars.js";
 import {
   STATUS, assignFolderCodes, backupDue, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
-  mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
+  localDay, mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
 
@@ -348,7 +348,7 @@ async function handleFiles(fileList) {
   render();
   runQueue();
   toast(`Įkelta lapų: ${fresh.length}. VIN ir modeliai skaitomi…`);
-  $("review").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  openReview();
 
   // Peržiūros paveikslėliai – kai lapai jau saugūs.
   for (const [record, bytes] of fresh) {
@@ -684,6 +684,8 @@ function reviewList() {
 function renderReview() {
   const review = reviewList();
   $("review").classList.toggle("hidden", !review.length);
+  if (!review.length) $("review").classList.remove("open");
+  renderRail();
   $("review-count").textContent = review.length ? `· ${review.length}` : "";
   const list = $("review-list");
   const existing = new Map([...list.children].map((card) => [card.dataset.id, card]));
@@ -838,6 +840,8 @@ function renderCounts() {
       .filter(Boolean).join(" · ")
     : "";
   $("empty").classList.toggle("hidden", records.length > 0);
+  $("rail-review").textContent = n[STATUS.REVIEW] || "";
+  renderLastScan();
 }
 
 // ---------------------------------------------------------------------------
@@ -935,10 +939,29 @@ function colourTag(record) {
   return `<span class="colour-tag"><i style="${paint ? `--paint:${cssColour(paint)}` : ""}"></i>${esc(name)}</span>`;
 }
 
+const MONTHS = ["saus.", "vas.", "kov.", "bal.", "geg.", "birž.", "liep.", "rugp.", "rugs.", "spal.", "lapkr.", "gruod."];
+
+/** „2026-10-13“ → „13 spal.“ (kitais metais – su metais). */
+function shortDate(iso) {
+  const day = localDay(iso);
+  const match = day.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return showDate(iso);
+  const text = `${Number(match[3])} ${MONTHS[Number(match[2]) - 1]}`;
+  return match[1] === todayIso().slice(0, 4) ? text : `${text} ${match[1]}`;
+}
+
+/** Modelio pavadinimas sąrašui: „Qashqai“, „X-Trail“. */
+function displayModel(record) {
+  const car = CARS[carKeyOf(record)];
+  if (car) return car.name;
+  const model = String(record.model || "").trim();
+  return model ? model.toLowerCase().replace(/(^|[\s-])\p{L}/gu, (ch) => ch.toUpperCase()) : "—";
+}
+
 /** Mažas automobilio paveikslėlis eilutėje (nuspalvinamas po atvaizdavimo). */
 function thumbHtml(record) {
   const key = carKeyOf(record);
-  if (!key) return `<span class="model-icon">${icon("file")}</span>`;
+  if (!key) return `<span class="car-thumb none">${icon("file")}</span>`;
   return `<span class="car-thumb" data-car="${key}" data-id="${record.id}"><img alt="" hidden></span>`;
 }
 
@@ -948,7 +971,7 @@ function hydrateThumbs(root = document) {
     const image = box.querySelector("img");
     if (!record || image.dataset.ready === box.dataset.id) return;
     image.dataset.ready = box.dataset.id;
-    carImage(box.dataset.car, paintOf(record), 200).then((url) => {
+    carImage(box.dataset.car, paintOf(record), 240).then((url) => {
       if (!url || image.dataset.ready !== box.dataset.id) return;
       image.src = url;
       image.hidden = false;
@@ -964,7 +987,7 @@ function vinCell(vin) {
 function inFolderFilter(record) {
   if (!folderFilter) return true;
   if (folderFilter === MODEL_FOLDERS) return !inSpecialFolder(record);
-  return String(record.folder || "").trim() === folderFilter;
+  return folderOf(record) === folderFilter;
 }
 
 function visibleRecords() {
@@ -997,32 +1020,31 @@ function renderTable() {
   moveIndicator();
 
   const rows = list.slice(0, shown).map((record, index) => {
-    const statusText = record.status === STATUS.OUT
-      ? `<span class="pill out">Atiduotas ${esc(showDate(record.given_date))}</span>
-         ${record.given_to ? `<small>${esc(record.given_to)}</small>` : ""}`
-      : `<span class="pill ${record.status}">${esc(statusName(record.status))}</span>`;
-    const action = record.status === STATUS.OUT
-      ? `<button type="button" class="btn sm" data-return="${record.id}">${icon("undo")}Grąžinti</button>`
-      : `<button type="button" class="btn sm" data-give="${record.id}">${icon("send")}Atiduoti</button>`;
-    const sub = [record.make, record.note].filter(Boolean).map(esc).join(" · ");
     const generation = generationOf(record);
-    return `<tr data-row="${record.id}" class="${selected.has(record.id) ? "selected" : ""} ${record.id === stageId ? "staged" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
-      <td class="check"><input type="checkbox" data-select="${record.id}" ${selected.has(record.id) ? "checked" : ""}
-          aria-label="Pažymėti ${esc(record.vin)}"></td>
-      <td class="vin">${vinCell(record.vin)}</td>
-      <td><div class="model">${thumbHtml(record)}
-        <div><b>${esc(record.model || "—")}${generation ? ` <em class="gen">${esc(generation)}</em>` : ""}</b>
-          <small>${[sub, colourTag(record)].filter(Boolean).join(" · ")}</small></div></div></td>
-      <td>${folderChip(record)}</td>
-      <td class="date hide-sm">${esc(showDate(record.added))}</td>
-      <td class="status-cell">${statusText}</td>
-      <td class="actions">${action}</td>
-    </tr>`;
+    const paint = paintOf(record);
+    const vin = record.vin || "";
+    const status = record.status === STATUS.OUT
+      ? `<i class="dot out"></i><span>Atiduotas<small>${esc(shortDate(record.given_date))}${record.given_to ? ` · ${esc(record.given_to)}` : ""}</small></span>`
+      : `<i class="dot ${record.status}"></i><span>${esc(statusName(record.status))}</span>`;
+    const name = folderOf(record);
+    return `<div data-row="${record.id}" class="lrow ${selected.has(record.id) ? "selected" : ""} ${record.id === stageId ? "staged" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
+      <label class="doc-check" title="Pažymėti"><input type="checkbox" data-select="${record.id}" ${selected.has(record.id) ? "checked" : ""}
+          aria-label="Pažymėti ${esc(vin)}"><svg><use href="#i-pdf"/></svg></label>
+      ${thumbHtml(record)}
+      <div class="lrow-main">
+        <b>${esc(displayModel(record))}${generation ? ` <em class="gen">${esc(generation)}</em>` : ""}${paint ? ` <i class="paint-dot" style="--paint:${cssColour(paint)}" title="${esc(record.coc.colour)}"></i>` : ""}</b>
+        <span class="lrow-vin">${vin ? `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>` : "VIN nėra"}</span>
+      </div>
+      <div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(codeOf(name) || name)}${
+        inSpecialFolder(record) && codeOf(name) ? `<small>${esc(name)}</small>` : ""}</span></div>
+      <div class="lrow-status">${status}</div>
+      <button type="button" class="kebab" data-menu="${record.id}" aria-label="Veiksmai">${icon("dots")}</button>
+    </div>`;
   });
   animateRows = false;
-  $("rows").innerHTML = rows.join("") || `<tr class="empty-row"><td colspan="7">${
-    query ? "Nieko nerasta." : records.length ? "Šiame sąraše tuščia." : "Dar nėra nė vieno liudijimo – įmeskite nuskenuotą PDF."
-  }</td></tr>`;
+  $("rows").innerHTML = rows.join("") || `<div class="empty-row">${
+    query ? "Nieko nerasta." : records.length ? "Šiame sąraše tuščia." : ""
+  }</div>`;
 
   const more = list.length - shown;
   $("list-note").innerHTML = more > 0
@@ -1052,13 +1074,13 @@ const PAZYMA_NEEDS = [
 const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim()).map(([, name]) => name);
 
 /** Ar skydelis matomas šalia sąrašo (plačiame ekrane). */
-const stageBeside = () => window.matchMedia("(min-width: 1360px)").matches;
+const stageBeside = () => window.matchMedia("(min-width: 1100px)").matches;
 
 function setStage(id, animate = true) {
   const changed = id !== stageId;
   stageId = id;
-  document.querySelectorAll("#rows tr.staged").forEach((row) => row.classList.toggle("staged", row.dataset.row === id));
-  if (id) document.querySelector(`#rows tr[data-row="${CSS.escape(id)}"]`)?.classList.add("staged");
+  document.querySelectorAll("#rows .staged").forEach((row) => row.classList.toggle("staged", row.dataset.row === id));
+  if (id) document.querySelector(`#rows [data-row="${CSS.escape(id)}"]`)?.classList.add("staged");
   renderStage(changed && animate);
 }
 
@@ -1070,11 +1092,9 @@ function renderStage(animate = false) {
   stage.classList.toggle("empty", !record);
   if (!record) {
     $("stage-model").textContent = records.length ? "Pasirinkite CoC" : "Sandėlis tuščias";
-    $("stage-kicker").textContent = "NISSAN";
-    $("stage-facts").innerHTML = "";
-    $("stage-actions").innerHTML = "";
-    $("stage-ready").innerHTML = "";
-    $("stage-credit").innerHTML = "";
+    $("stage-sub").innerHTML = records.length ? "" : "Įkelkite nuskenuotą PDF dešinėje";
+    $("stage-vin").textContent = "—";
+    for (const id of ["stage-facts", "stage-actions", "stage-ready", "stage-credit"]) $(id).innerHTML = "";
     $("stage-img").hidden = true;
     stageShown = "";
     return;
@@ -1084,36 +1104,31 @@ function renderStage(animate = false) {
   const paint = paintOf(record);
   const generation = generationOf(record);
   const year = yearOf(record);
-  $("stage-kicker").textContent = [record.make || "NISSAN", generation, year].filter(Boolean).join(" · ");
-  $("stage-model").textContent = record.model || car?.name || "—";
-  stage.style.setProperty("--paint", paint ? cssColour(paint) : "rgb(120 124 130)");
-
-  const vin = record.vin || "";
   const coc = record.coc || {};
+  $("stage-model").textContent = [record.make || "NISSAN", record.model || car?.name || ""].filter(Boolean).join(" ");
+  $("stage-sub").innerHTML = [esc(generation), year, coc.colour ? colourTag(record) : ""].filter(Boolean).join(" · ");
+  stage.style.setProperty("--paint", paint ? cssColour(paint) : "rgb(120 124 130)");
+  $("stage-vin").textContent = record.vin || "—";
+
+  const name = folderOf(record);
   const status = record.status === STATUS.OUT
-    ? `<span class="pill out">Atiduotas ${esc(showDate(record.given_date))}</span>${record.given_to ? `<small>${esc(record.given_to)}</small>` : ""}`
-    : `<span class="pill ${record.status}">${esc(statusName(record.status))}</span>`;
+    ? `Atiduotas <i class="dot out"></i>` : `${esc(statusName(record.status))} <i class="dot ${record.status}"></i>`;
   $("stage-facts").innerHTML = `
-    <div class="wide"><dt>VIN</dt><dd class="mono-vin">${vin ? `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>` : "—"}</dd></div>
-    <div><dt>Aplankas</dt><dd>${folderChip(record)}</dd></div>
-    <div><dt>Būsena</dt><dd>${status}</dd></div>
-    <div><dt>Spalva</dt><dd>${colourTag(record) || `<span class="muted-inline">neperskaityta</span>`}</dd></div>
-    <div><dt>Pagaminta</dt><dd>${esc(coc.manufacture_date || "—")}</dd></div>
-    <div class="wide"><dt>Tipo patvirtinimas</dt><dd class="mono-small">${esc(coc.approval_number || "—")}${coc.approval_date ? ` <span class="muted-inline">${esc(coc.approval_date)}</span>` : ""}</dd></div>`;
+    <div>${icon("file")}<dt>CoC</dt><dd>${status}</dd></div>
+    <div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(codeOf(name) || name)}</dd></div>
+    <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
   $("stage-ready").className = `stage-ready ${missing.length ? "warn" : "ok"}`;
   $("stage-ready").innerHTML = missing.length
-    ? `${icon("doc")}<span>Pažymai trūksta ${esc(missing.join(", "))}</span>`
-    : `${icon("check")}<span>Pažymai viskas perskaityta</span>`;
-  const give = record.status === STATUS.IN
-    ? `<button type="button" class="btn primary" data-stage="give">${icon("send")}Atiduoti</button>`
-    : record.status === STATUS.OUT ? `<button type="button" class="btn" data-stage="return">${icon("undo")}Grąžinti</button>` : "";
-  $("stage-actions").innerHTML = `${give}
-    <button type="button" class="btn" data-stage="pazyma">${icon("doc")}Pažyma</button>
-    <button type="button" class="btn" data-stage="pdf">${icon("eye")}PDF</button>
-    <button type="button" class="btn ghost" data-stage="detail">Atidaryti</button>`;
+    ? `${icon("doc")}<span>Pažymai trūksta: ${esc(missing.join(", "))}</span>`
+    : `${icon("check")}<span>Pažymos duomenys perskaityti${coc.approval_number ? ` · ${esc(coc.approval_number)}` : ""}</span>`;
+  $("stage-actions").innerHTML = `
+    <button type="button" class="skew-btn" data-stage="pdf"><span>${icon("eye")}Peržiūrėti dokumentą</span></button>
+    <button type="button" class="skew-btn" data-stage="pazyma"><span>${icon("doc")}Pažyma</span></button>
+    ${record.status === STATUS.IN ? `<button type="button" class="skew-btn red" data-stage="give"><span>${icon("send")}Atiduoti</span></button>`
+      : record.status === STATUS.OUT ? `<button type="button" class="skew-btn" data-stage="return"><span>${icon("undo")}Grąžinti</span></button>` : ""}`;
   $("stage-credit").innerHTML = car
-    ? `Nuotr.: <a href="${creditUrl(car)}" target="_blank" rel="noopener">${esc(car.author)}</a>, CC BY-SA 4.0 · spalva pakeista pagal CoC`
+    ? `Nuotr.: <a href="${creditUrl(car)}" target="_blank" rel="noopener">${esc(car.author)}</a>, CC BY-SA 4.0 · spalva pagal CoC`
     : "";
 
   const shownKey = `${key}|${paint ? paint.rgb.join(",") : "-"}`;
@@ -1142,6 +1157,87 @@ function renderStage(animate = false) {
   }).catch(() => { image.hidden = true; });
 }
 
+// ---------------------------------------------------------------------------
+// Apatinė juosta, patikros langas, kairysis meniu, eilutės meniu
+// ---------------------------------------------------------------------------
+
+const plural = (n, one, few, many) => {
+  const tens = n % 100; const last = n % 10;
+  if (last === 1 && tens !== 11) return one;
+  if (last >= 2 && last <= 9 && (tens < 10 || tens > 20)) return few;
+  return many;
+};
+
+/** „Paskutinis skenas · 12 dokumentų · ● 2 patikrinti“. */
+function renderLastScan() {
+  const pill = $("last-scan");
+  if (!records.length) { pill.hidden = true; return; }
+  const latest = records.reduce((best, record) => (String(record.added) > String(best.added) ? record : best), records[0]);
+  const pages = scanOf(latest).length;
+  const review = records.filter((record) => record.status === STATUS.REVIEW).length;
+  pill.hidden = false;
+  pill.classList.toggle("todo", review > 0);
+  pill.innerHTML = `<span>${icon("file")}<b>Paskutinis skenas</b><em>·</em>${pages} ${plural(pages, "dokumentas", "dokumentai", "dokumentų")}
+    <em>·</em><i class="dot ${review ? "tikrinti" : "turimas"}"></i><span class="${review ? "todo-text" : ""}">${review ? `${review} patikrinti` : "viskas patikrinta"}</span>${icon("chev")}</span>`;
+}
+
+function openReview() {
+  if (!reviewList().length) { toast("Patikrinti nėra ko – viskas patvirtinta."); return; }
+  $("review").classList.add("open");
+  renderRail();
+  requestAnimationFrame(() => $("review-list").querySelector("input[data-field]")?.focus({ preventScroll: true }));
+}
+
+function closeReview() {
+  $("review").classList.remove("open");
+  renderRail();
+}
+
+function renderRail() {
+  const reviewing = $("review").classList.contains("open");
+  const current = reviewing ? "scan" : tab === STATUS.OUT ? "history" : "library";
+  document.querySelectorAll(".rail-item").forEach((item) => item.classList.toggle("on", item.dataset.rail === current));
+}
+
+let menuId = null;
+
+function openRowMenu(id, anchor) {
+  const record = byId(id);
+  const menu = $("row-menu");
+  if (!record) return;
+  if (menuId === id && !menu.hidden) { closeRowMenu(); return; }
+  menuId = id;
+  const item = (action, iconName, label, extra = "") => `<button type="button" data-menu-action="${action}" class="${extra}">${icon(iconName)}${label}</button>`;
+  menu.innerHTML = [
+    item("detail", "file", "Atidaryti"),
+    item("pdf", "eye", "Peržiūrėti dokumentą"),
+    item("pazyma", "doc", "Pažyma"),
+    item("download", "download", "Atsisiųsti PDF"),
+    record.status === STATUS.IN ? item("give", "send", "Atiduoti", "red") : "",
+    record.status === STATUS.OUT ? item("return", "undo", "Grąžinti į turimus") : "",
+  ].join("");
+  menu.hidden = false;
+  const box = anchor.getBoundingClientRect();
+  const height = menu.offsetHeight;
+  const top = box.bottom + height + 8 > window.innerHeight ? box.top - height - 6 : box.bottom + 6;
+  menu.style.top = `${Math.max(8, top)}px`;
+  menu.style.left = `${Math.max(8, box.right - menu.offsetWidth)}px`;
+}
+
+function closeRowMenu() {
+  $("row-menu").hidden = true;
+  menuId = null;
+}
+
+function rowAction(action, id) {
+  if (action === "detail") openDetail(id);
+  if (action === "pdf") openPdf(id);
+  if (action === "pazyma") makePazymos([id]);
+  if (action === "download") downloadPdfs([id]);
+  if (action === "give") openGive([id]);
+  if (action === "return") returnRecords([id]);
+}
+
 function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
   $("bulk").classList.toggle("on", selected.size > 0);
@@ -1149,21 +1245,30 @@ function renderBulk() {
 }
 
 function renderFolders() {
-  const folders = allFolders();
-  if (folderFilter && folderFilter !== MODEL_FOLDERS && !folders.some((folder) => folder.name === folderFilter)) folderFilter = "";
+  const special = allFolders();
+  const specialNames = new Set(special.map((folder) => folder.name));
+  const names = folderNames(records, savedFolders);
+  const models = names.filter((name) => !specialNames.has(name));
+  const inStock = (name) => records.filter((record) => record.status === STATUS.IN && folderOf(record) === name).length;
+  if (folderFilter && folderFilter !== MODEL_FOLDERS && !names.includes(folderFilter)) folderFilter = "";
+  const option = (name) => `<option value="${esc(name)}">${codeOf(name) ? `${esc(codeOf(name))} · ` : ""}${esc(name)} (${inStock(name)})</option>`;
   $("folder-filter").innerHTML = [
     `<option value="">Visi aplankai</option>`,
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
-    ...folders.map((folder) => `<option value="${esc(folder.name)}">${codeOf(folder.name) ? `${esc(codeOf(folder.name))} · ` : ""}${esc(folder.name)} (${folder.count})</option>`),
+    models.length ? `<optgroup label="Modelių aplankai">${models.map(option).join("")}</optgroup>` : "",
+    special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => option(folder.name)).join("")}</optgroup>` : "",
   ].join("");
   $("folder-filter").value = folderFilter;
   renderPrintButton();
   $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
-  $("folder-nav").innerHTML = folders.length
-    ? folders.map((folder) => `<button type="button" class="nav ${folderFilter === folder.name ? "on-folder" : ""}"
-        data-folder="${esc(folder.name)}">${codeOf(folder.name) ? `<b class="code">${esc(codeOf(folder.name))}</b>` : icon("folder")}${esc(folder.name)}<span class="badge">${folder.count || ""}</span></button>`).join("")
+  $("filters-btn").classList.toggle("on", Boolean(folderFilter) || !$("filter-row").hidden);
+  const navItem = (name) => `<button type="button" class="nav ${folderFilter === name ? "on-folder" : ""} ${specialNames.has(name) ? "special" : ""}"
+      data-folder="${esc(name)}">${codeOf(name) ? `<b class="code">${esc(codeOf(name))}</b>` : icon("folder")}<span class="nav-name">${esc(name)}</span><span class="badge">${inStock(name) || ""}</span></button>`;
+  $("folders-title").textContent = "Aplankai";
+  $("folder-nav").innerHTML = names.length
+    ? [...models, ...special.map((folder) => folder.name)].map(navItem).join("")
     : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
-  $("folders").innerHTML = folders.map((folder) => `<option value="${esc(folder.name)}">`).join("");
+  $("folders").innerHTML = special.map((folder) => `<option value="${esc(folder.name)}">`).join("");
 }
 
 /** Aplankų kodų langas: kodą galima pakeisti, kad atitiktų lipduką ant aplanko. */
@@ -1542,6 +1647,8 @@ async function renderBackupState() {
   const ready = records.filter((record) => record.status !== STATUS.REVIEW).length;
   const button = $("store-btn");
   card.classList.remove("ok", "due");
+  $("store-dot").className = `store-dot ${store.state === "ok" ? "ok" : store.state === "permission" ? "due" : ""}`;
+  $("store-dot").title = store.state === "ok" ? `Saugoma aplanke „${store.handle.name}“` : "Duomenys tik naršyklėje – meniu → Duomenų aplankas";
   if (store.state === "ok") {
     card.classList.add("ok");
     $("store-title").textContent = `Saugoma: ${store.handle.name}`;
@@ -1678,6 +1785,7 @@ function focusSearch() {
 
 function setTab(next) {
   tab = next;
+  renderRail();
   shown = PAGE;
   if ($("q").value) { $("q").value = ""; renderAnswer(""); }
   animateRows = true;
@@ -1690,19 +1798,52 @@ $("rows").addEventListener("click", (event) => {
   const box = event.target.closest("[data-select]");
   if (box) {
     if (box.checked) selected.add(box.dataset.select); else selected.delete(box.dataset.select);
-    box.closest("tr").classList.toggle("selected", box.checked);
+    box.closest("[data-row]").classList.toggle("selected", box.checked);
     renderBulk();
     return;
   }
-  const button = event.target.closest("button");
-  if (button?.dataset.give) { openGive([button.dataset.give]); return; }
-  if (button?.dataset.return) { returnRecords([button.dataset.return]); return; }
-  const row = event.target.closest("tr[data-row]");
+  // Paspaudus PDF ženkliuką – pažymima (pats spragtelėjimas pasieks varnelę).
+  if (event.target.closest(".doc-check")) return;
+  const kebab = event.target.closest("[data-menu]");
+  if (kebab) { openRowMenu(kebab.dataset.menu, kebab); return; }
+  const row = event.target.closest("[data-row]");
   if (!row) return;
-  // Plačiame ekrane paspaudus – CoC parodomas skydelyje, antrą kartą – atidaromas.
+  // Paspaudus – CoC parodomas kairėje, antrą kartą – atidaromas.
   if (stageBeside() && row.dataset.row !== stageId) { setStage(row.dataset.row); return; }
   setStage(row.dataset.row, false);
   openDetail(row.dataset.row);
+});
+$("rows").addEventListener("dblclick", (event) => {
+  const row = event.target.closest("[data-row]");
+  if (row && !event.target.closest(".doc-check, .kebab")) openDetail(row.dataset.row);
+});
+$("row-menu").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-menu-action]");
+  if (!button) return;
+  const id = menuId;
+  closeRowMenu();
+  rowAction(button.dataset.menuAction, id);
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!$("row-menu").hidden && !event.target.closest("#row-menu, .kebab")) closeRowMenu();
+});
+document.querySelector(".rows-wrap").addEventListener("scroll", closeRowMenu, { passive: true });
+document.querySelectorAll(".rail-item").forEach((item) => item.addEventListener("click", () => {
+  const rail = item.dataset.rail;
+  if (rail === "library") { closeReview(); if (tab === STATUS.OUT) setTab(STATUS.IN); }
+  if (rail === "history") { closeReview(); setTab(STATUS.OUT); }
+  if (rail === "scan") { if (reviewList().length) openReview(); else $("files").click(); }
+  if (rail === "folders") {
+    $("sidebar").classList.add("open");
+    $("folder-nav").scrollIntoView({ block: "start", behavior: reduceMotion() ? "auto" : "smooth" });
+  }
+  renderRail();
+}));
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  if (!$("row-menu").hidden) closeRowMenu();
+  else if ($("sidebar").classList.contains("open")) $("sidebar").classList.remove("open");
+  else if ($("review").classList.contains("open") && !event.target.closest?.("input")) closeReview();
 });
 $("stage-actions").addEventListener("click", (event) => {
   const action = event.target.closest("[data-stage]")?.dataset.stage;
@@ -1729,7 +1870,7 @@ $("folder-nav").addEventListener("click", (event) => {
   $("sidebar").classList.remove("open");
   setTab(STATUS.IN);
   setFolderFilter(folderFilter === button.dataset.folder ? "" : button.dataset.folder);
-  $("list").scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  closeReview();
 });
 $("answer").addEventListener("click", (event) => {
   const button = event.target.closest("button");
@@ -1746,11 +1887,10 @@ $("check-all").addEventListener("change", (event) => {
 document.querySelectorAll(".sidebar [data-nav]").forEach((link) => link.addEventListener("click", (event) => {
   event.preventDefault();
   $("sidebar").classList.remove("open");
+  if (link.dataset.nav === "review") { openReview(); return; }
+  closeReview();
   if (link.dataset.tab) setTab(link.dataset.tab);
-  const target = link.dataset.nav === "top" ? null : $(link.dataset.nav);
-  if (target && target.classList.contains("hidden")) { toast("Patikrinti nėra ko – viskas patvirtinta."); return; }
-  if (target) target.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
-  else window.scrollTo({ top: 0, behavior: reduceMotion() ? "auto" : "smooth" });
+  if (link.dataset.nav === "top") focusSearch();
 }));
 
 /** Šoniniame meniu paryškinama ta vieta, kurią šiuo metu matote. */
@@ -1790,6 +1930,10 @@ const ACTIONS = {
   "folder-restore": () => connectFolder(true),
   "folder-allow": allowFolder,
   "print-folders": printFolders,
+  filters: () => { $("filter-row").hidden = !$("filter-row").hidden; renderFolders(); },
+  "open-review": () => { if (reviewList().length) openReview(); else toast("Visi CoC patikrinti."); },
+  "close-review": closeReview,
+  "open-staged": () => { if (stageId) openDetail(stageId); else toast("Pasirinkite CoC sąraše.", "warn"); },
   template: async () => { await pickTemplate(); },
   codes: openCodes,
   "open-pdf": () => openPdf(detailId),
