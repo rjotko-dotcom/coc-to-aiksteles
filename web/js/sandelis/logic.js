@@ -157,6 +157,41 @@ export function folderGroups(records) {
   })).sort((a, b) => a.name.localeCompare(b.name, "lt"));
 }
 
+/**
+ * Nissan modelio kodai VIN'e (4–6 ženklai, pvz. SJN**J12**…) – kartu ir karta.
+ * Tikrinta su tikrais CoC: SJNJ12… Qashqai, JN1T33… X-Trail, SJNF16… Juke,
+ * SJNZE2… Leaf, VNVK15… Micra.
+ */
+export const NISSAN_CODES = {
+  J10: { model: "QASHQAI", generation: "J10" },
+  J11: { model: "QASHQAI", generation: "J11" },
+  J12: { model: "QASHQAI", generation: "J12" },
+  T31: { model: "X-TRAIL", generation: "T31" },
+  T32: { model: "X-TRAIL", generation: "T32" },
+  T33: { model: "X-TRAIL", generation: "T33" },
+  F15: { model: "JUKE", generation: "F15" },
+  F16: { model: "JUKE", generation: "F16" },
+  ZE0: { model: "LEAF", generation: "ZE0" },
+  ZE1: { model: "LEAF", generation: "ZE1" },
+  ZE2: { model: "LEAF", generation: "ZE2" },
+  K13: { model: "MICRA", generation: "K13" },
+  K14: { model: "MICRA", generation: "K14" },
+  K15: { model: "MICRA", generation: "K15" },
+  FE0: { model: "ARIYA", generation: "FE0" },
+};
+
+/** Modelis ir karta iš VIN (null, jei kodas nežinomas). */
+export function modelFromVin(vin) {
+  const value = cleanVin(vin);
+  if (value.length < 9) return null;
+  // Dažniausiai kodas yra 4–6 ženkluose; kai kuriuose VIN – kiek toliau (iki 9-o).
+  for (let start = 3; start <= 6; start += 1) {
+    const hit = NISSAN_CODES[value.slice(start, start + 3)];
+    if (hit) return { make: "NISSAN", ...hit };
+  }
+  return null;
+}
+
 /** Rūšiavimas: naujausi viršuje. */
 export const newestFirst = (a, b) => String(b.added || "").localeCompare(String(a.added || ""));
 

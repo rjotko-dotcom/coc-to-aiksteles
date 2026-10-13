@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits, folderGroups,
+  EXCEL_COLUMNS, STATUS, backupDue, cleanVin, counts, duplicatesOf, excelSheets, folderOf, matches, mergePlan, specialFolders, vinHits, folderGroups, modelFromVin,
   pdfName, splitMakeModel, vinProblems,
 } from "../js/sandelis/logic.js";
 import { buildXlsx, excelDate } from "../js/sandelis/xlsx.js";
@@ -153,4 +153,14 @@ test("aplankų lapai: tik turimi, sugrupuoti ir surūšiuoti", () => {
     ["Nėra moderoje", true, ["C3", "D4"]],
     ["QASHQAI", false, ["A1", "B2"]],
   ]);
+});
+
+test("modelis ir karta iš VIN (tikri Nissan VIN)", () => {
+  assert.deepEqual(modelFromVin("SJNJ12TA9U2374201"), { make: "NISSAN", model: "QASHQAI", generation: "J12" });
+  assert.equal(modelFromVin("JN1T33TB7U0062538").model, "X-TRAIL");
+  assert.equal(modelFromVin("SJNF16FA2U2194020").model, "JUKE");
+  assert.equal(modelFromVin("SJNZE2TB8U1005299").generation, "ZE2");
+  assert.equal(modelFromVin("VNVK1500X76353558").model, "MICRA");
+  assert.equal(modelFromVin("WVWZZZ1KZAW000001"), null);
+  assert.equal(modelFromVin(""), null);
 });

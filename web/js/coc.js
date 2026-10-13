@@ -405,8 +405,13 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
 
   // Tipo patvirtinimas: frazė skiriasi pagal kalbą („granted on“, „issued on“,
   // „délivrée le“), todėl remiamės numeriu, o datos ieškome iškart po jo.
-  const approval = APPROVAL_RE.exec(flat);
-  const loose = approval ? null : APPROVAL_LOOSE_RE.exec(flat);
+  // Atpažinimas kartais sulieja žodžius: „approvale13*2018/858*00293*07grantedon“.
+  // Tada numeris neturi ribų iš šonų – jas atkuriame prieš ieškodami.
+  const spaced = flat
+    .replace(/(approval|réception|genehmigung|omologazione|homologación)(?=[eE]\s*\d)/gi, "$1 ")
+    .replace(/(\*\s*\d{1,3})(?=(granted|issued|délivrée|delivree|erteilt|rilasciata|concedida))/gi, "$1 ");
+  const approval = APPROVAL_RE.exec(spaced);
+  const loose = approval ? null : APPROVAL_LOOSE_RE.exec(spaced);
   if (approval || loose) {
     let end;
     if (approval) {
@@ -420,7 +425,7 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
         `Tipo patvirtinimo Nr. „${data.approval_number}“ sudėliotas iš neaiškiai atpažinto teksto – sulyginkite su liudijimu.`,
       );
     }
-    const date = DATE_RE.exec(flat.slice(end, end + 120));
+    const date = DATE_RE.exec(spaced.slice(end, end + 120));
     if (date) data.approval_date = normaliseDate(date[0]);
   }
 

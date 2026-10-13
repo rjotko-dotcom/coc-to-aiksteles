@@ -15,7 +15,7 @@ import { PER_PAGE, printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
 import {
   EXCEL_COLUMNS, STATUS, backupDue, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
-  mergePlan, newestFirst, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
+  mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
 
@@ -373,11 +373,13 @@ const typedByHand = (record, key) => Boolean(record.touched || (record.typed || 
 
 /**
  * Lapo juostos (dalimis nuo aukščio), kuriose Nissan CoC pirmoje pusėje yra
- * 0.1 markė, 0.2 tipas ir 0.2.1 modelis (~0,07–0,10) bei 0.10 VIN (~0,345).
- * Išmatuota su tikrais X-Trail, Leaf ir Micra lapais; paraštė palieka vietos
- * šiek tiek paslinktam skenui. Neradus VIN, skaitoma didesnė lapo dalis.
+ * viskas, ko reikia pažymai: 0.1 markė, 0.2 tipas/variantas/versija ir 0.2.1
+ * modelis (~0,07–0,10); 0.10 VIN, 0.11 pagaminimo data ir tipo patvirtinimo
+ * Nr. su data (~0,345–0,39); 40 spalva (~0,94). Išmatuota su tikrais X-Trail,
+ * Leaf ir Micra lapais; paraštė palieka vietos šiek tiek paslinktam skenui.
+ * Neradus VIN, skaitoma didesnė lapo dalis.
  */
-const VIN_BANDS = [[0.035, 0.135], [0.315, 0.385]];
+const VIN_BANDS = [[0.035, 0.135], [0.315, 0.405], [0.905, 0.97]];
 
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
 const PAGE_TIMEOUT = 20 * 60_000;
@@ -490,6 +492,10 @@ async function readLane() {
       const readValues = {
         vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version,
       };
+      // Modelio (ar markės) lape neperskaityta – Nissan VIN'e yra modelio kodas (J12 → QASHQAI).
+      const fromVin = modelFromVin(readValues.vin);
+      if (fromVin && !readValues.model) readValues.model = fromVin.model;
+      if (fromVin && !readValues.make) readValues.make = fromVin.make;
       for (const [key, value] of Object.entries(readValues)) {
         if (!typedByHand(record, key)) changes[key] = value;
       }
