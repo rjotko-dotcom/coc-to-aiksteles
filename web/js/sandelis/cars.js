@@ -115,7 +115,7 @@ function paintPixels(pixels, mask, lmed, rgb) {
     const r = pixels[i]; const g = pixels[i + 1]; const b = pixels[i + 2];
     let k = (0.299 * r + 0.587 * g + 0.114 * b) / lmed;
     // Šviesūs dažai šešėlius rodo švelniau, tamsūs – ryškesnius atspindžius.
-    if (light) k = 0.42 + 0.58 * k;
+    if (light) k = Math.min(1.06, 0.7 + 0.3 * k);
     let nr; let ng; let nb;
     if (k <= 1) { nr = tr * k; ng = tg * k; nb = tb * k; } else {
       const up = Math.min(1, (k - 1) / span) * (dark ? 0.8 : 1);

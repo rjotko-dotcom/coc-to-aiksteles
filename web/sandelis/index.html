@@ -48,142 +48,97 @@
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></symbol>
+    <symbol id="i-pdf" viewBox="0 0 24 24"><path d="M14 2H6.5A2.5 2.5 0 0 0 4 4.5v15A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5V8l-6-6Z"/><path d="M14 2v6h6"/><text x="12" y="17.6" fill="currentColor" stroke="none" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-weight="700" font-size="5.6">PDF</text></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></symbol>
+    <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="19" r="1.3" fill="currentColor"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M7.5 14h.01M12 14h.01M16.5 14h.01M7.5 17.5h.01M12 17.5h.01"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-library" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><rect x="8.2" y="8.2" width="7.6" height="7.6" rx="1.2"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 2"/></symbol>
   </defs>
 </svg>
 
-<div class="app">
-  <aside class="sidebar" id="sidebar">
-    <div class="brand">
+<div class="shell" id="top">
+  <!-- Kairė pusė: pasirinktas automobilis -->
+  <section class="pane-left">
+    <span class="pane-left-bg" aria-hidden="true"></span>
+    <header class="brandbar">
       <span class="logo" aria-label="Nissan"><svg viewBox="0 0 100 100"><use href="#nissan"/></svg></span>
-      <span class="brand-text"><b>FAKTO</b><em>auto</em></span>
-    </div>
-
-    <nav>
-      <a href="#top" class="nav on" data-nav="top"><svg><use href="#i-search"/></svg>Paieška</a>
-      <a href="#review" class="nav" data-nav="review"><svg><use href="#i-scan"/></svg>Patikra<span class="badge warn" id="nav-review"></span></a>
-      <p class="nav-title">Liudijimai</p>
-      <a href="#list" class="nav" data-nav="list" data-tab="turimas"><svg><use href="#i-file"/></svg>Turimi<span class="badge" id="nav-in"></span></a>
-      <a href="#list" class="nav" data-nav="list" data-tab="atiduotas"><svg><use href="#i-send"/></svg>Atiduoti<span class="badge" id="nav-out"></span></a>
-      <a href="#list" class="nav" data-nav="list" data-tab="visi"><svg><use href="#i-list"/></svg>Visi</a>
-      <p class="nav-title">Specialūs aplankai</p>
-      <div id="folder-nav"></div>
-      <p class="nav-title">Įrankiai</p>
-      <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
-        <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
-      <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
-      <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
-      <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
-      <button type="button" class="nav" data-action="restore"><svg><use href="#i-upload"/></svg>Įkelti kopiją</button>
-    </nav>
-
-    <div class="backup-card" id="backup-card">
-      <span class="backup-icon"><svg><use href="#i-shield"/></svg></span>
-      <b id="store-title">Duomenų aplankas</b>
-      <p id="backup-text">Duomenys kol kas tik naršyklėje.</p>
-      <button type="button" class="btn block" id="store-btn" data-action="folder-connect"><svg><use href="#i-folder"/></svg><span>Pasirinkti aplanką</span></button>
-      <button type="button" class="link-btn" data-action="backup">Atsisiųsti kopiją (.zip)</button>
-      <small id="usage"></small>
-    </div>
-  </aside>
-
-  <main class="main" id="top">
-    <header class="topbar">
-      <button class="icon-btn menu-btn" type="button" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
-      <div class="crumb"><span>CoC sandėlis</span></div>
-      <div class="top-actions">
-        <button class="btn ghost" type="button" data-action="excel"><svg><use href="#i-sheet"/></svg><span>Excel</span></button>
-        <button class="btn primary" type="button" data-action="upload"><svg><use href="#i-upload"/></svg><span>Įkelti skeną</span></button>
-      </div>
+      <b class="brand-nissan">NISSAN</b>
+      <span class="brand-sep"></span>
+      <span class="brand-fakto">FAKTO AUTO</span>
     </header>
 
-    <section class="hero reveal">
-      <h1 id="greeting">Sveiki!</h1>
-      <p class="summary" id="summary"></p>
-      <div class="search-box">
-        <svg><use href="#i-search"/></svg>
-        <input type="search" id="q" placeholder="Ar turime? Įveskite VIN (pakanka 6 paskutinių), modelį ar gavėją…"
-               autocomplete="off" spellcheck="false" aria-label="Paieška">
-        <kbd>/</kbd>
-      </div>
-      <div id="answer" aria-live="polite"></div>
-      <div id="incomplete"></div>
-    </section>
+    <nav class="rail" aria-label="Skyriai">
+      <button type="button" class="rail-item on" data-rail="library"><svg><use href="#i-library"/></svg><span>Biblioteka</span></button>
+      <button type="button" class="rail-item" data-rail="scan"><svg><use href="#i-scan"/></svg><span>Skenuoti</span><em class="rail-badge" id="rail-review"></em></button>
+      <button type="button" class="rail-item menu-btn" data-rail="folders"><svg><use href="#i-folder"/></svg><span>Aplankai</span></button>
+      <button type="button" class="rail-item" data-rail="history"><svg><use href="#i-history"/></svg><span>Istorija</span></button>
+    </nav>
 
-    <section class="card progress hidden" id="progress">
-      <div class="progress-head">
-        <span class="spinner"></span>
-        <div><b id="progress-title">Skaitoma…</b><small id="progress-text"></small></div>
-        <span class="progress-eta" id="progress-eta"></span>
-      </div>
-      <div class="bar"><i id="progress-bar"></i></div>
-    </section>
-
-    <section class="card empty-hero hidden reveal" id="empty" style="--d:5">
-      <button type="button" class="drop-target" data-action="upload">
-        <span class="drop-icon"><svg><use href="#i-upload"/></svg></span>
-        <b>Įmeskite pirmą nuskenuotą PDF</b>
-        <span>arba nuvilkite jį bet kur į šį langą</span>
-      </button>
-      <ol class="steps">
-        <li class="restore-step" id="restore-step"><i>↺</i><div><b>Jau naudojote programą?</b>
-          <span>Jei išvalėte Chrome duomenis, viską atkursite iš savo duomenų aplanko.</span>
-          <button type="button" class="btn sm" data-action="folder-restore"><svg><use href="#i-folder"/></svg>Atkurti iš aplanko</button></div></li>
-        <li><i>1</i><div><b>Nuskenuokite</b><span>Visus CoC vienu kartu – po vieną lapą. Skeneris atsiųs vieną PDF.</span></div></li>
-        <li><i>2</i><div><b>Patikrinkite</b><span>Kiekvienas lapas taps atskiru CoC. VIN ir modelis perskaitomi automatiškai.</span></div></li>
-        <li><i>3</i><div><b>Raskite ir atiduokite</b><span>Paieška atsako „turime / neturime“, atidavimas įrašomas su data ir gavėju.</span></div></li>
-      </ol>
-    </section>
-
-    <section class="card hidden" id="review">
-      <header class="card-head">
-        <div>
-          <h2>Patikra <span class="count" id="review-count"></span></h2>
-          <p class="muted">Sulyginkite VIN ir modelį su lapu. <kbd>Enter</kbd> – patvirtinti ir pereiti prie kito.</p>
+    <div class="left-body">
+      <h1 class="center-title">Dokumentų centras</h1>
+      <div class="stage empty" id="stage" aria-live="polite">
+        <div class="stage-head">
+          <span class="stage-kicker" id="stage-kicker">Pasirinktas automobilis</span>
+          <h2 id="stage-model">Pasirinkite CoC</h2>
+          <span class="stage-sub" id="stage-sub"></span>
         </div>
-        <div class="review-actions">
-        <button type="button" class="btn" data-action="retry-failed" id="retry-failed" hidden>
-          <svg><use href="#i-undo"/></svg><span></span></button>
-        <button type="button" class="btn" data-action="confirm-clean" id="confirm-clean" hidden>
-          <svg><use href="#i-check"/></svg><span></span></button>
+        <div class="stage-car" id="stage-car">
+          <span class="stage-glow"></span>
+          <span class="stage-floor"></span>
+          <img id="stage-img" alt="" hidden>
+          <span class="stage-sweep"></span>
         </div>
-      </header>
-      <div id="review-list"></div>
-    </section>
-
-    <div class="showroom">
-    <aside class="stage empty" id="stage" aria-live="polite">
-      <div class="stage-head">
-        <span class="stage-kicker" id="stage-kicker">NISSAN</span>
-        <h2 id="stage-model">Pasirinkite CoC</h2>
+        <div class="stage-bottom">
+          <div class="stage-vin"><span>VIN numeris</span><b id="stage-vin">—</b></div>
+          <dl class="stage-facts" id="stage-facts"></dl>
+          <div class="stage-ready" id="stage-ready"></div>
+          <div class="stage-actions" id="stage-actions"></div>
+          <small class="stage-credit" id="stage-credit"></small>
+        </div>
       </div>
-      <div class="stage-car" id="stage-car">
-        <span class="stage-glow"></span>
-        <span class="stage-floor"></span>
-        <img id="stage-img" alt="" hidden>
-        <span class="stage-sweep"></span>
-      </div>
-      <div class="stage-ready" id="stage-ready"></div>
-      <dl class="stage-facts" id="stage-facts"></dl>
-      <div class="stage-actions" id="stage-actions"></div>
-      <small class="stage-credit" id="stage-credit"></small>
-    </aside>
+    </div>
+  </section>
 
-    <section class="card" id="list">
-      <header class="card-head">
-        <h2>Liudijimai</h2>
+  <!-- Dešinė pusė: dokumentų biblioteka -->
+  <main class="pane-right">
+    <header class="right-top">
+      <span class="store-dot" id="store-dot" title="Duomenų saugojimas"></span>
+      <button type="button" class="avatar menu-btn" data-action="menu" title="Meniu">RJ</button>
+      <button type="button" class="burger menu-btn" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
+    </header>
+
+    <div class="lib-head">
+      <h2 class="lib-title">Dokumentų biblioteka</h2>
+      <button type="button" class="skew-btn" data-action="upload"><span><svg><use href="#i-plus"/></svg>Įkelti PDF</span></button>
+    </div>
+
+    <div class="search-box">
+      <svg><use href="#i-search"/></svg>
+      <input type="search" id="q" placeholder="Ieškoti VIN arba modelio" autocomplete="off" spellcheck="false" aria-label="Paieška">
+      <kbd>/</kbd>
+    </div>
+    <div id="answer" aria-live="polite"></div>
+    <div id="incomplete"></div>
+
+    <section class="library" id="list">
+      <div class="tabs-row">
         <div class="segmented" role="tablist" id="tabs">
           <span class="seg-indicator" id="seg-indicator"></span>
           <button role="tab" data-tab="turimas" class="on">Turimi <em id="t-in"></em></button>
           <button role="tab" data-tab="atiduotas">Atiduoti <em id="t-out"></em></button>
           <button role="tab" data-tab="visi">Visi <em id="t-all"></em></button>
         </div>
-      </header>
+        <button type="button" class="square-btn" data-action="filters" id="filters-btn" aria-label="Filtrai"><svg><use href="#i-sliders"/></svg></button>
+      </div>
 
-      <div class="filter-row">
+      <div class="filter-row" id="filter-row" hidden>
         <label class="folder-filter"><svg><use href="#i-folder"/></svg>
           <select id="folder-filter" aria-label="Aplankas"></select></label>
         <button type="button" class="btn sm" data-action="print-folders" id="print-folders">
           <svg><use href="#i-printer"/></svg><span>Spausdinti sąrašą</span></button>
+        <label class="check-all"><input type="checkbox" id="check-all">Pažymėti visus</label>
       </div>
 
       <div class="bulk" id="bulk">
@@ -196,39 +151,105 @@
         <button class="icon-btn sm" data-action="clear-selection" aria-label="Atžymėti"><svg><use href="#i-x"/></svg></button>
       </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th class="check"><input type="checkbox" id="check-all" aria-label="Pažymėti visus"></th>
-              <th>VIN</th>
-              <th>Modelis</th>
-              <th>Aplankas</th>
-              <th class="hide-sm">Įkelta</th>
-              <th>Būsena</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-        </table>
+      <div class="rows-wrap">
+        <div class="empty-hero hidden" id="empty">
+          <button type="button" class="drop-target" data-action="upload">
+            <span class="drop-icon"><svg><use href="#i-upload"/></svg></span>
+            <b>Įmeskite pirmą nuskenuotą PDF</b>
+            <span>arba nuvilkite jį bet kur į šį langą</span>
+          </button>
+          <ol class="steps">
+            <li class="restore-step" id="restore-step"><i>↺</i><div><b>Jau naudojote programą?</b>
+              <span>Jei išvalėte Chrome duomenis, viską atkursite iš savo duomenų aplanko.</span>
+              <button type="button" class="btn sm" data-action="folder-restore"><svg><use href="#i-folder"/></svg>Atkurti iš aplanko</button></div></li>
+            <li><i>1</i><div><b>Nuskenuokite</b><span>Visus CoC vienu kartu – po vieną lapą.</span></div></li>
+            <li><i>2</i><div><b>Patikrinkite</b><span>VIN, modelis, spalva ir pažymos duomenys perskaitomi automatiškai.</span></div></li>
+            <li><i>3</i><div><b>Raskite ir atiduokite</b><span>Paieška atsako „turime / neturime“ ir parodo aplanką.</span></div></li>
+          </ol>
+        </div>
+        <div class="rows" id="rows"></div>
+        <p class="list-note" id="list-note"></p>
       </div>
-      <p class="list-note" id="list-note"></p>
-    </section>
-    </div>
-
-    <section class="card update hidden" id="update">
-      <svg><use href="#i-sparkle"/></svg>
-      <b>Yra naujesnė versija.</b>
-      <span class="muted">Sąrašas ir liudijimai išliks.</span>
-      <button class="btn primary sm" id="update-now">Atnaujinti</button>
     </section>
 
-    <footer class="foot">
-      Liudijimai niekur nesiunčiami – nei į internetą, nei į jokį AI. Atpažinimas vyksta šiame kompiuteryje.
-      Įdiegti kaip programą: Chrome adreso juostoje → „Įdiegti“. <span id="version"></span>
+    <footer class="lib-foot">
+      <button type="button" class="scan-pill" id="last-scan" data-action="open-review"></button>
+      <div class="progress hidden" id="progress">
+        <span class="spinner"></span>
+        <div class="progress-text"><b id="progress-title">Skaitoma…</b><small id="progress-text"></small></div>
+        <span class="progress-eta" id="progress-eta"></span>
+        <div class="bar"><i id="progress-bar"></i></div>
+      </div>
+      <button type="button" class="skew-btn open-btn" data-action="open-staged"><span>Atidaryti<svg><use href="#i-chev"/></svg></span></button>
+      <button type="button" class="excel-link" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
     </footer>
+
+    <!-- Patikra: atsidaro virš bibliotekos -->
+    <section class="review-panel hidden" id="review">
+      <header class="card-head">
+        <div>
+          <h2>Patikra <span class="count" id="review-count"></span></h2>
+          <p class="muted">Sulyginkite VIN ir modelį su lapu. <kbd>Enter</kbd> – patvirtinti ir pereiti prie kito.</p>
+        </div>
+        <div class="review-actions">
+          <button type="button" class="btn" data-action="retry-failed" id="retry-failed" hidden>
+            <svg><use href="#i-undo"/></svg><span></span></button>
+          <button type="button" class="btn" data-action="confirm-clean" id="confirm-clean" hidden>
+            <svg><use href="#i-check"/></svg><span></span></button>
+          <button type="button" class="icon-btn" data-action="close-review" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+        </div>
+      </header>
+      <div id="review-list"></div>
+    </section>
   </main>
 </div>
+
+<!-- Meniu (atsidaro dešinėje) -->
+<aside class="sidebar" id="sidebar">
+  <header class="drawer-head">
+    <div><b id="greeting">Sveiki!</b><small class="summary" id="summary"></small></div>
+    <button type="button" class="icon-btn" data-action="menu" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+  </header>
+  <nav>
+    <a href="#top" class="nav" data-nav="top"><svg><use href="#i-search"/></svg>Paieška</a>
+    <a href="#review" class="nav" data-nav="review"><svg><use href="#i-scan"/></svg>Patikra<span class="badge warn" id="nav-review"></span></a>
+    <p class="nav-title">Liudijimai</p>
+    <a href="#list" class="nav" data-nav="list" data-tab="turimas"><svg><use href="#i-file"/></svg>Turimi<span class="badge" id="nav-in"></span></a>
+    <a href="#list" class="nav" data-nav="list" data-tab="atiduotas"><svg><use href="#i-send"/></svg>Atiduoti<span class="badge" id="nav-out"></span></a>
+    <a href="#list" class="nav" data-nav="list" data-tab="visi"><svg><use href="#i-list"/></svg>Visi</a>
+    <p class="nav-title" id="folders-title">Specialūs aplankai</p>
+    <div id="folder-nav"></div>
+    <p class="nav-title">Įrankiai</p>
+    <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
+      <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
+    <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
+    <button type="button" class="nav" data-action="print-folders"><svg><use href="#i-printer"/></svg>Spausdinti aplankų sąrašus</button>
+    <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
+    <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
+    <button type="button" class="nav" data-action="restore"><svg><use href="#i-upload"/></svg>Įkelti kopiją</button>
+  </nav>
+
+  <div class="backup-card" id="backup-card">
+    <span class="backup-icon"><svg><use href="#i-shield"/></svg></span>
+    <b id="store-title">Duomenų aplankas</b>
+    <p id="backup-text">Duomenys kol kas tik naršyklėje.</p>
+    <button type="button" class="btn block" id="store-btn" data-action="folder-connect"><svg><use href="#i-folder"/></svg><span>Pasirinkti aplanką</span></button>
+    <button type="button" class="link-btn" data-action="backup">Atsisiųsti kopiją (.zip)</button>
+    <small id="usage"></small>
+  </div>
+  <p class="drawer-foot">
+    Liudijimai niekur nesiunčiami – nei į internetą, nei į jokį AI. <span id="version"></span>
+  </p>
+</aside>
+
+<section class="update hidden" id="update">
+  <svg><use href="#i-sparkle"/></svg>
+  <b>Yra naujesnė versija.</b>
+  <span class="muted">Sąrašas ir liudijimai išliks.</span>
+  <button class="btn primary sm" id="update-now">Atnaujinti</button>
+</section>
+
+<div class="row-menu" id="row-menu" hidden></div>
 
 <div class="drop-overlay" id="drop-overlay">
   <div><span class="drop-icon"><svg><use href="#i-upload"/></svg></span>
