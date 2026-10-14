@@ -337,3 +337,38 @@ export function backupDue(lastBackup, recordCount, now = new Date(), days = 7) {
   if (!lastBackup) return true;
   return now - new Date(lastBackup) > days * 24 * 3600 * 1000;
 }
+
+/**
+ * VIN sąrašas iš įklijuoto teksto (po vieną eilutėje, per kablelį ar tarpą).
+ * Imami tik į VIN dalį panašūs žodžiai: bent 5 ženklai ir bent vienas skaitmuo.
+ * Pasikartojantys praleidžiami.
+ */
+export function vinList(text) {
+  const seen = new Set();
+  const list = [];
+  for (const word of String(text || "").split(/[\s,;|]+/)) {
+    const vin = cleanVin(word);
+    if (vin.length < 5 || !/\d/.test(vin) || seen.has(vin)) continue;
+    seen.add(vin);
+    list.push(vin);
+  }
+  return list;
+}
+
+/**
+ * Kelių VIN patikra iš karto: kiekvienam – rasti CoC (pilnas VIN – tik tikslus
+ * atitikmuo, trumpesnis – VIN pabaiga, kaip įprastoje paieškoje).
+ */
+export function bulkCheck(records, vins) {
+  const withVin = records.filter((record) => record.vin);
+  return vins.map((query) => {
+    const hits = query.length === 17
+      ? withVin.filter((record) => cleanVin(record.vin) === query)
+      : vinHits(withVin, query);
+    const order = { [STATUS.IN]: 0, [STATUS.REVIEW]: 1, [STATUS.OUT]: 2 };
+    hits.sort((a, b) => order[a.status] - order[b.status]);
+    const best = hits[0] || null;
+    const state = !best ? "none" : best.status === STATUS.IN ? "in" : best.status === STATUS.OUT ? "out" : "review";
+    return { query, hits, state };
+  });
+}

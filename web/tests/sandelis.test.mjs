@@ -187,3 +187,18 @@ test("automobilio paveikslas: modelis iš VIN, spalva iš CoC", async () => {
   assert.ok(paintOf({ coc: { colour: "PILKA", colour_raw: "Dark Grey" } }).rgb[0] < 104);
   assert.equal(paintOf({ coc: {} }), null);
 });
+
+test("keli VIN iš karto: kurie yra, kurių nėra", async () => {
+  const { vinList, bulkCheck, STATUS } = await import("../js/sandelis/logic.js");
+  assert.deepEqual(vinList("SJNJ12TA9U2000101\nJN1T33TB7U0062538, 2538; sjnj12ta9u2000101 abc 12"),
+    ["SJNJ12TA9U2000101", "JN1T33TB7U0062538"]);
+  assert.deepEqual(vinList("a1 x 1234 00501"), ["00501"]);
+  const records = [
+    { id: "a", vin: "SJNJ12TA9U2000101", status: STATUS.IN },
+    { id: "b", vin: "JN1T33TB7U0062538", status: STATUS.OUT },
+    { id: "c", vin: "VNVK1500X76000501", status: STATUS.IN },
+  ];
+  const result = bulkCheck(records, ["SJNJ12TA9U2000101", "JN1T33TB7U0062538", "SJNJ12TA9U2999999", "00501"]);
+  assert.deepEqual(result.map((r) => r.state), ["in", "out", "none", "in"]);
+  assert.equal(result[3].hits[0].id, "c");
+});
