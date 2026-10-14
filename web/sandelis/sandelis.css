@@ -609,14 +609,15 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   background: radial-gradient(closest-side, rgba(0, 0, 0, .8), transparent); animation: breathe 6s ease-in-out infinite;
 }
 .stage-sweep {
-  position: absolute; z-index: 3; inset: 0; pointer-events: none; opacity: 0;
+  /* Ta pati vieta ir dydis kaip paveikslo – šviesa eina tiksliai per mašiną. */
+  position: absolute; z-index: 3; inset: -20% -5% -2% -5%; width: 110%; height: 122%; pointer-events: none; opacity: 0;
   background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 48%, transparent 60%) no-repeat;
   background-size: 250% 100%; background-position: 130% 0;
-  -webkit-mask: var(--car) center 70% / contain no-repeat; mask: var(--car) center 70% / contain no-repeat;
+  -webkit-mask: var(--car) center bottom / contain no-repeat; mask: var(--car) center bottom / contain no-repeat;
   mix-blend-mode: overlay;
 }
 .stage-car.enter img { animation: car-in .9s var(--ease) both; }
-.stage-car.enter .stage-sweep { animation: sweep 1.6s .45s var(--ease) both; }
+.stage-car.enter .stage-sweep { animation: sweep 1.5s .75s var(--ease) both; }
 .stage-car.enter .stage-glow { animation: fade 1s both; }
 .stage-car.none::after, .stage.empty .stage-car::after {
   content: ""; position: absolute; inset: 22% 18% 18%; border-radius: 22px; border: 1px dashed rgba(255, 255, 255, .14);
