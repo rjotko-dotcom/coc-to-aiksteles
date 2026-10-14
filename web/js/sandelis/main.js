@@ -1585,7 +1585,8 @@ function renderPrintButton() {
   const label = !folderFilter ? "Spausdinti aplankų sąrašus"
     : folderFilter === MODEL_FOLDERS ? "Spausdinti modelių aplankus"
       : `Spausdinti „${folderFilter}“ sąrašą`;
-  $("print-folders").querySelector("span").textContent = label;
+  $("print-folders").querySelector(".label").textContent = "Spausdinti";
+  $("print-folders").title = label;
 }
 
 function setFolderFilter(value) {
