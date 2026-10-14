@@ -1248,6 +1248,7 @@ function renderTable() {
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   renderBulk();
   hydrateThumbs($("rows"));
+  fitRows();
   const moreButton = $("more-btn");
   if (moreButton) moreObserver.observe(moreButton);
   // Skydelyje – pasirinktas CoC; jei jo sąraše nebėra, pirmas sąrašo.
@@ -1496,6 +1497,26 @@ function rowAction(action, id) {
   if (action === "give") openGive([id]);
   if (action === "return") returnRecords([id]);
 }
+
+/**
+ * Sąrašo aukštis – sveikas eilučių skaičius: apačioje nelieka perpjautos eilutės.
+ * (Tik kompiuteryje, kur slenka pats sąrašas.)
+ */
+function fitRows() {
+  const wrap = document.querySelector(".rows-wrap");
+  const library = $("list");
+  if (!window.matchMedia("(min-width: 1100px)").matches) { wrap.style.height = ""; return; }
+  const row = $("rows").querySelector(".lrow");
+  wrap.style.height = "0px";
+  const free = library.getBoundingClientRect().bottom - wrap.getBoundingClientRect().top - 4;
+  if (!row) { wrap.style.height = `${Math.max(0, free)}px`; return; }
+  const height = row.getBoundingClientRect().height;
+  const count = Math.max(1, Math.floor(free / height));
+  wrap.style.height = `${count * height}px`;
+}
+
+// Kai pasikeičia laisva vieta (paieškos atsakymas, filtrai, lango dydis) – perskaičiuojama.
+new ResizeObserver(() => requestAnimationFrame(fitRows)).observe($("list"));
 
 /** Priartėjus prie sąrašo galo, automatiškai rodoma daugiau eilučių. */
 const moreObserver = new IntersectionObserver((entries) => {
@@ -2372,7 +2393,7 @@ document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener(
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(moveIndicator, 150);
+  resizeTimer = setTimeout(() => { moveIndicator(); fitRows(); }, 150);
 });
 
 // ---------------------------------------------------------------------------
