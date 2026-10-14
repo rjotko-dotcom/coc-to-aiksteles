@@ -910,7 +910,7 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .bulk-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .bulk-list li {
-  display: grid; grid-template-columns: minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(70px, .8fr) minmax(60px, .6fr) 92px;
+  display: grid; grid-template-columns: minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(70px, .8fr) minmax(60px, .6fr) 72px;
   gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, .28); font-size: 13.5px;
 }
 .bulk-list li.b-none { background: rgba(248, 113, 113, .1); }
@@ -922,7 +922,10 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .dot.none { background: var(--red); box-shadow: 0 0 10px rgba(248, 113, 113, .5); }
 .bulk-list .b-folder { display: flex; align-items: center; gap: 6px; color: var(--soft); }
 .bulk-list .b-folder svg { width: 15px; height: 15px; color: var(--muted); }
-.bulk-list .b-act { text-align: right; }
+.bulk-list .b-act { display: flex; justify-content: flex-end; gap: 6px; }
+.bulk-list .b-act .icon-btn svg { width: 16px; height: 16px; }
+.bulk-list .b-act .icon-btn.give { color: #fff; border-color: rgba(226, 20, 63, .55); background: var(--accent-bg); }
+.bulk-list .b-act .icon-btn.give:hover { background: var(--accent); }
 
 /* PDF peržiūra programoje */
 .viewer-dialog {
