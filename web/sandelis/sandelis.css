@@ -845,7 +845,12 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .scan-pill em { font-style: normal; color: var(--dim); }
 .scan-pill .todo-text { color: #f59e0b; }
 .scan-pill .dot { width: 10px; height: 10px; }
-.lib-foot:has(.progress:not(.hidden)) .scan-pill { display: none; }
+.foot-space { grid-column: 1; grid-row: 1; }
+.lib-foot:has(.progress:not(.hidden)) .foot-space { display: none; }
+.nav.last-scan[hidden] { display: none; }
+.nav.last-scan small { display: flex; align-items: center; gap: 6px; max-width: none; }
+.nav.last-scan .dot { width: 8px; height: 8px; }
+.nav.last-scan .todo-text { color: var(--amber); }
 .lib-foot .progress {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center;
   padding: 10px 16px; border-radius: 10px; background: #222225; animation: rise .4s var(--ease);
@@ -854,7 +859,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .lib-foot .progress b { display: block; font-size: 14px; }
 .lib-foot .progress small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-foot .progress .bar { grid-column: 1 / -1; height: 4px; }
-.lib-foot > .scan-pill, .lib-foot > .progress, .open-btn { grid-row: 1; height: 54px; }
+.lib-foot > .progress, .open-btn { grid-row: 1; height: 54px; }
 .open-btn { grid-column: 3; padding: 0 34px; font-size: 16px; }
 .excel-btn { grid-column: 2; grid-row: 1; height: 54px; padding: 0 22px; font-size: 15px; border-color: rgba(255, 255, 255, .35); }
 .excel-btn svg { color: var(--green); }
