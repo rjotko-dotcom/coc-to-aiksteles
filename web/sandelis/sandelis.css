@@ -789,6 +789,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .lrow-vin b { color: #fff; font-weight: 600; }
 .lrow-folder { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--soft); min-width: 0; }
 .lrow-folder svg { width: 24px; height: 24px; stroke-width: 1.4; color: var(--muted); }
+.lrow-folder.given svg { color: var(--blue); }
 .lrow-folder span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lrow-folder small { display: block; font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
 .lrow-status { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--soft); min-width: 0; }
