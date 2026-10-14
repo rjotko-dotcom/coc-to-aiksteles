@@ -769,12 +769,12 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   flex: 1; min-height: 0; overflow-y: auto; margin: 0 -12px 0 -14px; padding: 0 12px 0 14px;
   scrollbar-width: thin; scrollbar-color: #3a3a40 transparent;
 }
-.rows { display: flex; flex-direction: column; padding-bottom: 30px; }
+.rows { display: flex; flex-direction: column; }
 .rows .lrow:last-child { border-bottom: 0; }
-/* Sąrašo apačia švelniai išblunka – paskutinė eilutė nenukerpama aštriai. */
-.rows-wrap {
-  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+/* Slenkant sąrašas „prisitraukia“ prie eilučių; aukštis parenkamas (JS), kad tilptų tik pilnos eilutės. */
+@media (min-width: 1100px) {
+  .rows-wrap { flex: 0 0 auto; scroll-snap-type: y mandatory; }
+  .lrow { scroll-snap-align: start; content-visibility: visible; }
 }
 .lrow {
   position: relative; display: grid; grid-template-columns: 34px 104px minmax(190px, 1fr) minmax(56px, auto) minmax(96px, auto) 30px;
