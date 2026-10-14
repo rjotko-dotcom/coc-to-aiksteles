@@ -1046,6 +1046,7 @@ function renderBulkAnswer(vins) {
       <span class="bulk-actions">
         ${have ? `<label class="pick-all"><input type="checkbox" data-bulk="pick-all" ${picked === have ? "checked" : ""}>Visi turimi</label>
           <button type="button" class="btn primary sm" data-bulk="give" ${picked ? "" : "disabled"}>${icon("send")}Atiduoti pažymėtus${picked ? ` (${picked})` : ""}</button>
+          <button type="button" class="btn sm" data-bulk="binder" ${picked ? "" : "disabled"}>${icon("folder")}Į aplanką</button>
           <button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti sąraše</button>
           <button type="button" class="btn sm" data-bulk="pazyma">${icon("doc")}Pažymos turimiems</button>` : ""}
         ${none ? `<button type="button" class="btn sm" data-bulk="copy">${icon("file")}Kopijuoti neturimus</button>` : ""}
@@ -1511,6 +1512,7 @@ function openRowMenu(id, anchor) {
     item("pdf", "eye", "Peržiūrėti dokumentą"),
     item("pazyma", "doc", "Pažyma"),
     item("download", "download", "Atsisiųsti PDF"),
+    record.status === STATUS.IN ? item("binder", "folder", "Perkelti į kitą aplanką") : "",
     item("reread", "undo", "Perskaityti iš naujo"),
     record.status === STATUS.IN ? item("give", "send", "Atiduoti", "red") : "",
     record.status === STATUS.OUT ? item("return", "undo", "Grąžinti į turimus") : "",
@@ -1536,6 +1538,69 @@ function rowAction(action, id) {
   if (action === "reread") rereadRecords([id]);
   if (action === "give") openGive([id]);
   if (action === "return") returnRecords([id]);
+  if (action === "binder") openBinderDialog([id]);
+}
+
+// ---------------------------------------------------------------------------
+// Rankinis dėjimas į aplanką
+// ---------------------------------------------------------------------------
+
+let binderIds = [];
+
+const nextBinderCode = () => {
+  const numbers = [...binders.map((binder) => binder.code), ...Object.values(folderCodes)]
+    .map((code) => Number((/^A-(\d+)$/.exec(code) || [])[1] || 0));
+  return `A-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
+};
+
+/** Pasirinktus CoC perkelia į pasirinktą (ar naują) to paties modelio aplanką. */
+function openBinderDialog(ids) {
+  const list = ids.map(byId).filter((record) => record && record.status === STATUS.IN);
+  if (!list.length) { toast("Į aplanką dedami tik turimi CoC.", "warn"); return; }
+  const groups = [...new Set(list.map(folderOf))];
+  if (groups.length > 1) { toast(`Pažymėti skirtingi modeliai (${groups.join(", ")}) – viename aplanke modeliai nemaišomi.`, "warn"); return; }
+  const [group] = groups;
+  binderIds = list.map((record) => record.id);
+  const special = list.some(inSpecialFolder);
+  const own = binderContents(records, binders).filter((binder) => binder.group === group);
+  const current = new Set(list.map((record) => record.binder));
+  $("binder-count").textContent = list.length === 1 ? (list[0].vin || "").slice(-6) : `${list.length} CoC`;
+  $("binder-text").textContent = `${group}: pasirinkite aplanką. ${special ? "Specialus aplankas – vietų nevaržo." : `Viename aplanke telpa ${BINDER_SIZE}; kas netilps, bus perkelta į kitą to modelio aplanką.`}`;
+  $("binder-choices").innerHTML = own.map((binder) => {
+    const moving = binderIds.filter((id) => byId(id).binder !== binder.code).length;
+    const after = binder.records.length + moving;
+    const over = !special && after > BINDER_SIZE;
+    return `<label class="choice ${over ? "over" : ""}"><input type="radio" name="binder" value="${esc(binder.code)}" ${current.size === 1 && current.has(binder.code) ? "checked" : ""}>
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}<small>${binderFill(binder.records.length, special)}${moving && binder.records.length !== after ? ` → ${binderFill(after, special)}` : ""}${over ? " – netilps" : ""}</small></label>`;
+  }).join("") || `<p class="muted">Šio modelio aplankų dar nėra – įrašykite naujo kodą.</p>`;
+  $("binder-new").value = "";
+  $("binder-new").placeholder = `pvz. ${nextBinderCode()}`;
+  $("sidebar").classList.remove("open");
+  $("binder-dialog").showModal();
+}
+
+async function moveToBinder(code) {
+  const list = binderIds.map(byId).filter(Boolean);
+  if (!list.length || !code) return false;
+  const group = folderOf(list[0]);
+  const existing = binders.find((binder) => binder.code === code);
+  if (existing && existing.group !== group) {
+    const used = records.some((record) => record.status === STATUS.IN && record.binder === code);
+    if (used) { toast(`Aplankas ${code} skirtas „${existing.group}“ – kitų modelių nemaišome.`, "err"); return false; }
+    existing.group = group; // tuščias aplankas gali būti panaudotas kitam modeliui
+  }
+  if (!existing) binders.push({ code, group });
+  await setMeta("binders", binders);
+  for (const record of list) {
+    if (record.binder !== code) await update(record, { binder: code });
+  }
+  applyBinders();
+  render();
+  const overflow = list.filter((record) => record.binder !== code).length;
+  toast(overflow
+    ? `Į ${code} perkelta ${list.length - overflow}; ${overflow} netilpo ir liko kitame ${group} aplanke.`
+    : `Perkelta į ${code}: ${list.length} CoC.`, overflow ? "warn" : "ok");
+  return true;
 }
 
 /**
@@ -2218,6 +2283,7 @@ $("answer").addEventListener("click", async (event) => {
   if (action === "select") { have.forEach((id) => selected.add(id)); renderTable(); toast(`Pažymėta: ${have.length}.`); }
   if (action === "pazyma") makePazymos(have);
   if (action === "give") { if (bulkPicked.size) openGive([...bulkPicked]); }
+  if (action === "binder") { if (bulkPicked.size) openBinderDialog([...bulkPicked]); }
   if (action === "clear") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
   if (action === "copy") {
     const missing = bulkResult.filter((row) => row.state === "none").map((row) => row.query).join("\n");
@@ -2382,6 +2448,8 @@ const ACTIONS = {
   "pdf-selected": () => downloadPdfs([...selected]),
   "pazyma-selected": () => makePazymos([...selected]),
   "reread-selected": () => rereadRecords([...selected]),
+  "binder-selected": () => openBinderDialog([...selected]),
+  "binder-cancel": () => $("binder-dialog").close(),
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
   "codes-cancel": () => $("codes").close(),
@@ -2509,6 +2577,19 @@ $("codes-number").addEventListener("click", () => {
   [...$("codes-list").querySelectorAll("[data-code-for]")].forEach((input, index) => {
     input.value = `A-${String(start + index).padStart(2, "0")}`;
   });
+});
+
+$("binder-form").addEventListener("submit", async (event) => {
+  if (event.submitter?.value !== "ok") return;
+  event.preventDefault();
+  const typed = cleanFolderCode($("binder-new").value);
+  const picked = $("binder-choices").querySelector("input:checked")?.value;
+  const code = typed || picked;
+  if (!code) { toast("Pasirinkite aplanką arba įrašykite naujo kodą.", "warn"); return; }
+  if (await moveToBinder(code)) $("binder-dialog").close();
+});
+$("binder-new").addEventListener("input", () => {
+  if ($("binder-new").value) $("binder-choices").querySelectorAll("input").forEach((input) => { input.checked = false; });
 });
 
 $("codes-form").addEventListener("submit", async (event) => {

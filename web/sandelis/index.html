@@ -159,6 +159,7 @@
         <button class="btn sm" data-action="return-selected"><svg><use href="#i-undo"/></svg>Grąžinti</button>
         <button class="btn sm" data-action="pdf-selected"><svg><use href="#i-download"/></svg>PDF</button>
         <button class="btn sm" data-action="pazyma-selected"><svg><use href="#i-doc"/></svg>Pažymos</button>
+        <button class="btn sm" data-action="binder-selected"><svg><use href="#i-folder"/></svg>Į aplanką</button>
         <button class="btn sm" data-action="reread-selected"><svg><use href="#i-undo"/></svg>Perskaityti</button>
         <button class="btn sm" data-action="excel-selected"><svg><use href="#i-sheet"/></svg>Excel</button>
         <button class="icon-btn sm" data-action="clear-selection" aria-label="Atžymėti"><svg><use href="#i-x"/></svg></button>
@@ -421,6 +422,25 @@
   <option value="BALTA/JUODA"><option value="PILKA/JUODA"><option value="SIDABRINĖ/JUODA"><option value="MĖLYNA/JUODA">
   <option value="RAUDONA/JUODA"><option value="ŽALIA/JUODA">
 </datalist>
+
+<dialog id="binder-dialog" class="small-dialog">
+  <form method="dialog" id="binder-form">
+    <header class="dialog-head">
+      <div><span class="pill" id="binder-count"></span><h2>Į kurį aplanką dėti?</h2></div>
+      <button type="button" class="icon-btn" data-action="binder-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted" id="binder-text"></p>
+    <div class="choices" id="binder-choices"></div>
+    <div class="new-folder">
+      <label for="binder-new">Arba naujas aplankas (kodas)</label>
+      <input type="text" id="binder-new" class="mono" maxlength="8" autocomplete="off" placeholder="pvz. A-14">
+    </div>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="ok"><svg><use href="#i-folder"/></svg>Perkelti</button>
+      <button type="button" class="btn" data-action="binder-cancel">Atšaukti</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="stickers" class="small-dialog">
   <form method="dialog" id="stickers-form">
