@@ -249,7 +249,7 @@ export function excelColumns(codes = {}) {
     { title: "Modelis", get: (r) => r.model, width: 22 },
     { title: "Tipas/Variantas/Versija", get: (r) => r.tvv, width: 24 },
     { title: "Spalva", get: (r) => (r.coc || {}).colour, width: 14 },
-    { title: "Aplanko kodas", get: (r) => codes[folderOf(r)] || "", width: 10 },
+    { title: "Aplanko kodas", get: (r) => (r.status === STATUS.IN ? r.binder || codes[folderOf(r)] || "" : ""), width: 10 },
     { title: "Aplankas", get: (r) => folderOf(r), width: 20 },
     { title: "Būsena", get: (r) => statusName(r.status), width: 12 },
     { title: "Įkelta", get: (r) => localDay(r.added), width: 12, kind: "date" },
@@ -370,5 +370,108 @@ export function bulkCheck(records, vins) {
     const best = hits[0] || null;
     const state = !best ? "none" : best.status === STATUS.IN ? "in" : best.status === STATUS.OUT ? "out" : "review";
     return { query, hits, state };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fiziniai aplankai (įmautės) po 20 CoC
+// ---------------------------------------------------------------------------
+
+/** Kiek CoC telpa į vieną aplanką. */
+export const BINDER_SIZE = 20;
+
+const codeNumber = (code) => {
+  const match = /^A-(\d+)$/.exec(String(code || ""));
+  return match ? Number(match[1]) : 0;
+};
+const byCode = (a, b) => codeNumber(a.code) - codeNumber(b.code) || String(a.code).localeCompare(String(b.code));
+
+/** Rūšiavimas aplanko viduje (ir perrūšiuojant): pagal VIN. */
+const inBinderOrder = (a, b) => String(a.vin || "").localeCompare(String(b.vin || "")) || String(a.added || "").localeCompare(String(b.added || ""));
+
+/**
+ * Kuriame aplanke (įmautėje) guli kiekvienas turimas CoC.
+ *
+ * Aplankai – pagal grupę (modelį arba specialų aplanką), po `size` CoC. Atiduotas
+ * CoC vietą atlaisvina; naujas dedamas į pirmą tos grupės aplanką, kuriame yra
+ * vietos, o jei visi pilni – sukuriamas naujas su kitu laisvu kodu.
+ * `reorganize` – perrūšiuoti viską iš naujo (pagal VIN), paliekant esamus kodus.
+ * `codes` – senieji grupių kodai (pirmas grupės aplankas gauna jį).
+ *
+ * Grąžina { binders: [{ code, group }], assign: { įrašo id: kodas arba "" } }.
+ */
+export function planBinders(records, binders = [], { size = BINDER_SIZE, reorganize = false, codes = {} } = {}) {
+  const list = binders.map((binder) => ({ ...binder }));
+  const used = new Set(list.map((binder) => binder.code));
+  let next = Math.max(0, ...list.map((binder) => codeNumber(binder.code)), ...Object.values(codes).map(codeNumber)) + 1;
+  const create = (group) => {
+    let code = codes[group];
+    if (!code || used.has(code)) {
+      do { code = `A-${String(next).padStart(2, "0")}`; next += 1; } while (used.has(code));
+    }
+    used.add(code);
+    const binder = { code, group };
+    list.push(binder);
+    return binder;
+  };
+
+  const assign = {};
+  const groups = new Map();
+  for (const record of records) {
+    if (record.status !== STATUS.IN) { assign[record.id] = ""; continue; }
+    const group = folderOf(record);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(record);
+  }
+
+  for (const [group, members] of groups) {
+    const own = () => list.filter((binder) => binder.group === group).sort(byCode);
+    const filled = new Map();
+    const put = (record, binder) => {
+      assign[record.id] = binder.code;
+      filled.set(binder.code, (filled.get(binder.code) || 0) + 1);
+    };
+    const waiting = [];
+    if (reorganize) {
+      waiting.push(...[...members].sort(inBinderOrder));
+    } else {
+      const valid = new Set(own().map((binder) => binder.code));
+      // Tie, kurie jau guli savo aplanke, ten ir lieka (kol telpa).
+      for (const record of [...members].sort((a, b) => String(a.added || "").localeCompare(String(b.added || "")))) {
+        const code = record.binder;
+        if (valid.has(code) && (filled.get(code) || 0) < size) put(record, { code });
+        else waiting.push(record);
+      }
+      waiting.sort(inBinderOrder);
+    }
+    for (const record of waiting) {
+      let binder = own().find((item) => (filled.get(item.code) || 0) < size);
+      if (!binder) binder = create(group);
+      put(record, binder);
+    }
+  }
+  list.sort(byCode);
+  return { binders: list, assign };
+}
+
+/**
+ * Aplankų turinys: kiekvienam aplankui – grupė, eilės numeris grupėje
+ * („2 iš 3“) ir jame esantys turimi CoC (pagal VIN).
+ */
+export function binderContents(records, binders) {
+  const byBinder = new Map(binders.map((binder) => [binder.code, []]));
+  for (const record of records) {
+    if (record.status === STATUS.IN && record.binder && byBinder.has(record.binder)) byBinder.get(record.binder).push(record);
+  }
+  const perGroup = new Map();
+  for (const binder of binders) perGroup.set(binder.group, [...(perGroup.get(binder.group) || []), binder.code]);
+  return [...binders].sort(byCode).map((binder) => {
+    const siblings = perGroup.get(binder.group);
+    return {
+      ...binder,
+      index: siblings.indexOf(binder.code) + 1,
+      of: siblings.length,
+      records: byBinder.get(binder.code).sort(inBinderOrder),
+    };
   });
 }

@@ -1032,6 +1032,17 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .missing-dialog .car-thumb { width: 84px; height: 46px; }
 .viewer-dialog { z-index: 2; }
 
+/* Aplankai po 20 meniu */
+#folder-nav .nav.binder { gap: 10px; }
+#folder-nav .nav.binder .nav-name small { color: var(--dim); margin-left: 4px; }
+#folder-nav .fill { flex: none; width: 44px; height: 4px; border-radius: 4px; background: var(--card-3); overflow: hidden; margin-left: auto; }
+#folder-nav .fill i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
+#folder-nav .fill.full i { background: var(--amber); }
+#folder-nav .nav.binder .badge { margin-left: 0; }
+#stickers .choices { max-height: 38vh; }
+#stickers .choice b.code { margin-right: 4px; }
+.binders-notice .actions { flex-wrap: wrap; }
+
 /* PDF peržiūra programoje */
 .viewer-dialog {
   width: min(1100px, 94vw); height: 92vh; max-height: 92vh; padding: 0; display: none; flex-direction: column; overflow: hidden;

@@ -213,3 +213,30 @@ test("spalvos nuotrauka: derinys su juodu stogu, pagrindinė spalva, perdažymas
   assert.equal(shotFor("x-trail", ""), "x-trail-pilka");
   assert.equal(shotFor("x-trail", "GELTONA"), null);
 });
+
+test("aplankai po 20: skirstymas, nauji, atsilaisvinusi vieta", async () => {
+  const { planBinders, binderContents, STATUS } = await import("../js/sandelis/logic.js");
+  const make = (n, model, extra = {}) => Array.from({ length: n }, (_, i) => ({
+    id: `${model}${i}`, model, vin: `${model}${String(i).padStart(4, "0")}`, status: STATUS.IN, added: `2026-01-${String(i % 28 + 1).padStart(2, "0")}`, ...extra,
+  }));
+  const qashqai = make(28, "QASHQAI");
+  const juke = make(5, "JUKE");
+  let { binders, assign } = planBinders([...qashqai, ...juke], [], { codes: { QASHQAI: "A-10", JUKE: "A-02" } });
+  assert.deepEqual(binders.map((b) => `${b.code}:${b.group}`), ["A-02:JUKE", "A-10:QASHQAI", "A-11:QASHQAI"]);
+  const count = (code) => Object.values(assign).filter((c) => c === code).length;
+  assert.equal(count("A-10"), 20); assert.equal(count("A-11"), 8); assert.equal(count("A-02"), 5);
+  // pritaikom, atiduodam du iš A-10, pridedam 3 naujus
+  const all = [...qashqai, ...juke].map((r) => ({ ...r, binder: assign[r.id] }));
+  const inA10 = all.filter((r) => r.binder === "A-10");
+  inA10[0].status = STATUS.OUT; inA10[1].status = STATUS.OUT;
+  const fresh = make(3, "QASHQAI").map((r, i) => ({ ...r, id: `new${i}`, vin: `NEW${i}`, added: "2026-05-01" }));
+  ({ binders, assign } = planBinders([...all, ...fresh], binders));
+  assert.equal(assign[inA10[0].id], "");
+  assert.deepEqual(fresh.map((r) => assign[r.id]), ["A-10", "A-10", "A-11"]);
+  assert.equal(assign[inA10[5].id], "A-10", "esami nepajuda");
+  const view = binderContents(all.map((r) => ({ ...r, binder: assign[r.id] })), binders);
+  assert.deepEqual(view.map((b) => [b.code, b.index, b.of]), [["A-02", 1, 1], ["A-10", 1, 2], ["A-11", 2, 2]]);
+  // perrūšiavimas: 30 qashqai → 20 + 10, kodai lieka
+  const re = planBinders(all.map((r) => ({ ...r, binder: assign[r.id] })), binders, { reorganize: true });
+  assert.deepEqual(re.binders.map((b) => b.code), ["A-02", "A-10", "A-11"]);
+});
