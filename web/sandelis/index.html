@@ -82,14 +82,13 @@
     </header>
 
     <nav class="rail" aria-label="Skyriai">
-      <button type="button" class="rail-item on" data-rail="library"><svg><use href="#i-library"/></svg><span>Biblioteka</span></button>
-      <button type="button" class="rail-item" data-rail="scan"><svg><use href="#i-scan"/></svg><span>Skenuoti</span><em class="rail-badge" id="rail-review"></em></button>
-      <button type="button" class="rail-item menu-btn" data-rail="folders"><svg><use href="#i-folder"/></svg><span>Aplankai</span></button>
-      <button type="button" class="rail-item" data-rail="history"><svg><use href="#i-history"/></svg><span>Istorija</span></button>
+      <button type="button" class="rail-item on" data-rail="library" title="Biblioteka" aria-label="Biblioteka"><svg><use href="#i-library"/></svg></button>
+      <button type="button" class="rail-item" data-rail="scan" title="Skenuoti" aria-label="Skenuoti"><svg><use href="#i-scan"/></svg><em class="rail-badge" id="rail-review"></em></button>
+      <button type="button" class="rail-item menu-btn" data-rail="folders" title="Aplankai" aria-label="Aplankai"><svg><use href="#i-folder"/></svg></button>
+      <button type="button" class="rail-item" data-rail="history" title="Istorija" aria-label="Istorija"><svg><use href="#i-history"/></svg></button>
     </nav>
 
     <div class="left-body">
-      <h1 class="center-title">Dokumentų centras</h1>
       <div class="stage empty" id="stage" aria-live="polite">
         <div class="stage-head">
           <span class="stage-kicker" id="stage-kicker">Pasirinktas automobilis</span>
@@ -116,6 +115,7 @@
   <main class="pane-right">
     <header class="right-top">
       <span class="store-dot" id="store-dot" title="Duomenų saugojimas"></span>
+      <button type="button" class="dl-btn" data-action="downloads" title="Atsisiuntimai" aria-label="Atsisiuntimai"><svg><use href="#i-download"/></svg><em id="downloads-badge"></em></button>
       <button type="button" class="burger menu-btn" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
     </header>
 
@@ -192,8 +192,8 @@
         <span class="progress-eta" id="progress-eta"></span>
         <div class="bar"><i id="progress-bar"></i></div>
       </div>
+      <button type="button" class="skew-btn excel-btn" data-action="excel" title="Eksportuoti visą sąrašą į Excel"><span><svg><use href="#i-sheet"/></svg><i class="excel-label">Excel</i></span></button>
       <button type="button" class="skew-btn open-btn" data-action="open-staged"><span>Atidaryti<svg><use href="#i-chev"/></svg></span></button>
-      <button type="button" class="excel-link" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
     </footer>
 
     <!-- Patikra: atsidaro virš bibliotekos -->
@@ -263,6 +263,14 @@
 </section>
 
 <div class="row-menu" id="row-menu" hidden></div>
+
+<section class="downloads" id="downloads" hidden aria-live="polite">
+  <header><b>Atsisiuntimai</b>
+    <button type="button" class="icon-btn sm" data-action="downloads-close" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button></header>
+  <ul id="downloads-list"></ul>
+  <p class="dl-hint">Failai išsaugomi aplanke „Atsisiuntimai“ (<kbd>Ctrl</kbd>+<kbd>J</kbd>). Kad „Atidaryti“ iškart atvertų Word,
+    Chrome atsisiuntimuose prie failo spauskite ⋮ → „Visada atidaryti šio tipo failus“.</p>
+</section>
 
 <div class="drop-overlay" id="drop-overlay">
   <div><span class="drop-icon"><svg><use href="#i-upload"/></svg></span>

@@ -90,15 +90,61 @@ function ask(title, text = "", okLabel = "Gerai", danger = false) {
   });
 }
 
-function download(bytes, filename, type = "application/octet-stream") {
+/**
+ * Atsisiuntimai: programos lange Chrome atsisiuntimų juostos nesimato, todėl
+ * paskutiniai failai rodomi čia – su galimybe atidaryti dar kartą.
+ */
+const downloads = [];
+let downloadsTimer = null;
+
+const fileKind = (name) => (/\.pdf$/i.test(name) ? "pdf" : /\.docx$/i.test(name) ? "doc" : /\.xlsx$/i.test(name) ? "sheet" : "zip");
+const fileSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+
+function saveFile(bytes, filename, type) {
   const url = URL.createObjectURL(new Blob([bytes], { type }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.style.position = "fixed";
+  link.style.top = "0";
   document.body.appendChild(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function download(bytes, filename, type = "application/octet-stream", meta = {}) {
+  saveFile(bytes, filename, type);
+  downloads.unshift({ id: `${Date.now()}-${Math.random()}`, bytes, filename, type, at: new Date(), ...meta });
+  // Atmintyje laikomi tik paskutiniai failai (ir ne per dideli kartu).
+  let total = 0;
+  downloads.forEach((item, index) => {
+    total += item.bytes ? item.bytes.length : 0;
+    if (index >= 8 || total > 80 * 1024 * 1024) item.bytes = null;
+  });
+  downloads.splice(12);
+  showDownloads(true);
+}
+
+function showDownloads(auto = false) {
+  const tray = $("downloads");
+  $("downloads-badge").textContent = downloads.length || "";
+  if (!downloads.length) { tray.hidden = true; return; }
+  $("downloads-list").innerHTML = downloads.map((item) => {
+    const kind = fileKind(item.filename);
+    const time = item.at.toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" });
+    const open = !item.bytes ? `<span class="muted-inline">atsisiųsta</span>`
+      : kind === "pdf" && item.recordId
+        ? `<button type="button" class="btn sm" data-dl-view="${item.id}">${icon("eye")}Peržiūrėti</button>`
+        : `<button type="button" class="btn sm" data-dl-open="${item.id}" title="Atsisiunčia dar kartą – jei Chrome nustatyta „Visada atidaryti šio tipo failus“, failas iškart atsidarys">${icon("arrow")}Atidaryti</button>`;
+    return `<li><span class="dl-icon ${kind}">${icon(kind === "doc" ? "doc" : kind === "sheet" ? "sheet" : "file")}</span>
+      <span class="dl-name"><b title="${esc(item.filename)}">${esc(item.filename)}</b><small>${item.bytes ? fileSize(item.bytes.length) + " · " : ""}${time}</small></span>
+      ${open}</li>`;
+  }).join("");
+  tray.hidden = false;
+  tray.classList.remove("pop"); void tray.offsetWidth; tray.classList.add("pop");
+  clearTimeout(downloadsTimer);
+  if (auto) downloadsTimer = setTimeout(() => { if (!tray.matches(":hover")) tray.hidden = true; }, 12000);
 }
 
 let viewer = { id: null, url: "" };
@@ -1634,7 +1680,7 @@ async function downloadPdfs(ids) {
   const list = ids.map(byId).filter(Boolean);
   if (!list.length) return;
   if (list.length === 1) {
-    download(await getPdf(list[0].id), pdfName(list[0]), "application/pdf");
+    download(await getPdf(list[0].id), pdfName(list[0]), "application/pdf", { recordId: list[0].id });
     return;
   }
   const files = {};
@@ -2120,6 +2166,8 @@ const ACTIONS = {
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
   "codes-cancel": () => $("codes").close(),
+  downloads: () => { if ($("downloads").hidden) showDownloads(); else $("downloads").hidden = true; },
+  "downloads-close": () => { $("downloads").hidden = true; },
   multi: () => { $("multi-text").value = (bulkVins() || []).join("\n"); updateMultiCount(); $("multi").showModal(); $("multi-text").focus(); },
   "multi-cancel": () => $("multi").close(),
   "viewer-close": closeViewer,
@@ -2182,6 +2230,19 @@ $("viewer").addEventListener("close", () => {
   $("viewer-frame").removeAttribute("src");
   if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
   viewer = { id: null, url: "" };
+});
+
+$("downloads-list").addEventListener("click", (event) => {
+  const view = event.target.closest("[data-dl-view]");
+  const open = event.target.closest("[data-dl-open]");
+  const item = downloads.find((entry) => entry.id === (view || open)?.dataset[view ? "dlView" : "dlOpen"]);
+  if (!item) return;
+  if (view) openPdf(item.recordId);
+  else if (item.bytes) saveFile(item.bytes, item.filename, item.type);
+});
+$("downloads").addEventListener("mouseleave", () => {
+  clearTimeout(downloadsTimer);
+  downloadsTimer = setTimeout(() => { $("downloads").hidden = true; }, 6000);
 });
 
 $("codes-form").addEventListener("submit", async (event) => {
