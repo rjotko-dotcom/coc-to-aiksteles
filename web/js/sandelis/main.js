@@ -13,7 +13,7 @@ import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
 import { PER_PAGE, printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
-import { CARS, carImage, carKeyOf, creditUrl, cssColour, generationOf, paintOf, yearOf } from "./cars.js";
+import { CARS, carImage, carKeyOf, cssColour, generationOf, imageSize, paintOf, yearOf } from "./cars.js";
 import {
   STATUS, assignFolderCodes, backupDue, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   localDay, mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
@@ -466,6 +466,12 @@ function laneFinished() {
   if (!session.done) return;
   const review = records.filter((record) => record.status === STATUS.REVIEW).length;
   if (review) toast(`Perskaityta. Patikrinkite ${review} lap. ir patvirtinkite.`);
+  if (session.refreshed) {
+    const still = records.filter((record) => record.status !== STATUS.REVIEW && pazymaMissing(record).length).length;
+    toast(`Perskaityta iš naujo: ${session.refreshed}.${still ? ` Kai kurių laukų vis tiek trūksta (${still} CoC) – įrašykite ranka.` : " Visi pažymos duomenys yra."}`, still ? "warn" : "ok");
+    session.refreshed = 0;
+    render();
+  }
   const flipped = records.filter((record) => record.status === STATUS.REVIEW && record.upside_down).length;
   if (flipped) toast(`${flipped} lap. nuskenuoti aukštyn kojom – jie pažymėti patikroje.`, "warn");
   session.done = 0;
@@ -522,10 +528,21 @@ async function readLane() {
       const fromVin = modelFromVin(readValues.vin);
       if (fromVin && !readValues.model) readValues.model = fromVin.model;
       if (fromVin && !readValues.make) readValues.make = fromVin.make;
-      for (const [key, value] of Object.entries(readValues)) {
-        if (!typedByHand(record, key)) changes[key] = value;
+      if (record.refresh) {
+        // Jau patvirtintas CoC skaitomas iš naujo: pildomi tik tušti laukai –
+        // tai, kas patvirtinta ar pataisyta ranka, lieka kaip buvo.
+        const coc = { ...(record.coc || {}) };
+        for (const [key, value] of Object.entries(changes.coc)) if (!String(coc[key] || "").trim() && value) coc[key] = value;
+        const filled = { coc, ocr: "baigta", refresh: false };
+        for (const [key, value] of Object.entries(readValues)) if (!String(record[key] || "").trim() && value) filled[key] = value;
+        await update(record, filled);
+        session.refreshed = (session.refreshed || 0) + 1;
+      } else {
+        for (const [key, value] of Object.entries(readValues)) {
+          if (!typedByHand(record, key)) changes[key] = value;
+        }
+        await update(record, changes);
       }
-      await update(record, changes);
     } catch (error) {
       const message = error.message || String(error);
       // Atsitiktinė klaida (pvz. nepavyko atidaryti PDF) – lapas grąžinamas į
@@ -534,7 +551,9 @@ async function readLane() {
       if (attempts < 2 && message !== PAGE_TIMEOUT_TEXT) {
         await update(record, { ocr: "laukia", ocr_attempts: attempts });
       } else {
-        await update(record, { ocr: "klaida", ocr_error: message, ocr_attempts: attempts });
+        await update(record, record.refresh
+          ? { ocr: "baigta", refresh: false, ocr_attempts: 0 }
+          : { ocr: "klaida", ocr_error: message, ocr_attempts: attempts });
       }
     }
     session.done += 1;
@@ -709,6 +728,32 @@ function renderReview() {
 }
 
 /** Neperskaitytus lapus grąžina į skaitymo eilę. */
+/**
+ * Patvirtintus CoC perskaito iš naujo (pvz. trūksta pažymos duomenų) –
+ * užpildomi tik tušti laukai. Nepatvirtinti skaitomi iš naujo kaip įprasta.
+ */
+async function rereadRecords(ids) {
+  const list = ids.map(byId).filter((record) => record && !["laukia", "skaitoma"].includes(record.ocr));
+  if (!list.length) return;
+  const review = list.filter((record) => record.status === STATUS.REVIEW).map((record) => record.id);
+  for (const record of list) {
+    if (record.status === STATUS.REVIEW) continue;
+    await update(record, { ocr: "laukia", refresh: true, ocr_error: "", ocr_attempts: 0 });
+  }
+  if (review.length) await retryReading(review);
+  else toast(list.length === 1 ? "CoC skaitomas iš naujo – užpildysiu trūkstamus laukus." : `Iš naujo skaitoma CoC: ${list.length}.`);
+  renderStage();
+  renderRereadCount();
+  runQueue();
+}
+
+/** Kiek patvirtintų CoC trūksta pažymos duomenų (meniu mygtukui). */
+function renderRereadCount() {
+  const missing = records.filter((record) => record.status !== STATUS.REVIEW && pazymaMissing(record).length).length;
+  $("reread-count").textContent = missing ? `trūksta ${missing} CoC` : "visko užtenka";
+  $("reread-nav").classList.toggle("warn", missing > 0);
+}
+
 async function retryReading(ids) {
   for (const id of ids) {
     const record = byId(id);
@@ -961,8 +1006,7 @@ function displayModel(record) {
 /** Mažas automobilio paveikslėlis eilutėje (nuspalvinamas po atvaizdavimo). */
 function thumbHtml(record) {
   const key = carKeyOf(record);
-  if (!key) return `<span class="car-thumb none">${icon("file")}</span>`;
-  return `<span class="car-thumb" data-car="${key}" data-id="${record.id}"><img alt="" hidden></span>`;
+  return `<span class="car-thumb" data-car="${key || ""}" data-id="${record.id}"><img alt="" hidden></span>`;
 }
 
 function hydrateThumbs(root = document) {
@@ -1094,7 +1138,7 @@ function renderStage(animate = false) {
     $("stage-model").textContent = records.length ? "Pasirinkite CoC" : "Sandėlis tuščias";
     $("stage-sub").innerHTML = records.length ? "" : "Įkelkite nuskenuotą PDF dešinėje";
     $("stage-vin").textContent = "—";
-    for (const id of ["stage-facts", "stage-actions", "stage-ready", "stage-credit"]) $(id).innerHTML = "";
+    for (const id of ["stage-facts", "stage-actions", "stage-ready"]) $(id).innerHTML = "";
     $("stage-img").hidden = true;
     stageShown = "";
     return;
@@ -1118,28 +1162,23 @@ function renderStage(animate = false) {
     <div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(codeOf(name) || name)}</dd></div>
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
-  $("stage-ready").className = `stage-ready ${missing.length ? "warn" : "ok"}`;
-  $("stage-ready").innerHTML = missing.length
-    ? `${icon("doc")}<span>Pažymai trūksta: ${esc(missing.join(", "))}</span>`
+  const busy = ["laukia", "skaitoma"].includes(record.ocr);
+  $("stage-ready").className = `stage-ready ${busy ? "busy" : missing.length ? "warn" : "ok"}`;
+  $("stage-ready").innerHTML = busy
+    ? `<span class="spinner"></span><span>Skaitoma iš naujo…</span>`
+    : missing.length
+    ? `${icon("doc")}<span>Pažymai trūksta: ${esc(missing.join(", "))}</span>
+       <button type="button" class="link-inline" data-stage="reread">${icon("undo")}Perskaityti iš naujo</button>`
     : `${icon("check")}<span>Pažymos duomenys perskaityti${coc.approval_number ? ` · ${esc(coc.approval_number)}` : ""}</span>`;
   $("stage-actions").innerHTML = `
     <button type="button" class="skew-btn" data-stage="pdf"><span>${icon("eye")}Peržiūrėti dokumentą</span></button>
     <button type="button" class="skew-btn" data-stage="pazyma"><span>${icon("doc")}Pažyma</span></button>
     ${record.status === STATUS.IN ? `<button type="button" class="skew-btn red" data-stage="give"><span>${icon("send")}Atiduoti</span></button>`
       : record.status === STATUS.OUT ? `<button type="button" class="skew-btn" data-stage="return"><span>${icon("undo")}Grąžinti</span></button>` : ""}`;
-  $("stage-credit").innerHTML = car?.author
-    ? `Nuotr.: <a href="${creditUrl(car)}" target="_blank" rel="noopener">${esc(car.author)}</a>, CC BY-SA 4.0 · spalva pagal CoC`
-    : "";
 
   const shownKey = `${key}|${paint ? paint.rgb.join(",") : "-"}`;
   const image = $("stage-img");
-  if (!car) {
-    image.hidden = true;
-    stageShown = "";
-    $("stage-car").classList.add("none");
-    return;
-  }
-  $("stage-car").classList.remove("none");
+  const size = imageSize(key);
   if (shownKey === stageShown && !animate) return;
   const sameCar = shownKey === stageShown;
   stageShown = shownKey;
@@ -1148,7 +1187,7 @@ function renderStage(animate = false) {
     image.src = url;
     image.hidden = false;
     $("stage-car").style.setProperty("--car", `url("${url}")`);
-    $("stage-car").style.setProperty("--ratio", `${car.w} / ${car.h}`);
+    $("stage-car").style.setProperty("--ratio", `${size.w} / ${size.h}`);
     if (animate && !sameCar && !reduceMotion()) {
       $("stage-car").classList.remove("enter");
       void $("stage-car").offsetWidth;
@@ -1213,6 +1252,7 @@ function openRowMenu(id, anchor) {
     item("pdf", "eye", "Peržiūrėti dokumentą"),
     item("pazyma", "doc", "Pažyma"),
     item("download", "download", "Atsisiųsti PDF"),
+    item("reread", "undo", "Perskaityti iš naujo"),
     record.status === STATUS.IN ? item("give", "send", "Atiduoti", "red") : "",
     record.status === STATUS.OUT ? item("return", "undo", "Grąžinti į turimus") : "",
   ].join("");
@@ -1234,6 +1274,7 @@ function rowAction(action, id) {
   if (action === "pdf") openPdf(id);
   if (action === "pazyma") makePazymos([id]);
   if (action === "download") downloadPdfs([id]);
+  if (action === "reread") rereadRecords([id]);
   if (action === "give") openGive([id]);
   if (action === "return") returnRecords([id]);
 }
@@ -1337,6 +1378,7 @@ function renderRecipients() {
 function render() {
   ensureFolderCodes();
   renderCounts();
+  renderRereadCount();
   renderReview();
   renderTable();
   renderAnswer($("q").value);
@@ -1845,6 +1887,9 @@ document.addEventListener("keydown", (event) => {
   else if ($("sidebar").classList.contains("open")) $("sidebar").classList.remove("open");
   else if ($("review").classList.contains("open") && !event.target.closest?.("input")) closeReview();
 });
+$("stage-ready").addEventListener("click", (event) => {
+  if (event.target.closest("[data-stage=reread]") && stageId) rereadRecords([stageId]);
+});
 $("stage-actions").addEventListener("click", (event) => {
   const action = event.target.closest("[data-stage]")?.dataset.stage;
   if (!action || !stageId) return;
@@ -1852,6 +1897,7 @@ $("stage-actions").addEventListener("click", (event) => {
   if (action === "return") returnRecords([stageId]);
   if (action === "pazyma") makePazymos([stageId]);
   if (action === "pdf") openPdf(stageId);
+  if (action === "reread") rereadRecords([stageId]);
   if (action === "detail") openDetail(stageId);
 });
 $("template-file").addEventListener("change", (event) => { useTemplate(event.target.files[0]); event.target.value = ""; });
@@ -1922,6 +1968,7 @@ const ACTIONS = {
   "return-selected": () => returnRecords([...selected]),
   "pdf-selected": () => downloadPdfs([...selected]),
   "pazyma-selected": () => makePazymos([...selected]),
+  "reread-selected": () => rereadRecords([...selected]),
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
   "codes-cancel": () => $("codes").close(),
@@ -1933,6 +1980,12 @@ const ACTIONS = {
   filters: () => { $("filter-row").hidden = !$("filter-row").hidden; renderFolders(); },
   "open-review": () => { if (reviewList().length) openReview(); else toast("Visi CoC patikrinti."); },
   "close-review": closeReview,
+  "reread-missing": () => {
+    const ids = records.filter((record) => record.status !== STATUS.REVIEW && pazymaMissing(record).length).map((record) => record.id);
+    $("sidebar").classList.remove("open");
+    if (!ids.length) { toast("Visų CoC pažymos duomenys jau yra."); return; }
+    rereadRecords(ids);
+  },
   "open-staged": () => { if (stageId) openDetail(stageId); else toast("Pasirinkite CoC sąraše.", "warn"); },
   template: async () => { await pickTemplate(); },
   codes: openCodes,

@@ -511,7 +511,7 @@ b.code {
 .code-row small { color: var(--dim); }
 .nav-two { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .nav-two small { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
-#template-nav.warn small { color: var(--amber); }
+#template-nav.warn small, #reread-nav.warn small { color: var(--amber); }
 
 /* ===== Mažesni ekranai ===== */
 /* Žemas ekranas (nešiojamas kompiuteris): kortelė kompaktiška. */
@@ -538,22 +538,25 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 
 /* ---- Kairė pusė ---- */
+/* Visas kairys skydas apkarpytas įstrižai – mašina „užlenda“ už dešinio skydo krašto. */
 .pane-left {
   position: relative; z-index: 2; min-height: 0; display: grid; grid-template-columns: 118px minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr); padding: 26px 0 24px 30px;
+  grid-template-rows: auto minmax(0, 1fr); padding: 26px 0 24px 30px; margin-right: -3%;
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
 }
 .pane-left-bg {
-  position: absolute; z-index: -1; inset: 0 -3% 0 0; pointer-events: none;
-  clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
+  position: absolute; z-index: -1; inset: 0; pointer-events: none;
   background:
     radial-gradient(60% 45% at 48% 58%, rgba(255, 255, 255, .075), transparent 70%),
     linear-gradient(165deg, #333336 0%, #262629 42%, #1b1b1e 100%);
 }
 .brandbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .brandbar .logo, .brandbar .logo svg { width: 54px; height: 54px; }
-.brand-nissan { font-size: 19px; font-weight: 800; letter-spacing: .14em; }
-.brand-sep { width: 1px; height: 30px; background: rgba(255, 255, 255, .3); margin: 0 6px; }
-.brand-fakto { font-size: 19px; font-weight: 500; letter-spacing: .1em; color: var(--soft); }
+.brand-word { width: auto; height: 17px; color: #fff; fill: currentColor; stroke: none; }
+.brand-sep { width: 1px; height: 26px; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .45), transparent); margin: 0 8px; }
+.brand-fakto { display: inline-flex; align-items: baseline; gap: .55em; font-size: 15px; line-height: 1; text-transform: uppercase; }
+.brand-fakto b { font-weight: 800; letter-spacing: .24em; color: #fff; }
+.brand-fakto i { font-style: normal; font-weight: 300; letter-spacing: .38em; color: var(--muted); }
 
 .rail { grid-column: 1; align-self: center; display: flex; flex-direction: column; gap: 30px; margin-top: -40px; }
 .rail-item {
@@ -573,7 +576,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .rail-badge:empty { display: none; }
 
-.left-body { grid-column: 2; min-height: 0; display: flex; flex-direction: column; padding-right: 26px; }
+.left-body { grid-column: 2; min-height: 0; display: flex; flex-direction: column; padding-right: 8%; }
 .center-title {
   margin: 34px 0 0; font-size: clamp(30px, 2.75vw, 48px); font-weight: 800; letter-spacing: .015em; line-height: 1.05;
   text-transform: uppercase;
@@ -589,10 +592,10 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .stage-sub { color: var(--muted); font-size: 13px; letter-spacing: .04em; min-height: 18px; }
 .stage-car {
-  position: relative; flex: 1 1 0; min-height: 110px; margin: 4px -7% 0 -2%; display: grid; place-items: center; isolation: isolate;
+  position: relative; flex: 1 1 0; min-height: 110px; margin: 10px -9% 12px 5%; display: grid; place-items: center; isolation: isolate;
 }
 .stage-car img {
-  position: relative; z-index: 2; width: 100%; height: 100%; object-fit: contain; object-position: center 70%;
+  position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center 70%;
   filter: drop-shadow(0 26px 22px rgba(0, 0, 0, .6));
 }
 .stage-glow {
@@ -621,7 +624,8 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 @keyframes sweep { 0% { opacity: 0; background-position: 130% 0; } 15% { opacity: 1; } 100% { opacity: 0; background-position: -40% 0; } }
 @keyframes breathe { 50% { transform: scaleX(.94); opacity: .8; } }
 
-.stage-bottom { display: flex; flex-direction: column; gap: 14px; max-width: 560px; }
+/* Apatinė dalis lieka kairiau įstrižo krašto. */
+.stage-bottom { display: flex; flex-direction: column; gap: 14px; max-width: min(580px, 80%); }
 .stage-vin span { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .stage-vin b { font-size: 16px; font-weight: 500; letter-spacing: .3em; }
 .stage-facts {
@@ -641,8 +645,19 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .stage-ready:empty { display: none; }
 .stage-ready svg { width: 15px; height: 15px; }
 .stage-ready.ok { color: var(--green); }
-.stage-ready.warn { color: var(--amber); }
-.stage-actions { display: flex; flex-wrap: wrap; gap: 12px; padding-left: 6px; }
+.stage-ready.warn { color: var(--amber); flex-wrap: wrap; }
+.stage-ready.busy { color: var(--soft); }
+.stage-ready .spinner { width: 14px; height: 14px; }
+.link-inline {
+  display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 3px 10px; border-radius: 99px;
+  border: 1px solid rgba(251, 191, 36, .45); background: rgba(251, 191, 36, .08); color: var(--amber);
+  font: 600 12px var(--sans); cursor: pointer;
+}
+.link-inline:hover { background: rgba(251, 191, 36, .18); }
+.link-inline svg { width: 13px; height: 13px; }
+.stage-actions { display: flex; flex-wrap: nowrap; gap: 8px; padding-left: 6px; }
+.stage-actions .skew-btn { padding: 10px 16px; font-size: 14px; min-width: 0; }
+.stage-actions .skew-btn svg { width: 18px; height: 18px; }
 .stage-actions:empty { display: none; }
 .stage-credit { color: var(--dim); font-size: 10.5px; }
 .stage-credit a { color: var(--muted); }
@@ -722,7 +737,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .rows { display: flex; flex-direction: column; }
 .lrow {
-  position: relative; display: grid; grid-template-columns: 34px 118px minmax(0, 1fr) minmax(70px, 110px) 118px 30px;
+  position: relative; display: grid; grid-template-columns: 34px 104px minmax(190px, 1fr) minmax(56px, auto) minmax(96px, auto) 30px;
   gap: 16px; align-items: center; min-height: 86px; padding: 10px 10px 10px 26px; cursor: pointer;
   border-bottom: 1px solid rgba(255, 255, 255, .08);
 }
@@ -748,8 +763,12 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   background: var(--accent-hi); color: #fff; font: 700 10px/15px var(--sans); text-align: center;
 }
 .doc-check:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; border-radius: 6px; }
-.car-thumb { width: 118px; height: 60px; display: grid; place-items: center; }
-.car-thumb img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .5)); animation: fade .4s both; }
+/* Mažas automobilis: vienodo dydžio, apkarpytas, su švelniu šešėliu po ratais. */
+.car-thumb {
+  position: relative; width: 104px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 8px;
+  background: radial-gradient(70% 30% at 50% 92%, rgba(0, 0, 0, .55), transparent 70%);
+}
+.car-thumb img { width: 92%; height: 92%; object-fit: contain; object-position: center 70%; animation: fade .4s both; }
 .car-thumb.none { color: var(--dim); }
 .car-thumb.none svg { width: 28px; height: 28px; stroke-width: 1.3; }
 .lrow-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -762,7 +781,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   width: 10px; height: 10px; border-radius: 50%; background: var(--paint); flex: none;
   border: 1px solid rgba(255, 255, 255, .4); box-shadow: inset 0 -2px 3px rgba(0, 0, 0, .35);
 }
-.lrow-vin { font-size: 14.5px; color: var(--soft); letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.lrow-vin { font-size: 14.5px; color: var(--soft); letter-spacing: .02em; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .lrow-vin b { color: #fff; font-weight: 600; }
 .lrow-folder { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--soft); min-width: 0; }
 .lrow-folder svg { width: 24px; height: 24px; stroke-width: 1.4; color: var(--muted); }
@@ -802,8 +821,8 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 18px; margin-top: 14px;
 }
 .scan-pill {
-  justify-self: start; max-width: 100%; position: relative; border: 0; color: #fff; background: #222225;
-  transform: skewX(var(--skew, -14deg)); border-radius: 10px; padding: 15px 24px; cursor: pointer; font: 400 15px var(--sans);
+  justify-self: start; max-width: 100%; display: inline-flex; align-items: center; position: relative; border: 0; color: #fff; background: #222225;
+  transform: skewX(var(--skew, -14deg)); border-radius: 10px; padding: 0 24px; cursor: pointer; font: 400 15px var(--sans);
   transition: background .2s;
 }
 .scan-pill[hidden] { display: none; }
@@ -823,9 +842,11 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .lib-foot .progress b { display: block; font-size: 14px; }
 .lib-foot .progress small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-foot .progress .bar { grid-column: 1 / -1; height: 4px; }
-.open-btn { grid-column: 2; grid-row: 1 / span 2; padding: 14px 34px; font-size: 16px; }
+.lib-foot > .scan-pill, .lib-foot > .progress, .open-btn { grid-row: 1; height: 54px; }
+.open-btn { grid-column: 2; padding: 0 34px; font-size: 16px; }
+.lib-foot .progress { padding-block: 6px; }
 .excel-link {
-  grid-column: 1; justify-self: end; display: inline-flex; align-items: center; gap: 8px; border: 0; background: none;
+  grid-column: 1; grid-row: 2; justify-self: end; display: inline-flex; align-items: center; gap: 8px; border: 0; background: none;
   color: var(--muted); font: 13px var(--sans); cursor: pointer; padding: 4px 6px;
 }
 .excel-link:hover { color: #fff; }
@@ -868,15 +889,15 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 
 /* Nešiojamas kompiuteris (1280–1500 px) */
 @media (max-width: 1500px) and (min-width: 1100px) {
-  .lrow { grid-template-columns: 28px 92px minmax(0, 1fr) 64px 100px 26px; gap: 12px; padding-left: 22px; }
-  .car-thumb { width: 92px; height: 48px; }
+  .lrow { grid-template-columns: 28px 84px minmax(168px, 1fr) minmax(48px, auto) minmax(88px, auto) 24px; gap: 10px; padding-left: 20px; }
+  .car-thumb { width: 84px; height: 46px; }
   .lrow-main > b { font-size: 15.5px; }
   .lrow-vin { font-size: 13px; }
   .lrow-folder { gap: 8px; font-size: 14px; }
   .lrow-folder svg { width: 20px; height: 20px; }
   .lrow-status { gap: 8px; font-size: 14px; }
   .doc-check svg { width: 26px; height: 26px; }
-  .stage-actions .skew-btn { padding: 9px 16px; font-size: 14px; }
+  .stage-actions .skew-btn { padding: 9px 13px; font-size: 13.5px; }
   .stage-actions { gap: 8px; flex-wrap: nowrap; }
   .pane-right .segmented button { padding: 8px 18px; font-size: 15px; }
   .scan-pill { padding: 13px 18px; font-size: 14px; }
