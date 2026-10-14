@@ -861,8 +861,15 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .excel-label { font-style: normal; }
 /* Siauresniame lange – tik ikona, kad juosta tilptų. */
 @media (max-width: 1700px) { .excel-label { display: none; } .excel-btn { padding: 0 18px; } }
-.scan-pill { min-width: 0; overflow: hidden; }
-.scan-pill > span { min-width: 0; }
+.scan-pill { min-width: 0; }
+.scan-pill > span { min-width: 0; max-width: 100%; }
+.scan-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-text > * { vertical-align: middle; }
+.scan-text em { margin: 0 8px; }
+.scan-text .dot { margin-right: 8px; }
+.scan-pill > span > svg { flex: none; }
+.narrow-only { display: none; }
+@media (max-width: 1600px) { .wide-only { display: none; } .narrow-only { display: inline; } }
 .lib-foot .progress { padding-block: 6px; }
 
 /* Patikra – atsidaro virš bibliotekos */
