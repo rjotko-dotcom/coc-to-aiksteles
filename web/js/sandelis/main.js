@@ -113,9 +113,20 @@ function saveFile(bytes, filename, type) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-function download(bytes, filename, type = "application/octet-stream", meta = {}) {
-  saveFile(bytes, filename, type);
-  downloads.unshift({ id: `${Date.now()}-${Math.random()}`, bytes, filename, type, at: new Date(), ...meta });
+async function download(bytes, filename, type = "application/octet-stream", meta = {}) {
+  // Kai pasirinktas duomenų aplankas, failas įrašomas tiesiai į jį
+  // („atsisiuntimai“) – be Chrome atsisiuntimų lango.
+  let where = "";
+  if (store.state === "ok") {
+    try {
+      filename = await disk.saveDownload(store.handle, filename, bytes);
+      where = `${store.handle.name}/${disk.DOWNLOADS_DIR}`;
+    } catch {
+      where = "";
+    }
+  }
+  if (!where) saveFile(bytes, filename, type);
+  downloads.unshift({ id: `${Date.now()}-${Math.random()}`, bytes, filename, type, at: new Date(), where, ...meta });
   // Atmintyje laikomi tik paskutiniai failai (ir ne per dideli kartu).
   let total = 0;
   downloads.forEach((item, index) => {
@@ -138,9 +149,12 @@ function showDownloads(auto = false) {
         ? `<button type="button" class="btn sm" data-dl-view="${item.id}">${icon("eye")}Peržiūrėti</button>`
         : `<button type="button" class="btn sm" data-dl-open="${item.id}" title="Atsisiunčia dar kartą – jei Chrome nustatyta „Visada atidaryti šio tipo failus“, failas iškart atsidarys">${icon("arrow")}Atidaryti</button>`;
     return `<li><span class="dl-icon ${kind}">${icon(kind === "doc" ? "doc" : kind === "sheet" ? "sheet" : "file")}</span>
-      <span class="dl-name"><b title="${esc(item.filename)}">${esc(item.filename)}</b><small>${item.bytes ? fileSize(item.bytes.length) + " · " : ""}${time}</small></span>
+      <span class="dl-name"><b title="${esc(item.filename)}">${esc(item.filename)}</b><small>${item.bytes ? fileSize(item.bytes.length) + " · " : ""}${time}${item.where ? ` · ${icon("folder")}${esc(item.where)}` : ""}</small></span>
       ${open}</li>`;
   }).join("");
+  $("dl-hint").innerHTML = store.state === "ok"
+    ? `Failai įrašomi į duomenų aplanką „${esc(store.handle.name)}“ → „${disk.DOWNLOADS_DIR}“ – be Chrome atsisiuntimų lango.`
+    : `Failai išsaugomi aplanke „Atsisiuntimai“ (<kbd>Ctrl</kbd>+<kbd>J</kbd>). Pasirinkus duomenų aplanką (☰ meniu), failai bus įrašomi į jį ir Chrome langas nebeiššoks.`;
   tray.hidden = false;
   tray.classList.remove("pop"); void tray.offsetWidth; tray.classList.add("pop");
   clearTimeout(downloadsTimer);

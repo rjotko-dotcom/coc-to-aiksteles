@@ -76,6 +76,24 @@ export async function save(handle, records, { getPdf, xlsx, settings = {}, templ
   }
 }
 
+export const DOWNLOADS_DIR = "atsisiuntimai";
+
+/**
+ * Įrašo failą į duomenų aplanko poaplankį „atsisiuntimai“ (be Chrome
+ * atsisiuntimo lango). Jei toks failas jau yra, pridedamas numeris.
+ * Grąžina galutinį failo pavadinimą.
+ */
+export async function saveDownload(handle, name, bytes) {
+  const folder = await handle.getDirectoryHandle(DOWNLOADS_DIR, { create: true });
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let final = name;
+  for (let n = 2; await exists(folder, final); n += 1) final = `${base} (${n})${ext}`;
+  await writeFile(folder, final, bytes);
+  return final;
+}
+
 /** Ištrina liudijimo PDF iš aplanko. */
 export async function removePdf(handle, id) {
   try {

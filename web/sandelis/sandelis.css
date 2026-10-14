@@ -602,7 +602,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .stage-car img {
   /* Paveikslas didesnis už savo plotą (į viršų ir šonus), bet ne ant VIN apačioje. */
-  position: absolute; z-index: 2; inset: -20% -5% -2% -5%; width: 110%; height: 122%; object-fit: contain; object-position: center bottom;
+  position: absolute; z-index: 2; inset: -6% 1% 2% 1%; width: 98%; height: 104%; object-fit: contain; object-position: center bottom;
   filter: drop-shadow(0 26px 22px rgba(0, 0, 0, .6));
 }
 .stage-glow {
@@ -616,7 +616,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .stage-sweep {
   /* Ta pati vieta ir dydis kaip paveikslo – šviesa eina tiksliai per mašiną. */
-  position: absolute; z-index: 3; inset: -20% -5% -2% -5%; width: 110%; height: 122%; pointer-events: none; opacity: 0;
+  position: absolute; z-index: 3; inset: -6% 1% 2% 1%; width: 98%; height: 104%; pointer-events: none; opacity: 0;
   background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 48%, transparent 60%) no-repeat;
   background-size: 250% 100%; background-position: 130% 0;
   -webkit-mask: var(--car) center bottom / contain no-repeat; mask: var(--car) center bottom / contain no-repeat;
@@ -968,7 +968,8 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .dl-icon svg { width: 18px; height: 18px; }
 .dl-name { min-width: 0; display: flex; flex-direction: column; }
 .dl-name b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dl-name small { color: var(--dim); font-size: 11.5px; }
+.dl-name small { color: var(--dim); font-size: 11.5px; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; }
+.dl-name small svg { width: 12px; height: 12px; }
 .dl-hint { margin: 8px 6px 2px; color: var(--dim); font-size: 11.5px; line-height: 1.45; }
 
 /* PDF peržiūra programoje */
