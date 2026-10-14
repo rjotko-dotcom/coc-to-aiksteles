@@ -11,11 +11,11 @@ import {
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
 import { buildXlsx } from "./xlsx.js";
-import { PER_PAGE, printFolderSheets } from "./print.js";
+import { printBinderLabels, printFolderSheets, printMoveSheet } from "./print.js";
 import * as disk from "./folder.js";
 import { CARS, carImage, carKeyOf, cssColour, generationOf, imageSize, paintOf, yearOf } from "./cars.js";
 import {
-  STATUS, assignFolderCodes, backupDue, bulkCheck, vinList, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  STATUS, BINDER_SIZE, assignFolderCodes, backupDue, binderContents, bulkCheck, planBinders, vinList, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   localDay, mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
@@ -43,10 +43,14 @@ let animateRows = true;
 /** Aplankų filtras: "" – visi, MODEL_FOLDERS – tik modelių aplankai, kitaip – specialaus aplanko vardas. */
 let folderFilter = "";
 const MODEL_FOLDERS = "\u0000modeliai";
+/** Filtras pagal vieną aplanką (įmautę): BINDER_PREFIX + kodas. */
+const BINDER_PREFIX = "\u0000aplankas:";
 /** Sukurti, bet dar tušti specialūs aplankai (kad nedingtų iš sąrašo). */
 let savedFolders = [];
-/** Aplankų kodai: { „X-TRAIL“: „A-01“, … }. */
+/** Seni grupių kodai: { „X-TRAIL“: „A-01“, … } – pirmas grupės aplankas gauna jį. */
 let folderCodes = {};
+/** Fiziniai aplankai (įmautės) po 20 CoC: [{ code: "A-10", group: "QASHQAI" }]. */
+let binders = [];
 /** Šablonas pasikeitė – įrašyti ir į duomenų aplanką. */
 let templateDirty = false;
 /** Kuris CoC rodomas automobilio skydelyje. */
@@ -205,7 +209,7 @@ async function syncNow() {
   try {
     const template = templateDirty ? (await getTemplate())?.bytes || null : null;
     await disk.save(store.handle, records, {
-      getPdf, xlsx: buildXlsx(excelSheets(records), excelColumns(folderCodes)), settings: { folderCodes }, template,
+      getPdf, xlsx: buildXlsx(excelSheets(records), excelColumns(folderCodes)), settings: { folderCodes, binders }, template,
     });
     if (template) templateDirty = false;
     store.saved = new Date();
@@ -241,6 +245,10 @@ async function mergeFromFolder(handle) {
 
 /** Aplankų kodai iš aplanko ar kopijos: esami čia nekeičiami, trūkstami pridedami. */
 async function mergeSettings(settings = {}) {
+  if (!binders.length && Array.isArray(settings.binders) && settings.binders.length) {
+    binders = settings.binders;
+    await setMeta("binders", binders);
+  }
   const incoming = settings.folderCodes || {};
   const merged = { ...incoming, ...folderCodes };
   if (JSON.stringify(merged) === JSON.stringify(folderCodes)) return;
@@ -870,6 +878,8 @@ async function confirmRecord(id, quiet = false) {
   const next = quiet ? null : nextReviewAfter(id);
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
+  applyBinders();
+  if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderCount(record.binder)}/${BINDER_SIZE}.`);
   animateOut(id);
   if (!quiet) {
     render();
@@ -1023,7 +1033,7 @@ function renderBulkAnswer(vins) {
       <span class="b-vin">${esc(row.query)}${row.hits.length > 1 ? ` <small>(${row.hits.length} CoC)</small>` : ""}</span>
       <span class="b-state"><i class="dot ${cls}"></i>${label}${extra ? `<small>${extra}</small>` : ""}</span>
       <span class="b-model">${record ? esc(displayModel(record)) : "—"}</span>
-      <span class="b-folder">${record && row.state !== "out" ? `${icon("folder")}${esc(codeOf(name) || name)}` : ""}</span>
+      <span class="b-folder">${record && row.state !== "out" ? `${icon("folder")}${esc(binderOfRecord(record) || name)}` : ""}</span>
       <span class="b-act">${record ? `
         <button type="button" class="icon-btn sm" data-detail="${record.id}" title="Atidaryti" aria-label="Atidaryti">${icon("eye")}</button>
         ${record.status === STATUS.IN ? `<button type="button" class="icon-btn sm give" data-give="${record.id}" title="Atiduoti" aria-label="Atiduoti">${icon("send")}</button>`
@@ -1072,7 +1082,7 @@ function renderAnswer(query) {
         : `Atiduotas ${esc(showDate(one.given_date))}${one.given_to ? ` – ${esc(one.given_to)}` : ""}.`;
     html = `<div class="answer ${kind}"><span class="mark">${icon(one.status === STATUS.IN ? "check" : one.status === STATUS.OUT ? "send" : "scan")}</span>
       <div><b>${title}</b> <span>${vinLabel(one, part)}</span>
-        ${one.status === STATUS.OUT ? "" : `<span class="where">${icon("folder")} Aplanke ${codeOf(folderOf(one)) ? `<b class="code">${esc(codeOf(folderOf(one)))}</b> ` : ""}<b>${esc(folderOf(one))}</b></span>`}</div>
+        ${one.status === STATUS.OUT ? "" : `<span class="where">${icon("folder")} Aplanke ${binderOfRecord(one) ? `<b class="code">${esc(binderOfRecord(one))}</b> ` : ""}<b>${esc(folderOf(one))}</b></span>`}</div>
       <div class="actions">${answerButtons(one)}</div></div>`;
   } else {
     // Keli CoC su tokia VIN pabaiga – parodomi visi, kad išsirinktumėte.
@@ -1094,21 +1104,47 @@ function renderAnswer(query) {
   if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
 }
 
-/** Kodai naujiems aplankams (A-01, A-02…) – kad kiekvienas aplankas turėtų savo. */
-function ensureFolderCodes() {
-  const next = assignFolderCodes(folderNames(records, savedFolders), folderCodes);
-  if (Object.keys(next).length === Object.keys(folderCodes).length) return;
-  folderCodes = next;
-  setMeta("folderCodes", folderCodes).catch(() => {});
-  scheduleSync();
+/**
+ * Kiekvienam turimam CoC – aplankas (po 20). Naujiems parenkamas pirmas tos
+ * grupės aplankas su laisva vieta; atiduoti vietą atlaisvina. Pakeisti įrašai
+ * išsaugomi. Grąžina pakeistų įrašų sąrašą [{ record, from, to }].
+ */
+function applyBinders(reorganize = false) {
+  const first = !binders.length;
+  const plan = planBinders(records, binders, { codes: folderCodes, reorganize });
+  const moved = [];
+  for (const record of records) {
+    const to = plan.assign[record.id] ?? "";
+    const from = record.binder || "";
+    if (from === to) continue;
+    // Iš kur perkelti: ankstesnis aplankas, o pirmą kartą – senas grupės aplankas.
+    const was = from || folderCodes[folderOf(record)] || "";
+    record.binder = to;
+    record.updated = now();
+    saveRecord(record).catch(() => {});
+    if (to && was !== to) moved.push({ record, from: was, to });
+  }
+  const changedBinders = JSON.stringify(plan.binders) !== JSON.stringify(binders);
+  if (changedBinders) {
+    binders = plan.binders;
+    setMeta("binders", binders).catch(() => {});
+  }
+  if (moved.length || changedBinders) scheduleSync();
+  // Pirmą kartą suskirsčius – priminimas atsispausdinti perkėlimo sąrašą ir lipdukus.
+  if (first && binders.length) setMeta("bindersNotice", true).then(() => { bindersNotice = true; renderIncomplete(); }).catch(() => {});
+  return moved;
 }
+let bindersNotice = false;
 
-const codeOf = (name) => folderCodes[name] || "";
+/** Aplanko kodas: CoC aplankas arba (senas) grupės kodas. */
+const codeOf = (name) => binders.find((binder) => binder.group === name)?.code || folderCodes[name] || "";
+const binderOfRecord = (record) => record.binder || "";
+const binderCount = (code) => records.filter((record) => record.status === STATUS.IN && record.binder === code).length;
 
 /** Aplanko žymė: kodas + pavadinimas. */
 function folderChip(record) {
   const name = folderOf(record);
-  const code = codeOf(name);
+  const code = binderOfRecord(record) || codeOf(name);
   return `<span class="folder ${inSpecialFolder(record) ? "special" : ""}">${code ? `<b class="code">${esc(code)}</b>` : icon("folder")}${esc(name)}</span>`;
 }
 
@@ -1174,6 +1210,7 @@ function vinCell(vin) {
 function inFolderFilter(record) {
   if (!folderFilter) return true;
   if (folderFilter === MODEL_FOLDERS) return !inSpecialFolder(record);
+  if (folderFilter.startsWith(BINDER_PREFIX)) return record.binder === folderFilter.slice(BINDER_PREFIX.length);
   return folderOf(record) === folderFilter;
 }
 
@@ -1228,8 +1265,8 @@ function renderTable() {
       </div>
       ${record.status === STATUS.OUT
         ? `<div class="lrow-folder given" title="${esc(record.given_to || "")}">${icon("send")}<span>${esc(record.given_to || "—")}</span></div>`
-        : `<div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(codeOf(name) || name)}${
-        inSpecialFolder(record) && codeOf(name) ? `<small>${esc(name)}</small>` : ""}</span></div>`}
+        : `<div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(binderOfRecord(record) || name)}${
+        inSpecialFolder(record) && binderOfRecord(record) ? `<small>${esc(name)}</small>` : ""}</span></div>`}
       <div class="lrow-status">${status}</div>
       <button type="button" class="kebab" data-menu="${record.id}" aria-label="Veiksmai">${icon("dots")}</button>
     </div>`;
@@ -1376,7 +1413,8 @@ function renderStage(animate = false) {
     <div>${icon("file")}<dt>CoC</dt><dd>${status}</dd></div>
     ${record.status === STATUS.OUT
       ? `<div title="${esc(record.given_to || "")}">${icon("send")}<dt>Kam atiduota</dt><dd>${esc(record.given_to || "—")}</dd></div>`
-      : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(codeOf(name) || name)}</dd></div>`}
+      : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(binderOfRecord(record) || name)}${
+        binderOfRecord(record) ? ` <small class="muted-inline">${binderCount(record.binder)}/${BINDER_SIZE}</small>` : ""}</dd></div>`}
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
   const busy = ["laukia", "skaitoma"].includes(record.ocr);
@@ -1538,74 +1576,139 @@ function renderFolders() {
   const names = folderNames(records, savedFolders);
   const models = names.filter((name) => !specialNames.has(name));
   const inStock = (name) => records.filter((record) => record.status === STATUS.IN && folderOf(record) === name).length;
-  if (folderFilter && folderFilter !== MODEL_FOLDERS && !names.includes(folderFilter)) folderFilter = "";
-  const option = (name) => `<option value="${esc(name)}">${codeOf(name) ? `${esc(codeOf(name))} · ` : ""}${esc(name)} (${inStock(name)})</option>`;
+  const view = binderContents(records, binders);
+  if (folderFilter.startsWith(BINDER_PREFIX) && !binders.some((binder) => BINDER_PREFIX + binder.code === folderFilter)) folderFilter = "";
+  if (folderFilter && !folderFilter.startsWith("\u0000") && !names.includes(folderFilter)) folderFilter = "";
+  const groupOption = (name) => {
+    const codes = view.filter((binder) => binder.group === name).map((binder) => binder.code);
+    return `<option value="${esc(name)}">${esc(name)} (${inStock(name)})${codes.length ? ` · ${esc(codes.join(", "))}` : ""}</option>`;
+  };
   $("folder-filter").innerHTML = [
     `<option value="">Visi aplankai</option>`,
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
-    models.length ? `<optgroup label="Modelių aplankai">${models.map(option).join("")}</optgroup>` : "",
-    special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => option(folder.name)).join("")}</optgroup>` : "",
+    models.length ? `<optgroup label="Modeliai">${models.map(groupOption).join("")}</optgroup>` : "",
+    special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => groupOption(folder.name)).join("")}</optgroup>` : "",
+    view.length ? `<optgroup label="Aplankai po ${BINDER_SIZE}">${view.map((binder) => `<option value="${BINDER_PREFIX}${esc(binder.code)}">${esc(binder.code)} · ${esc(binder.group)}${binder.of > 1 ? ` ${binder.index}/${binder.of}` : ""} (${binder.records.length}/${BINDER_SIZE})</option>`).join("")}</optgroup>` : "",
   ].join("");
   $("folder-filter").value = folderFilter;
   renderPrintButton();
   $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
   $("filters-btn").classList.toggle("on", Boolean(folderFilter) || !$("filter-row").hidden);
-  const navItem = (name) => `<button type="button" class="nav ${folderFilter === name ? "on-folder" : ""} ${specialNames.has(name) ? "special" : ""}"
-      data-folder="${esc(name)}">${codeOf(name) ? `<b class="code">${esc(codeOf(name))}</b>` : icon("folder")}<span class="nav-name">${esc(name)}</span><span class="badge">${inStock(name) || ""}</span></button>`;
-  $("folders-title").textContent = "Aplankai";
-  $("folder-nav").innerHTML = names.length
-    ? [...models, ...special.map((folder) => folder.name)].map(navItem).join("")
+  $("folders-title").textContent = `Aplankai (po ${BINDER_SIZE})`;
+  $("folder-nav").innerHTML = view.length
+    ? view.map((binder) => {
+      const full = binder.records.length >= BINDER_SIZE;
+      return `<button type="button" class="nav binder ${folderFilter === BINDER_PREFIX + binder.code ? "on-folder" : ""} ${specialNames.has(binder.group) ? "special" : ""}"
+        data-folder="${BINDER_PREFIX}${esc(binder.code)}"><b class="code">${esc(binder.code)}</b><span class="nav-name">${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span>
+        <span class="fill ${full ? "full" : ""}" title="${binder.records.length} iš ${BINDER_SIZE}"><i style="width:${Math.round(binder.records.length / BINDER_SIZE * 100)}%"></i></span><span class="badge">${binder.records.length}</span></button>`;
+    }).join("")
     : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
   $("folders").innerHTML = special.map((folder) => `<option value="${esc(folder.name)}">`).join("");
 }
 
 /** Aplankų kodų langas: kodą galima pakeisti, kad atitiktų lipduką ant aplanko. */
 function openCodes() {
-  const names = folderNames(records, savedFolders);
-  const count = (name) => records.filter((record) => record.status === STATUS.IN && folderOf(record) === name).length;
-  $("codes-list").innerHTML = names.map((name) => `
-    <label class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(name)}" value="${esc(codeOf(name))}">
-      <span>${esc(name)}</span><small>${count(name)} CoC</small></label>`).join("")
+  const view = binderContents(records, binders);
+  $("codes-list").innerHTML = view.map((binder) => `
+    <label class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(binder.code)}" value="${esc(binder.code)}">
+      <span>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span><small>${binder.records.length}/${BINDER_SIZE} CoC</small></label>`).join("")
     || `<p class="muted">Aplankų dar nėra.</p>`;
+  $("sidebar").classList.remove("open");
   $("codes").showModal();
 }
 
 async function saveCodes() {
-  const next = { ...folderCodes };
+  const renames = new Map();
   for (const input of $("codes-list").querySelectorAll("[data-code-for]")) {
-    const code = cleanFolderCode(input.value);
-    if (code) next[input.dataset.codeFor] = code; else delete next[input.dataset.codeFor];
+    const code = cleanFolderCode(input.value) || input.dataset.codeFor;
+    renames.set(input.dataset.codeFor, code);
   }
-  const seen = new Map();
-  for (const [name, code] of Object.entries(next)) {
-    if (seen.has(code)) { toast(`Kodas ${code} jau naudojamas aplankui „${seen.get(code)}“.`, "err"); return false; }
-    seen.set(code, name);
+  const seen = new Set();
+  for (const code of renames.values()) {
+    if (seen.has(code)) { toast(`Kodas ${code} kartojasi – kiekvienas aplankas turi turėti savo.`, "err"); return false; }
+    seen.add(code);
   }
-  folderCodes = assignFolderCodes(folderNames(records, savedFolders), next);
-  await setMeta("folderCodes", folderCodes);
+  binders = binders.map((binder) => ({ ...binder, code: renames.get(binder.code) || binder.code }));
+  await setMeta("binders", binders);
+  for (const record of records) {
+    const to = record.binder && renames.get(record.binder);
+    if (to && to !== record.binder) await update(record, { binder: to });
+  }
   scheduleSync();
   render();
   toast("Aplankų kodai išsaugoti.");
   return true;
 }
 
-/** Spausdina pasirinkto aplanko (arba visų aplankų) turimų CoC sąrašą. */
-async function printFolders() {
-  const groups = folderGroups(records.filter(inFolderFilter));
-  if (!groups.length) { toast("Šiame aplanke turimų CoC nėra.", "warn"); return; }
-  if (groups.length > 1 && !await ask(
+/** Perrūšiuoja visus turimus CoC į aplankus po 20 ir pasiūlo perkėlimo sąrašą bei lipdukus. */
+async function reorganizeBinders() {
+  $("sidebar").classList.remove("open");
+  if (!await ask(
+    `Perrūšiuoti visus aplankus po ${BINDER_SIZE}?`,
+    "Kiekvieno modelio CoC bus išdėlioti pagal VIN į aplankus po 20. Aplankų kodai lieka. Po to atsispausdinkite perkėlimo sąrašą – jame nurodyta, kurį CoC į kurį aplanką perkelti.",
+    "Perrūšiuoti",
+  )) return;
+  const moved = applyBinders(true);
+  render();
+  await setMeta("bindersNotice", true);
+  bindersNotice = true;
+  renderIncomplete();
+  toast(moved.length ? `Perrūšiuota. Perkelti reikia ${moved.length} CoC.` : "Viskas jau išdėliota teisingai.");
+  if (moved.length) printMoves(moved);
+}
+
+/** Perkėlimo sąrašas: kuriuos CoC iš kur į kur perkelti. */
+function printMoves(moved = null) {
+  const view = binderContents(records, binders);
+  // Be sąrašo – visi CoC, kurie ne savo senajame grupės aplanke (pirmas sutvarkymas).
+  const list = moved || view.flatMap((binder) => binder.records
+    .map((record) => ({ record, from: folderCodes[binder.group] || "", to: binder.code }))
+    .filter((move) => move.from !== move.to));
+  if (!list.length) { toast("Perkelti nieko nereikia – visi CoC savo aplankuose."); return; }
+  printMoveSheet(view, list, stampNow());
+}
+
+function openStickers() {
+  const view = binderContents(records, binders);
+  $("sidebar").classList.remove("open");
+  if (!view.length) { toast("Aplankų dar nėra.", "warn"); return; }
+  $("stickers-list").innerHTML = view.map((binder) => `
+    <label class="choice"><input type="checkbox" value="${esc(binder.code)}" checked>
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}<small>${binder.records.length}/${BINDER_SIZE}</small></label>`).join("");
+  $("stickers").showModal();
+}
+
+/** Aplankai, kuriuos rodo dabartinis filtras. */
+function filteredBinders() {
+  const view = binderContents(records, binders);
+  if (!folderFilter) return view;
+  if (folderFilter.startsWith(BINDER_PREFIX)) return view.filter((binder) => BINDER_PREFIX + binder.code === folderFilter);
+  if (folderFilter === MODEL_FOLDERS) return view.filter((binder) => !allFolders().some((folder) => folder.name === binder.group));
+  return view.filter((binder) => binder.group === folderFilter);
+}
+
+const stampNow = () => `${showDate(todayIso())} ${new Date().toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" })}`;
+
+/** Spausdina pasirinkto aplanko (arba visų aplankų) turimų CoC sąrašą – po lapą aplankui. */
+async function printFolders(all = false) {
+  const list = (all === true ? binderContents(records, binders) : filteredBinders()).filter((binder) => binder.records.length);
+  if (!list.length) { toast("Šiame aplanke turimų CoC nėra.", "warn"); return; }
+  if (list.length > 1 && !await ask(
     "Spausdinti aplankų sąrašus?",
-    `Bus išspausdinti ${groups.length} aplankų sąrašai – iš viso ${groups.reduce((sum, group) => sum + Math.max(1, Math.ceil(group.records.length / PER_PAGE)), 0)} lap. (iki ${PER_PAGE} CoC lape).`,
+    `Bus išspausdinti ${list.length} aplankų sąrašai – po lapą kiekvienam aplankui (iki ${BINDER_SIZE} CoC).`,
     "Spausdinti",
   )) return;
-  const time = new Date().toLocaleTimeString("lt-LT", { hour: "2-digit", minute: "2-digit" });
-  printFolderSheets(groups.map((group) => ({ ...group, code: codeOf(group.name) })), `${showDate(todayIso())} ${time}`);
+  printFolderSheets(list.map((binder) => ({
+    name: binder.group, code: binder.code, records: binder.records,
+    special: allFolders().some((folder) => folder.name === binder.group), part: binder.of > 1 ? `${binder.index} iš ${binder.of}` : "",
+  })), stampNow());
 }
 
 function renderPrintButton() {
   const label = !folderFilter ? "Spausdinti aplankų sąrašus"
     : folderFilter === MODEL_FOLDERS ? "Spausdinti modelių aplankus"
-      : `Spausdinti „${folderFilter}“ sąrašą`;
+      : folderFilter.startsWith(BINDER_PREFIX) ? `Spausdinti aplanko ${folderFilter.slice(BINDER_PREFIX.length)} sąrašą`
+        : `Spausdinti „${folderFilter}“ sąrašą`;
   $("print-folders").querySelector(".label").textContent = "Spausdinti";
   $("print-folders").title = label;
 }
@@ -1624,7 +1727,7 @@ function renderRecipients() {
 }
 
 function render() {
-  ensureFolderCodes();
+  applyBinders();
   renderCounts();
   renderRereadCount();
   renderReview();
@@ -1638,7 +1741,16 @@ function render() {
 }
 
 function renderIncomplete() {
-  $("incomplete").innerHTML = incompleteScans().map((scan) => `
+  const notice = bindersNotice && binders.length ? `
+    <div class="answer ok binders-notice"><span class="mark">${icon("folder")}</span>
+      <div><b>CoC suskirstyti į aplankus po ${BINDER_SIZE}: ${binders.length} aplank.</b>
+        <span class="where">Atsispausdinkite perkėlimo sąrašą, sudėkite CoC ir užklijuokite lipdukus.</span></div>
+      <div class="actions">
+        <button type="button" class="btn primary sm" data-binders="moves">${icon("printer")}Perkėlimo sąrašas</button>
+        <button type="button" class="btn sm" data-binders="stickers">${icon("doc")}Lipdukai</button>
+        <button type="button" class="btn sm" data-action="binders-notice-done" title="Paslėpti">${icon("check")}Sutvarkyta</button>
+      </div></div>` : "";
+  $("incomplete").innerHTML = notice + incompleteScans().map((scan) => `
     <div class="answer warn"><span class="mark">${icon("file")}</span>
       <div><b>„${esc(scan.name)}“: įkelta tik ${scan.pages.size} iš ${scan.total} lap.</b>
         <span class="where">Įkelkite tą patį PDF dar kartą – bus pridėti tik trūkstami lapai, be dublikatų.</span></div>
@@ -1903,7 +2015,7 @@ function exportExcel(subset = null) {
 
 async function backup() {
   if (!records.length) { toast("Kol kas nėra ko kopijuoti.", "warn"); return; }
-  const files = { "sandelis.json": strToU8(JSON.stringify({ version: 1, saved: now(), settings: { folderCodes }, records }, null, 1)) };
+  const files = { "sandelis.json": strToU8(JSON.stringify({ version: 1, saved: now(), settings: { folderCodes, binders }, records }, null, 1)) };
   const template = await getTemplate();
   if (template) files[disk.TEMPLATE_FILE] = template.bytes;
   for (const record of records) {
@@ -2282,6 +2394,11 @@ const ACTIONS = {
   "folder-restore": () => connectFolder(true),
   "folder-allow": allowFolder,
   "print-folders": printFolders,
+  reorganize: reorganizeBinders,
+  stickers: openStickers,
+  "stickers-cancel": () => $("stickers").close(),
+  "print-moves": () => { $("stickers").close(); printFolders(true); },
+  "binders-notice-done": async () => { bindersNotice = false; await setMeta("bindersNotice", false); renderIncomplete(); },
   filters: () => { $("filter-row").hidden = !$("filter-row").hidden; renderFolders(); },
   "open-review": () => { $("sidebar").classList.remove("open"); if (reviewList().length) openReview(); else toast("Visi CoC patikrinti."); },
   "close-review": closeReview,
@@ -2361,6 +2478,19 @@ $("missing-list").addEventListener("click", (event) => {
   if (button) openPdf(button.dataset.missingPdf);
 });
 
+$("stickers-form").addEventListener("submit", (event) => {
+  if (event.submitter?.value !== "print") return;
+  const codes = [...$("stickers-list").querySelectorAll("input:checked")].map((input) => input.value);
+  if (!codes.length) { event.preventDefault(); toast("Pažymėkite bent vieną aplanką.", "warn"); return; }
+  const view = binderContents(records, binders).filter((binder) => codes.includes(binder.code));
+  printBinderLabels(view, $("stickers-size").value);
+});
+$("incomplete").addEventListener("click", (event) => {
+  const action = event.target.closest("[data-binders]")?.dataset.binders;
+  if (action === "moves") printMoves();
+  if (action === "stickers") openStickers();
+});
+
 $("codes-form").addEventListener("submit", async (event) => {
   if (event.submitter?.value !== "save") return;
   event.preventDefault();
@@ -2404,6 +2534,8 @@ async function start() {
   savedFolders = (await getMeta("folders").catch(() => null)) || [];
   ignoredScans = (await getMeta("ignoredScans").catch(() => null)) || [];
   folderCodes = (await getMeta("folderCodes").catch(() => null)) || {};
+  binders = (await getMeta("binders").catch(() => null)) || [];
+  bindersNotice = Boolean(await getMeta("bindersNotice").catch(() => false));
   renderTemplateState();
   await loadFolderState();
   try {

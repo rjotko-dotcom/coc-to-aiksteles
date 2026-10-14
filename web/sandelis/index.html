@@ -233,6 +233,8 @@
     <p class="nav-title">Įrankiai</p>
     <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
       <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
+    <button type="button" class="nav" data-action="stickers"><svg><use href="#i-doc"/></svg>Lipdukai aplankams</button>
+    <button type="button" class="nav" data-action="reorganize"><svg><use href="#i-undo"/></svg>Perrūšiuoti aplankus po 20</button>
     <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
     <button type="button" class="nav" data-action="reread-missing" id="reread-nav"><svg><use href="#i-doc"/></svg><span class="nav-two">Trūkstami pažymos duomenys<small id="reread-count"></small></span></button>
     <button type="button" class="nav" data-action="print-folders"><svg><use href="#i-printer"/></svg>Spausdinti aplankų sąrašus</button>
@@ -419,6 +421,28 @@
   <option value="BALTA/JUODA"><option value="PILKA/JUODA"><option value="SIDABRINĖ/JUODA"><option value="MĖLYNA/JUODA">
   <option value="RAUDONA/JUODA"><option value="ŽALIA/JUODA">
 </datalist>
+
+<dialog id="stickers" class="small-dialog">
+  <form method="dialog" id="stickers-form">
+    <header class="dialog-head">
+      <div><span class="pill">Spausdinimas</span><h2>Lipdukai aplankams</h2></div>
+      <button type="button" class="icon-btn" data-action="stickers-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Spausdinama ant standartinių A4 lipdukų lapų (arba ant paprasto popieriaus ir iškerpama). Spausdinant pasirinkite
+      „Mastelis: 100 %“ / „Tikras dydis“.</p>
+    <label for="stickers-size" style="margin-top:12px">Lipduko dydis</label>
+    <select id="stickers-size">
+      <option value="large">Didelis 99×68 mm – 8 lape (Avery L7165)</option>
+      <option value="small">Mažas 64×38 mm – 21 lape (Avery L7160)</option>
+    </select>
+    <div class="choices" id="stickers-list"></div>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="print"><svg><use href="#i-printer"/></svg>Spausdinti</button>
+      <button type="button" class="btn" data-action="print-moves"><svg><use href="#i-list"/></svg>Aplankų turinio lapai</button>
+      <button type="button" class="btn" data-action="stickers-cancel">Atšaukti</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="codes" class="small-dialog">
   <form method="dialog" id="codes-form">
