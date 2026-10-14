@@ -694,7 +694,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   .lib-head { margin-left: 64px; }
   .pane-right .search-box, #answer, #incomplete { margin-left: 56px; }
   .tabs-row, .filter-row, .bulk { margin-left: 30px; }
-  .lib-foot { margin-left: -34px; }
+  .lib-foot { margin-left: 0; }
 }
 .right-top { display: flex; justify-content: flex-end; align-items: center; gap: 20px; }
 .avatar {
@@ -829,9 +829,8 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .pane-right .empty-hero { display: flex; flex-direction: column; gap: 22px; padding: 10px 0; }
 .pane-right .drop-target { min-height: 190px; background: rgba(255, 255, 255, .02); }
 
-.lib-foot {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; margin-top: 14px;
-}
+.lib-foot { display: block; margin-top: 12px; }
+.lib-foot:not(:has(.progress:not(.hidden))) { display: none; }
 .scan-pill {
   justify-self: start; max-width: 100%; display: inline-flex; align-items: center; position: relative; border: 0; color: #fff; background: #222225;
   transform: skewX(var(--skew, -14deg)); border-radius: 10px; padding: 0 24px; cursor: pointer; font: 400 15px var(--sans);
@@ -958,6 +957,8 @@ textarea:focus { outline: none; border-color: #5a5a62; }
   background: none; color: #fff; cursor: pointer;
 }
 .dl-btn:hover { background: rgba(255, 255, 255, .08); }
+.dl-btn.excel svg { color: var(--green); stroke-width: 1.5; }
+.right-top { gap: 10px; }
 .dl-btn svg { width: 24px; height: 24px; stroke-width: 1.6; }
 .dl-btn em {
   position: absolute; right: 2px; top: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px;
@@ -983,6 +984,22 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .dl-name small { color: var(--dim); font-size: 11.5px; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; }
 .dl-name small svg { width: 12px; height: 12px; }
 .dl-hint { margin: 8px 6px 2px; color: var(--dim); font-size: 11.5px; line-height: 1.45; }
+
+/* Trūkstami pažymos duomenys */
+.missing-dialog { width: min(920px, 94vw); }
+.missing-dialog form { padding: 22px; }
+.missing-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.mrow { padding: 12px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
+.mrow-head { display: flex; align-items: center; gap: 12px; }
+.mrow-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mrow-name b { font-size: 15px; }
+.mrow-name .mono-vin { font-size: 13.5px; color: var(--soft); }
+.mrow-name small { color: var(--dim); font-size: 11.5px; }
+.mrow-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+.mrow-fields label { margin: 0; }
+.mrow-fields input { margin-top: 5px; }
+.missing-dialog .car-thumb { width: 84px; height: 46px; }
+.viewer-dialog { z-index: 2; }
 
 /* PDF peržiūra programoje */
 .viewer-dialog {

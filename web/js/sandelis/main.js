@@ -1265,6 +1265,69 @@ const PAZYMA_NEEDS = [
   ["approval_date", "patvirtinimo datos", (r) => (r.coc || {}).approval_date], ["colour", "spalvos", (r) => (r.coc || {}).colour],
 ];
 
+const PAZYMA_LABELS = {
+  make: ["Markė", ""], tvv: ["Tipas / Variantas / Versija", "pvz. T33/B/B20"], model: ["Modelis", ""], vin: ["VIN", ""],
+  approval_number: ["Tipo patvirtinimo Nr.", "e13*2018/858*00293*07"], approval_date: ["Patvirtinimo data", "DD.MM.MMMM"],
+  colour: ["Spalva", "pvz. PILKA arba ŽALIA/JUODA"],
+};
+const COC_KEYS = new Set(["approval_number", "approval_date", "colour"]);
+const missingKeys = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim()).map(([key]) => key);
+const missingRecords = () => records.filter((record) => record.status !== STATUS.REVIEW && missingKeys(record).length);
+
+/** Langas su CoC, kuriems trūksta pažymos duomenų – juos galima įrašyti ranka. */
+function openMissing() {
+  const list = missingRecords();
+  $("sidebar").classList.remove("open");
+  if (!list.length) { toast("Visų CoC pažymos duomenys jau yra."); return; }
+  $("missing-count").textContent = `${list.length} CoC`;
+  $("missing-list").innerHTML = list.map((record) => {
+    const keys = missingKeys(record);
+    const busy = ["laukia", "skaitoma"].includes(record.ocr);
+    return `<div class="mrow" data-id="${record.id}">
+      <div class="mrow-head">
+        ${thumbHtml(record)}
+        <div class="mrow-name"><b>${esc(displayModel(record))}</b><span class="mono-vin">${esc(record.vin || "VIN nėra")}</span>
+          <small>${esc(record.source_file || "")}${record.page ? ` · ${record.page} lapas` : ""}${busy ? " · skaitoma…" : ""}</small></div>
+        <button type="button" class="btn sm" data-missing-pdf="${record.id}">${icon("eye")}PDF</button>
+      </div>
+      <div class="mrow-fields">${keys.map((key) => `
+        <label>${esc(PAZYMA_LABELS[key][0])}
+          <input type="text" class="${key === "colour" ? "" : "mono"}" data-mkey="${key}" placeholder="${esc(PAZYMA_LABELS[key][1])}"
+            ${key === "colour" ? 'list="lt-colours"' : ""} autocomplete="off" spellcheck="false"></label>`).join("")}</div>
+    </div>`;
+  }).join("");
+  hydrateThumbs($("missing-list"));
+  if (!$("missing").open) $("missing").showModal();
+}
+
+async function saveMissing() {
+  let saved = 0;
+  for (const row of $("missing-list").querySelectorAll(".mrow")) {
+    const record = byId(row.dataset.id);
+    if (!record) continue;
+    const changes = {};
+    const coc = { ...(record.coc || {}) };
+    const typed = { ...(record.typed || {}) };
+    let any = false;
+    for (const input of row.querySelectorAll("[data-mkey]")) {
+      let value = input.value.trim();
+      if (!value) continue;
+      const key = input.dataset.mkey;
+      if (key === "vin") value = cleanVin(value);
+      if (key === "colour" || key === "make" || key === "model") value = value.toUpperCase();
+      if (COC_KEYS.has(key)) coc[key] = value; else changes[key] = value;
+      typed[key] = true;
+      any = true;
+    }
+    if (!any) continue;
+    await update(record, { ...changes, coc, typed });
+    saved += 1;
+  }
+  render();
+  toast(saved ? `Išsaugota: ${saved} CoC.` : "Nieko neįrašyta.", saved ? "ok" : "warn");
+  return saved;
+}
+
 /** Ko trūksta pažymai (tušti laukai). */
 const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim()).map(([, name]) => name);
 
@@ -1321,7 +1384,8 @@ function renderStage(animate = false) {
     ? `<span class="spinner"></span><span>Skaitoma iš naujo…</span>`
     : missing.length
     ? `${icon("doc")}<span>Pažymai trūksta: ${esc(missing.join(", "))}</span>
-       <button type="button" class="link-inline" data-stage="reread">${icon("undo")}Perskaityti iš naujo</button>`
+       <button type="button" class="link-inline" data-stage="reread">${icon("undo")}Perskaityti iš naujo</button>
+       <button type="button" class="link-inline" data-stage="detail-fill">${icon("doc")}Įrašyti ranka</button>`
     : `${icon("check")}<span>Pažymos duomenys perskaityti${coc.approval_number ? ` · ${esc(coc.approval_number)}` : ""}</span>`;
   $("stage-actions").innerHTML = `
     <button type="button" class="skew-btn" data-stage="pdf"><span>${icon("eye")}Peržiūrėti dokumentą</span></button>
@@ -1639,10 +1703,12 @@ function detailFolderHint() {
 /** Atidarytų liudijimų peržiūros (kad antrą kartą atsidarytų iš karto). */
 const previews = new Map();
 
-async function openDetail(id) {
+async function openDetail(id, fill = false) {
   const record = byId(id);
   if (!record) return;
   detailId = id;
+  // Kai trūksta pažymos duomenų – „Pažymos laukai“ atskleidžiami iš karto.
+  $("detail-coc").open = fill || pazymaMissing(record).length > 0;
   $("detail-title").textContent = [record.make, record.model].filter(Boolean).join(" ") || "Liudijimas";
   $("detail-pill").className = `pill ${record.status}`;
   $("detail-pill").textContent = record.status === STATUS.OUT
@@ -2097,6 +2163,7 @@ document.addEventListener("keydown", (event) => {
 });
 $("stage-ready").addEventListener("click", (event) => {
   if (event.target.closest("[data-stage=reread]") && stageId) rereadRecords([stageId]);
+  if (event.target.closest("[data-stage=detail-fill]") && stageId) openDetail(stageId, true);
 });
 $("stage-actions").addEventListener("click", (event) => {
   const action = event.target.closest("[data-stage]")?.dataset.stage;
@@ -2196,10 +2263,11 @@ const ACTIONS = {
   filters: () => { $("filter-row").hidden = !$("filter-row").hidden; renderFolders(); },
   "open-review": () => { $("sidebar").classList.remove("open"); if (reviewList().length) openReview(); else toast("Visi CoC patikrinti."); },
   "close-review": closeReview,
-  "reread-missing": () => {
-    const ids = records.filter((record) => record.status !== STATUS.REVIEW && pazymaMissing(record).length).map((record) => record.id);
-    $("sidebar").classList.remove("open");
-    if (!ids.length) { toast("Visų CoC pažymos duomenys jau yra."); return; }
+  "reread-missing": openMissing,
+  "missing-close": () => $("missing").close(),
+  "missing-reread": () => {
+    const ids = missingRecords().map((record) => record.id);
+    $("missing").close();
     rereadRecords(ids);
   },
   "open-staged": () => { if (stageId) openDetail(stageId); else toast("Pasirinkite CoC sąraše.", "warn"); },
@@ -2258,6 +2326,17 @@ $("downloads-list").addEventListener("click", (event) => {
 $("downloads").addEventListener("mouseleave", () => {
   clearTimeout(downloadsTimer);
   downloadsTimer = setTimeout(() => { $("downloads").hidden = true; }, 6000);
+});
+
+$("missing-form").addEventListener("submit", async (event) => {
+  if (event.submitter?.value !== "save") return;
+  event.preventDefault();
+  await saveMissing();
+  if (missingRecords().length) openMissing(); else $("missing").close();
+});
+$("missing-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-missing-pdf]");
+  if (button) openPdf(button.dataset.missingPdf);
 });
 
 $("codes-form").addEventListener("submit", async (event) => {
