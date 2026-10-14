@@ -432,7 +432,7 @@ dialog {
   padding: 24px; width: 100%; max-height: calc(100vh - 32px); box-shadow: 0 40px 100px -30px #000;
 }
 dialog[open] { animation: dialog-in .35s var(--ease); }
-dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); animation: fade .3s ease; }
+dialog::backdrop { background: rgba(0, 0, 0, .72); animation: fade .2s ease; }
 .sheet-dialog { max-width: min(1040px, calc(100vw - 32px)); }
 .small-dialog { max-width: min(480px, calc(100vw - 32px)); }
 .dialog-grid { display: grid; grid-template-columns: minmax(240px, 360px) 1fr; gap: 26px; }
@@ -458,7 +458,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); backdrop-filter: blur(4px); an
 /* ===== Nuvilkimas ===== */
 .drop-overlay {
   position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; pointer-events: none;
-  background: rgba(10, 10, 11, .82); backdrop-filter: blur(6px); opacity: 0; transition: opacity .25s;
+  background: rgba(10, 10, 11, .9); opacity: 0; transition: opacity .25s;
 }
 .drop-overlay > div {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 60px 90px; text-align: center;
@@ -600,9 +600,9 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   filter: drop-shadow(0 26px 22px rgba(0, 0, 0, .6));
 }
 .stage-glow {
-  position: absolute; z-index: 0; inset: 18% 10% 14%; border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--paint) 45%, transparent), transparent);
-  filter: blur(36px); opacity: .55; transition: background .6s;
+  position: absolute; z-index: 0; inset: 10% 2% 6%; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--paint) 32%, transparent), transparent 75%);
+  opacity: .6;
 }
 .stage-floor {
   position: absolute; z-index: 1; left: 12%; right: 12%; bottom: 6%; height: 14%; border-radius: 50%;
@@ -621,7 +621,8 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .stage-car.none::after, .stage.empty .stage-car::after {
   content: ""; position: absolute; inset: 22% 18% 18%; border-radius: 22px; border: 1px dashed rgba(255, 255, 255, .14);
 }
-@keyframes car-in { from { opacity: 0; transform: translateX(70px) scale(.96); filter: blur(6px) drop-shadow(0 26px 22px rgba(0, 0, 0, .6)); } }
+@keyframes car-in { from { opacity: 0; transform: translateX(70px) scale(.96); } }
+.stage-car.enter img { will-change: transform, opacity; }
 @keyframes sweep { 0% { opacity: 0; background-position: 130% 0; } 15% { opacity: 1; } 100% { opacity: 0; background-position: -40% 0; } }
 @keyframes breathe { 50% { transform: scaleX(.94); opacity: .8; } }
 
@@ -753,7 +754,9 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .lrow.staged::before {
   background: linear-gradient(90deg, #2c2c2f, #252528); box-shadow: inset 5px 0 0 var(--accent-hi), 0 14px 30px -18px #000;
 }
-.lrow.enter { animation: rise .4s var(--ease) both; animation-delay: calc(var(--i, 0) * 22ms); }
+.lrow.enter { animation: rise .35s var(--ease) both; animation-delay: calc(min(var(--i, 0), 12) * 18ms); }
+/* Nematomos eilutės nepiešiamos – ilgas sąrašas neapkrauna kompiuterio. */
+.lrow { content-visibility: auto; contain-intrinsic-size: auto 86px; }
 .doc-check { position: relative; margin: 0; display: grid; place-items: center; color: var(--soft); cursor: pointer; }
 .doc-check input { position: absolute; opacity: 0; pointer-events: none; }
 .doc-check svg { width: 30px; height: 30px; stroke-width: 1.4; transition: color .2s; }
@@ -887,6 +890,63 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   box-shadow: 0 20px 50px -20px #000;
 }
 .update.hidden { display: none; }
+
+/* Keli VIN */
+.multi-btn {
+  display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 10px; border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .04); color: var(--soft);
+  font: 500 12.5px var(--sans); cursor: pointer;
+}
+.multi-btn:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.multi-btn svg { width: 15px; height: 15px; }
+textarea {
+  width: 100%; margin-top: 12px; padding: 12px; border-radius: 10px; border: 1px solid var(--line-2); resize: vertical;
+  background: var(--card); color: var(--text); font: 14px/1.5 var(--mono); letter-spacing: .03em;
+}
+textarea:focus { outline: none; border-color: #5a5a62; }
+.bulk-answer { display: block; padding: 12px 14px; }
+.bulk-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.bulk-head b { font-size: 14.5px; }
+.bulk-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.bulk-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bulk-list li {
+  display: grid; grid-template-columns: minmax(170px, 1.4fr) minmax(110px, 1fr) minmax(70px, .8fr) minmax(60px, .6fr) 92px;
+  gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, .28); font-size: 13.5px;
+}
+.bulk-list li.b-none { background: rgba(248, 113, 113, .1); }
+.bulk-list .b-vin { font-family: var(--mono); letter-spacing: .02em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bulk-list .b-vin small { color: var(--dim); font-family: var(--sans); }
+.bulk-list .b-state { display: flex; align-items: center; gap: 8px; color: var(--soft); white-space: nowrap; }
+.bulk-list .b-state small { color: var(--dim); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; }
+.bulk-list .b-none .b-state { color: var(--red); font-weight: 600; }
+.dot.none { background: var(--red); box-shadow: 0 0 10px rgba(248, 113, 113, .5); }
+.bulk-list .b-folder { display: flex; align-items: center; gap: 6px; color: var(--soft); }
+.bulk-list .b-folder svg { width: 15px; height: 15px; color: var(--muted); }
+.bulk-list .b-act { text-align: right; }
+
+/* PDF peržiūra programoje */
+.viewer-dialog {
+  width: min(1100px, 94vw); height: 92vh; max-height: 92vh; padding: 0; display: none; flex-direction: column; overflow: hidden;
+}
+.viewer-dialog[open] { display: flex; }
+.viewer-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 18px; border-bottom: 1px solid var(--line); }
+.viewer-head b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.viewer-head .spacer { flex: 1; }
+.viewer-dialog iframe { flex: 1; width: 100%; border: 0; background: #2a2a2e; }
+
+/* Įdiegta programa: per visą langą, be Chrome juostos (Window Controls Overlay). */
+@media (display-mode: standalone), (display-mode: window-controls-overlay), (display-mode: fullscreen) {
+  .shell { height: 100vh; margin: 0; border-radius: 0; box-shadow: none; }
+}
+@media (display-mode: window-controls-overlay) {
+  /* Viršutinė juosta, už kurios galima tempti langą; mygtukai lieka paspaudžiami. */
+  .titlebar {
+    position: fixed; z-index: 90; left: env(titlebar-area-x, 0); top: env(titlebar-area-y, 0);
+    width: env(titlebar-area-width, 100%); height: env(titlebar-area-height, 0); app-region: drag; -webkit-app-region: drag;
+  }
+  .right-top { padding-top: calc(env(titlebar-area-height, 0px) - 10px); }
+  .brandbar, .right-top, button, a, input { app-region: no-drag; -webkit-app-region: no-drag; }
+}
 
 /* Nešiojamas kompiuteris (1280–1500 px) */
 @media (max-width: 1500px) and (min-width: 1100px) {

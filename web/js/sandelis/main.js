@@ -15,13 +15,13 @@ import { PER_PAGE, printFolderSheets } from "./print.js";
 import * as disk from "./folder.js";
 import { CARS, carImage, carKeyOf, cssColour, generationOf, imageSize, paintOf, yearOf } from "./cars.js";
 import {
-  STATUS, assignFolderCodes, backupDue, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  STATUS, assignFolderCodes, backupDue, bulkCheck, vinList, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   localDay, mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
 
 /** Kiek eilučių rodyti iš karto – didelis sąrašas kitaip stabdytų puslapį. */
-const PAGE = 200;
+const PAGE = 60;
 
 /** Laukai, kurių sandėliui reikia iš kiekvieno lapo. */
 const NEEDED = ["vin", "commercial_name"];
@@ -101,12 +101,22 @@ function download(bytes, filename, type = "application/octet-stream") {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
+let viewer = { id: null, url: "" };
+
+/** PDF peržiūra pačioje programoje (be naujo Chrome skirtuko). */
 async function openPdf(id) {
   const bytes = await getPdf(id);
   if (!bytes) { toast("Šio liudijimo PDF nerastas.", "err"); return; }
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-  window.open(url, "_blank");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  if (viewer.url) URL.revokeObjectURL(viewer.url);
+  const record = byId(id);
+  viewer = { id, url: URL.createObjectURL(new Blob([bytes], { type: "application/pdf" })) };
+  $("viewer-title").textContent = record ? [displayModel(record), record.vin].filter(Boolean).join(" · ") : "Dokumentas";
+  $("viewer-frame").src = `${viewer.url}#view=FitH`;
+  $("viewer").showModal();
+}
+
+function closeViewer() {
+  $("viewer").close();
 }
 
 async function update(record, changes) {
@@ -917,9 +927,60 @@ function answerButtons(record) {
   return `${give}<button type="button" class="btn sm" data-detail="${record.id}">Atidaryti</button>`;
 }
 
+/** Keli VIN paieškos laukelyje (įklijuotas sąrašas) – tada tikrinami visi iš karto. */
+const bulkVins = (query = $("q").value) => {
+  const list = vinList(query);
+  return list.length >= 2 ? list : null;
+};
+let bulkResult = [];
+
+const BULK_STATE = {
+  in: ["turimas", "Turime"], out: ["out", "Atiduotas"], review: ["tikrinti", "Netikrintas"], none: ["none", "Neturime"],
+};
+
+/** Kelių VIN atsakymas: santrauka ir kiekvieno VIN eilutė. */
+function renderBulkAnswer(vins) {
+  bulkResult = bulkCheck(records, vins);
+  const count = (state) => bulkResult.filter((row) => row.state === state).length;
+  const have = count("in"); const none = count("none");
+  const rows = bulkResult.map((row) => {
+    const record = row.hits[0];
+    const [cls, label] = BULK_STATE[row.state];
+    const name = record ? folderOf(record) : "";
+    const extra = record && row.state === "out"
+      ? `${esc(shortDate(record.given_date))}${record.given_to ? ` · ${esc(record.given_to)}` : ""}` : "";
+    return `<li class="b-${row.state}">
+      <span class="b-vin">${esc(row.query)}${row.hits.length > 1 ? ` <small>(${row.hits.length} CoC)</small>` : ""}</span>
+      <span class="b-state"><i class="dot ${cls}"></i>${label}${extra ? `<small>${extra}</small>` : ""}</span>
+      <span class="b-model">${record ? esc(displayModel(record)) : "—"}</span>
+      <span class="b-folder">${record ? `${icon("folder")}${esc(codeOf(name) || name)}` : ""}</span>
+      <span class="b-act">${record ? `<button type="button" class="btn sm" data-detail="${record.id}">Atidaryti</button>` : ""}</span>
+    </li>`;
+  }).join("");
+  return `<div class="answer bulk-answer ${none ? "warn" : "ok"}">
+    <div class="bulk-head">
+      <b>Patikrinta ${bulkResult.length} VIN: turime ${have}${count("out") ? ` · atiduota ${count("out")}` : ""}${count("review") ? ` · netikrinta ${count("review")}` : ""} · neturime ${none}</b>
+      <span class="bulk-actions">
+        ${have ? `<button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti turimus</button>
+          <button type="button" class="btn sm" data-bulk="pazyma">${icon("doc")}Pažymos turimiems</button>` : ""}
+        ${none ? `<button type="button" class="btn sm" data-bulk="copy">${icon("file")}Kopijuoti neturimus</button>` : ""}
+        <button type="button" class="icon-btn sm" data-bulk="clear" aria-label="Išvalyti">${icon("x")}</button>
+      </span>
+    </div>
+    <ul class="bulk-list">${rows}</ul>
+  </div>`;
+}
+
 /** Aiškus atsakymas į klausimą „ar turime šitą CoC?“ (pakanka 4 paskutinių VIN ženklų). */
 function renderAnswer(query) {
   const box = $("answer");
+  const many = bulkVins(query);
+  if (many) {
+    const html = renderBulkAnswer(many);
+    if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+    return;
+  }
+  bulkResult = [];
   const part = cleanVin(query);
   const hits = vinHits(records, query);
   let html = "";
@@ -1004,8 +1065,14 @@ function displayModel(record) {
 }
 
 /** Mažas automobilio paveikslėlis eilutėje (nuspalvinamas po atvaizdavimo). */
+/** Jau nuspalvintos miniatiūros – kad perpiešiant sąrašą jos atsirastų iš karto. */
+const thumbUrls = new Map();
+const thumbKey = (record) => `${carKeyOf(record) || ""}|${(paintOf(record)?.rgb || []).join(",")}`;
+
 function thumbHtml(record) {
   const key = carKeyOf(record);
+  const ready = thumbUrls.get(thumbKey(record));
+  if (ready) return `<span class="car-thumb"><img alt="" src="${ready}" decoding="async"></span>`;
   return `<span class="car-thumb" data-car="${key || ""}" data-id="${record.id}"><img alt="" hidden></span>`;
 }
 
@@ -1016,6 +1083,7 @@ function hydrateThumbs(root = document) {
     if (!record || image.dataset.ready === box.dataset.id) return;
     image.dataset.ready = box.dataset.id;
     carImage(box.dataset.car, paintOf(record), 240).then((url) => {
+      if (url) thumbUrls.set(thumbKey(record), url);
       if (!url || image.dataset.ready !== box.dataset.id) return;
       image.src = url;
       image.hidden = false;
@@ -1036,6 +1104,10 @@ function inFolderFilter(record) {
 
 function visibleRecords() {
   const query = $("q").value;
+  if (bulkVins(query)) {
+    const ids = new Set(bulkCheck(records, bulkVins(query)).flatMap((row) => row.hits.map((record) => record.id)));
+    return records.filter((record) => ids.has(record.id)).sort(newestFirst);
+  }
   if (query.trim()) {
     return records.filter((record) => record.status !== STATUS.REVIEW && matches(record, query)).sort(newestFirst);
   }
@@ -1092,13 +1164,15 @@ function renderTable() {
 
   const more = list.length - shown;
   $("list-note").innerHTML = more > 0
-    ? `Rodoma ${shown} iš ${list.length}. <button type="button" class="btn sm" data-action="more">Rodyti daugiau</button>`
+    ? `Rodoma ${shown} iš ${list.length}. <button type="button" class="btn sm" data-action="more" id="more-btn">Rodyti daugiau</button>`
     : query ? `Rasta: ${list.length} · ieškoma visuose sąrašuose ir aplankuose` : "";
 
   const visibleIds = list.slice(0, shown).map((record) => record.id);
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   renderBulk();
   hydrateThumbs($("rows"));
+  const moreButton = $("more-btn");
+  if (moreButton) moreObserver.observe(moreButton);
   // Skydelyje – pasirinktas CoC; jei jo sąraše nebėra, pirmas sąrašo.
   if (!stageId || !list.some((record) => record.id === stageId)) setStage(list[0]?.id || null, false);
   else renderStage();
@@ -1278,6 +1352,14 @@ function rowAction(action, id) {
   if (action === "give") openGive([id]);
   if (action === "return") returnRecords([id]);
 }
+
+/** Priartėjus prie sąrašo galo, automatiškai rodoma daugiau eilučių. */
+const moreObserver = new IntersectionObserver((entries) => {
+  if (!entries.some((entry) => entry.isIntersecting)) return;
+  moreObserver.disconnect();
+  shown += PAGE;
+  renderTable();
+}, { root: document.querySelector(".rows-wrap"), rootMargin: "300px" });
 
 function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
@@ -1474,6 +1556,9 @@ function detailFolderHint() {
   $("d-folder-hint").innerHTML = `${icon("folder")}Guli aplanke: ${esc(special || folderOf({ model: $("d-model").value }))}`;
 }
 
+/** Atidarytų liudijimų peržiūros (kad antrą kartą atsidarytų iš karto). */
+const previews = new Map();
+
 async function openDetail(id) {
   const record = byId(id);
   if (!record) return;
@@ -1493,8 +1578,14 @@ async function openDetail(id) {
   $("detail-preview").removeAttribute("src");
   $("detail").showModal();
   try {
+    if (previews.has(id)) { $("detail-preview").src = previews.get(id); return; }
     const bytes = await getPdf(id);
-    if (bytes && detailId === id) $("detail-preview").src = await thumbnail(bytes, 900);
+    const url = bytes ? await thumbnail(bytes, 900) : "";
+    if (url) {
+      previews.set(id, url);
+      if (previews.size > 40) previews.delete(previews.keys().next().value);
+    }
+    if (url && detailId === id) $("detail-preview").src = url;
   } catch {
     // peržiūra nebūtina – PDF vis tiek galima atsidaryti
   }
@@ -1808,9 +1899,32 @@ $("q").addEventListener("input", () => {
 });
 $("q").addEventListener("keydown", (event) => {
   if (event.key === "Escape") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
-  if (event.key === "Enter") {
+  if (event.key === "Enter" && !bulkVins()) {
     const first = visibleRecords()[0];
     if (first && $("q").value.trim()) openDetail(first.id);
+  }
+});
+// Įklijuotas VIN sąrašas (po vieną eilutėje) – eilutės paverčiamos tarpais,
+// kitaip naršyklė jas tiesiog sulipdytų į vieną ilgą žodį.
+$("q").addEventListener("paste", (event) => {
+  const text = event.clipboardData?.getData("text") || "";
+  if (!/[\r\n]/.test(text.trim())) return;
+  event.preventDefault();
+  const input = $("q");
+  const joined = text.trim().split(/[\r\n]+/).map((line) => line.trim()).filter(Boolean).join(" ");
+  input.setRangeText(joined, input.selectionStart, input.selectionEnd, "end");
+  input.dispatchEvent(new Event("input"));
+});
+$("answer").addEventListener("click", async (event) => {
+  const action = event.target.closest("[data-bulk]")?.dataset.bulk;
+  if (!action) return;
+  const have = bulkResult.filter((row) => row.state === "in").map((row) => row.hits[0].id);
+  if (action === "select") { have.forEach((id) => selected.add(id)); renderTable(); toast(`Pažymėta: ${have.length}.`); }
+  if (action === "pazyma") makePazymos(have);
+  if (action === "clear") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
+  if (action === "copy") {
+    const missing = bulkResult.filter((row) => row.state === "none").map((row) => row.query).join("\n");
+    try { await navigator.clipboard.writeText(missing); toast("Neturimi VIN nukopijuoti."); } catch { toast("Nepavyko nukopijuoti.", "err"); }
   }
 });
 document.addEventListener("keydown", (event) => {
@@ -1972,6 +2086,11 @@ const ACTIONS = {
   "clear-selection": () => { selected.clear(); renderTable(); },
   "give-cancel": () => $("give").close(),
   "codes-cancel": () => $("codes").close(),
+  multi: () => { $("multi-text").value = (bulkVins() || []).join("\n"); updateMultiCount(); $("multi").showModal(); $("multi-text").focus(); },
+  "multi-cancel": () => $("multi").close(),
+  "viewer-close": closeViewer,
+  "viewer-download": () => { if (viewer.id) downloadPdfs([viewer.id]); },
+  "viewer-tab": () => { if (viewer.url) window.open(viewer.url, "_blank"); },
   "folder-cancel": () => $("folder-dialog").close(),
   "folder-connect": () => connectFolder(),
   "folder-restore": () => connectFolder(true),
@@ -2010,6 +2129,26 @@ document.addEventListener("click", (event) => {
   }
 });
 $("restore-file").addEventListener("change", (event) => { restore(event.target.files[0]); event.target.value = ""; });
+
+function updateMultiCount() {
+  const count = vinList($("multi-text").value).length;
+  $("multi-count").textContent = count ? `Rasta VIN: ${count}` : "";
+}
+$("multi-text").addEventListener("input", updateMultiCount);
+$("multi-form").addEventListener("submit", (event) => {
+  if (event.submitter?.value !== "check") return;
+  const list = vinList($("multi-text").value);
+  if (!list.length) { event.preventDefault(); toast("Nerasta nė vieno VIN.", "warn"); return; }
+  closeReview();
+  $("q").value = list.join(" ");
+  $("q").dispatchEvent(new Event("input"));
+});
+$("viewer").addEventListener("close", () => {
+  const { url } = viewer;
+  $("viewer-frame").removeAttribute("src");
+  if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+  viewer = { id: null, url: "" };
+});
 
 $("codes-form").addEventListener("submit", async (event) => {
   if (event.submitter?.value !== "save") return;

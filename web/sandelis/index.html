@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Turimų atitikties liudijimų (CoC) sąrašas: nuskenuoti, surasti, atiduoti.">
-<meta name="theme-color" content="#0a0a0b">
+<meta name="theme-color" content="#111113">
 <meta name="color-scheme" content="dark">
 <title>FAKTO auto · CoC sandėlis</title>
 <link rel="manifest" href="./manifest.webmanifest">
@@ -68,6 +68,7 @@
   </defs>
 </svg>
 
+<div class="titlebar" aria-hidden="true"></div>
 <div class="shell" id="top">
   <!-- Kairė pusė: pasirinktas automobilis -->
   <section class="pane-left">
@@ -124,7 +125,8 @@
 
     <div class="search-box">
       <svg><use href="#i-search"/></svg>
-      <input type="search" id="q" placeholder="Ieškoti VIN arba modelio" autocomplete="off" spellcheck="false" aria-label="Paieška">
+      <input type="search" id="q" placeholder="Ieškoti VIN arba modelio – galima įklijuoti ir kelis VIN" autocomplete="off" spellcheck="false" aria-label="Paieška">
+      <button type="button" class="multi-btn" data-action="multi" title="Patikrinti kelis VIN iš karto"><svg><use href="#i-list"/></svg>Keli VIN</button>
       <kbd>/</kbd>
     </div>
     <div id="answer" aria-live="polite"></div>
@@ -357,6 +359,34 @@
       </div>
     </div>
   </form>
+</dialog>
+
+<dialog id="multi" class="small-dialog">
+  <form method="dialog" id="multi-form">
+    <header class="dialog-head">
+      <div><span class="pill">Paieška</span><h2>Patikrinti kelis VIN</h2></div>
+      <button type="button" class="icon-btn" data-action="multi-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Įklijuokite VIN sąrašą – po vieną eilutėje (pvz. iš Excel ar laiško). Tinka ir paskutiniai 6 ženklai.
+      Iš karto pamatysite, kuriuos turime, kurie atiduoti ir kurių nėra.</p>
+    <textarea id="multi-text" rows="10" spellcheck="false" placeholder="SJNJ12TA9U2000101&#10;JN1T33TB7U0062538&#10;…"></textarea>
+    <p class="muted small" id="multi-count"></p>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="check"><svg><use href="#i-search"/></svg>Tikrinti</button>
+      <button type="button" class="btn" data-action="multi-cancel">Atšaukti</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="viewer" class="viewer-dialog">
+  <header class="viewer-head">
+    <b id="viewer-title">Dokumentas</b>
+    <span class="spacer"></span>
+    <button type="button" class="btn sm" data-action="viewer-download"><svg><use href="#i-download"/></svg>Atsisiųsti</button>
+    <button type="button" class="btn sm" data-action="viewer-tab"><svg><use href="#i-arrow"/></svg>Naujame lange</button>
+    <button type="button" class="icon-btn" data-action="viewer-close" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+  </header>
+  <iframe id="viewer-frame" title="CoC dokumentas"></iframe>
 </dialog>
 
 <dialog id="codes" class="small-dialog">
