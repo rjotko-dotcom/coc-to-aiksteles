@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-5ac99b6becb2";
+const VERSION = "aikstele-6de1717c0a65";
 const ASSETS = [
   "./",
   "./version.js",
@@ -34,7 +34,21 @@ const ASSETS = [
   "./js/store.js",
   "./manifest.webmanifest",
   "./sandelis/brand/nissan.svg",
+  "./sandelis/cars/x-trail-balta-juoda.webp",
+  "./sandelis/cars/x-trail-balta.webp",
+  "./sandelis/cars/x-trail-juoda.webp",
   "./sandelis/cars/x-trail-mask.webp",
+  "./sandelis/cars/x-trail-melyna-juoda.webp",
+  "./sandelis/cars/x-trail-melyna.webp",
+  "./sandelis/cars/x-trail-pilka-juoda.webp",
+  "./sandelis/cars/x-trail-pilka.webp",
+  "./sandelis/cars/x-trail-raudona-juoda.webp",
+  "./sandelis/cars/x-trail-raudona.webp",
+  "./sandelis/cars/x-trail-ruda.webp",
+  "./sandelis/cars/x-trail-sidabrine-juoda.webp",
+  "./sandelis/cars/x-trail-sidabrine.webp",
+  "./sandelis/cars/x-trail-zalia-juoda.webp",
+  "./sandelis/cars/x-trail-zalia.webp",
   "./sandelis/cars/x-trail.webp",
   "./sandelis/icons/app-192.png",
   "./sandelis/icons/app-256.png",

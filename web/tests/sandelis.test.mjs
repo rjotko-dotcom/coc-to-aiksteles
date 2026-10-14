@@ -202,3 +202,14 @@ test("keli VIN iš karto: kurie yra, kurių nėra", async () => {
   assert.deepEqual(result.map((r) => r.state), ["in", "out", "none", "in"]);
   assert.equal(result[3].hits[0].id, "c");
 });
+
+test("spalvos nuotrauka: derinys su juodu stogu, pagrindinė spalva, perdažymas", async () => {
+  const { colourSlug, shotFor } = await import("../js/sandelis/cars.js");
+  assert.equal(colourSlug("ŽALIA/JUODA"), "zalia-juoda");
+  assert.equal(colourSlug("SIDABRINĖ"), "sidabrine");
+  assert.equal(shotFor("x-trail", "ŽALIA/JUODA"), "x-trail-zalia-juoda");
+  assert.equal(shotFor("x-trail", "RUDA/JUODA"), "x-trail-ruda");
+  assert.equal(shotFor("qashqai", "MĖLYNA"), "x-trail-melyna");
+  assert.equal(shotFor("x-trail", ""), "x-trail-pilka");
+  assert.equal(shotFor("x-trail", "GELTONA"), null);
+});

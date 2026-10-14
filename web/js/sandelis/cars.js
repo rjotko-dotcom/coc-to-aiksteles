@@ -1,17 +1,22 @@
 // Automobilio paveikslas pagal CoC: modelis ir karta – iš VIN, spalva – iš CoC
-// 38 punkto. Paveikslas paruoštas iš anksto (`tools/cars_xtrail.py`): automobilis
-// be fono + dažų kaukė. Naršyklė tik nuspalvina dažus (išlaikydama šviesą ir
-// šešėlius) – jokio interneto ir jokio AI.
+// 38 punkto. Kiekvienai spalvai (ir dviejų spalvų deriniui su juodu stogu) yra
+// atskira nuotrauka; jei kurios spalvos nėra, naršyklė perdažo atsarginį
+// paveikslą (`tools/cars_xtrail.py`). Jokio interneto ir jokio AI.
 
 import { cleanVin, modelFromVin } from "./logic.js";
 
 /**
- * Paveikslai. `lmed` – vidutinis dažų šviesumas nuotraukoje (nuo jo skaičiuojami
- * šešėliai ir atspindžiai); `exact` – spalvos, kurių nuotrauka tikra (rodoma be
- * perdažymo). Kol kas yra tik X-Trail – jis rodomas visiems modeliams.
+ * Paveikslai. `shots` – spalvos, kurių nuotrauka yra (failas `<paveikslas>-<spalva>.webp`,
+ * pvz. `x-trail-zalia-juoda.webp` = žalia su juodu stogu). Kitoms spalvoms perdažomas
+ * `<paveikslas>.webp` pagal kaukę: `lmed` – vidutinis jo dažų šviesumas, `exact` –
+ * spalvos, kurių jis tikras. Kol kas yra tik X-Trail – jis rodomas visiems modeliams.
  */
 const IMAGES = {
-  "x-trail": { lmed: 98.9, w: 960, h: 600, exact: ["PILKA"] },
+  "x-trail": {
+    lmed: 98.9, w: 960, h: 600, exact: ["PILKA"],
+    shots: ["balta", "balta-juoda", "juoda", "melyna", "melyna-juoda", "pilka", "pilka-juoda", "raudona",
+      "raudona-juoda", "ruda", "sidabrine", "sidabrine-juoda", "zalia", "zalia-juoda"],
+  },
 };
 const PLACEHOLDER = "x-trail";
 
@@ -68,6 +73,26 @@ export function paintOf(record) {
   else if (/LIGHT|HELL|CLAIR|CHIAR|ŠVIES|SKY/.test(raw)) factor = 1.35;
   const rgb = base.map((value) => Math.round(factor > 1 ? value + (255 - value) * (factor - 1) : value * factor));
   return { name: coc.colour, rgb };
+}
+
+const fold = (text) => String(text || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** CoC spalva → failo dalis: „ŽALIA/JUODA“ → „zalia-juoda“, „SIDABRINĖ“ → „sidabrine“. */
+export function colourSlug(colour) {
+  return fold(colour).split("/").map((part) => part.replace(/[^a-z]+/g, "")).filter(Boolean).slice(0, 2).join("-");
+}
+
+/**
+ * Kuri spalvos nuotrauka tinka: pirmiausia tikslus derinys („žalia su juodu stogu“),
+ * tada pagrindinė spalva; spalvos nežinant – pilka. null – reikia perdažyti.
+ */
+export function shotFor(key, colour) {
+  const name = CARS[key]?.image || PLACEHOLDER;
+  const shots = IMAGES[name].shots || [];
+  const slug = colourSlug(colour);
+  const main = slug.split("-")[0];
+  const pick = shots.includes(slug) ? slug : shots.includes(main) ? main : !slug && shots.includes("pilka") ? "pilka" : "";
+  return pick ? `${name}-${pick}` : null;
 }
 
 /** Paveikslo matmenys (rodymui). */
@@ -131,7 +156,9 @@ function paintPixels(pixels, mask, lmed, rgb) {
  * Nuspalvinto automobilio paveikslo adresas (blob:). `width` – pikseliais;
  * rezultatas įsimenamas, todėl tas pats modelis ir spalva dažomi tik kartą.
  */
-export function carImage(key, paint, width = 960) {
+export function carImage(key, paint, width = 960, colour = paint?.name) {
+  const shot = shotFor(key, colour);
+  if (shot) return Promise.resolve(new URL(`../../sandelis/cars/${shot}.webp`, import.meta.url).href);
   const name = CARS[key]?.image || PLACEHOLDER;
   const car = IMAGES[name];
   const id = `${name}|${paint ? paint.rgb.join(",") : "-"}|${width}`;
