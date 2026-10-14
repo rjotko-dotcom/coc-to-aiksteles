@@ -504,7 +504,7 @@ b.code {
 .answer .where b.code { font-size: 12px; }
 .codes-list { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; max-height: 50vh; overflow-y: auto; }
 .code-row {
-  display: grid; grid-template-columns: 92px 1fr auto; gap: 12px; align-items: center; margin: 0;
+  display: grid; grid-template-columns: 92px 1fr auto auto; gap: 12px; align-items: center; margin: 0;
   padding: 6px 10px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line-2); color: var(--text);
 }
 .code-row input { padding: 6px 8px; text-transform: uppercase; }
@@ -1038,10 +1038,17 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 #folder-nav .fill { flex: none; width: 44px; height: 4px; border-radius: 4px; background: var(--card-3); overflow: hidden; margin-left: auto; }
 #folder-nav .fill i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
 #folder-nav .fill.full i { background: var(--amber); }
+#folder-nav .fill.none { background: transparent; }
 #folder-nav .nav.binder .badge { margin-left: 0; }
 #stickers .choices { max-height: 38vh; }
 #stickers .choice b.code { margin-right: 4px; }
 .binders-notice .actions { flex-wrap: wrap; }
+
+.code-row .order { display: flex; gap: 4px; }
+.code-row .order .icon-btn { font-size: 14px; line-height: 1; }
+.codes-tools { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.codes-tools label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.codes-tools input { width: 70px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--card); color: var(--text); font: 14px var(--sans); }
 
 /* PDF peržiūra programoje */
 .viewer-dialog {

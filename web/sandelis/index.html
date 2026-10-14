@@ -450,8 +450,12 @@
       <div><span class="pill">Lentyna</span><h2>Aplankų kodai</h2></div>
       <button type="button" class="icon-btn" data-action="codes-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
     </header>
-    <p class="muted">Kodą užrašykite ant aplanko nugarėlės – paieška parodys, kuriame aplanke CoC guli.
+    <p class="muted">Sudėliokite aplankus ↑ ↓ taip, kaip jie stovi lentynoje, ir spauskite „Numeruoti iš eilės“ – arba įrašykite kodą ranka.
       Naujiems aplankams kodas suteikiamas automatiškai.</p>
+    <div class="codes-tools">
+      <label>Pradėti nuo <input type="number" id="codes-start" min="1" value="1"></label>
+      <button type="button" class="btn sm" id="codes-number"><svg><use href="#i-list"/></svg>Numeruoti iš eilės</button>
+    </div>
     <div class="codes-list" id="codes-list"></div>
     <div class="dialog-actions">
       <button type="submit" class="btn primary" value="save"><svg><use href="#i-check"/></svg>Išsaugoti</button>

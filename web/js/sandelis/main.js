@@ -879,7 +879,7 @@ async function confirmRecord(id, quiet = false) {
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
   applyBinders();
-  if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderCount(record.binder)}/${BINDER_SIZE}.`);
+  if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record))}.`);
   animateOut(id);
   if (!quiet) {
     render();
@@ -1140,6 +1140,8 @@ let bindersNotice = false;
 const codeOf = (name) => binders.find((binder) => binder.group === name)?.code || folderCodes[name] || "";
 const binderOfRecord = (record) => record.binder || "";
 const binderCount = (code) => records.filter((record) => record.status === STATUS.IN && record.binder === code).length;
+/** „12/20“ modelio aplankui, „12 CoC“ – specialiam (jis neribojamas). */
+const binderFill = (count, special) => (special ? `${count} CoC` : `${count}/${BINDER_SIZE}`);
 
 /** Aplanko žymė: kodas + pavadinimas. */
 function folderChip(record) {
@@ -1414,7 +1416,7 @@ function renderStage(animate = false) {
     ${record.status === STATUS.OUT
       ? `<div title="${esc(record.given_to || "")}">${icon("send")}<dt>Kam atiduota</dt><dd>${esc(record.given_to || "—")}</dd></div>`
       : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(binderOfRecord(record) || name)}${
-        binderOfRecord(record) ? ` <small class="muted-inline">${binderCount(record.binder)}/${BINDER_SIZE}</small>` : ""}</dd></div>`}
+        binderOfRecord(record) ? ` <small class="muted-inline">${binderFill(binderCount(record.binder), inSpecialFolder(record))}</small>` : ""}</dd></div>`}
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
   const busy = ["laukia", "skaitoma"].includes(record.ocr);
@@ -1588,7 +1590,7 @@ function renderFolders() {
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
     models.length ? `<optgroup label="Modeliai">${models.map(groupOption).join("")}</optgroup>` : "",
     special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => groupOption(folder.name)).join("")}</optgroup>` : "",
-    view.length ? `<optgroup label="Aplankai po ${BINDER_SIZE}">${view.map((binder) => `<option value="${BINDER_PREFIX}${esc(binder.code)}">${esc(binder.code)} · ${esc(binder.group)}${binder.of > 1 ? ` ${binder.index}/${binder.of}` : ""} (${binder.records.length}/${BINDER_SIZE})</option>`).join("")}</optgroup>` : "",
+    view.length ? `<optgroup label="Aplankai po ${BINDER_SIZE}">${view.map((binder) => `<option value="${BINDER_PREFIX}${esc(binder.code)}">${esc(binder.code)} · ${esc(binder.group)}${binder.of > 1 ? ` ${binder.index}/${binder.of}` : ""} (${binderFill(binder.records.length, binder.special)})</option>`).join("")}</optgroup>` : "",
   ].join("");
   $("folder-filter").value = folderFilter;
   renderPrintButton();
@@ -1597,10 +1599,10 @@ function renderFolders() {
   $("folders-title").textContent = `Aplankai (po ${BINDER_SIZE})`;
   $("folder-nav").innerHTML = view.length
     ? view.map((binder) => {
-      const full = binder.records.length >= BINDER_SIZE;
+      const full = !binder.special && binder.records.length >= BINDER_SIZE;
       return `<button type="button" class="nav binder ${folderFilter === BINDER_PREFIX + binder.code ? "on-folder" : ""} ${specialNames.has(binder.group) ? "special" : ""}"
         data-folder="${BINDER_PREFIX}${esc(binder.code)}"><b class="code">${esc(binder.code)}</b><span class="nav-name">${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span>
-        <span class="fill ${full ? "full" : ""}" title="${binder.records.length} iš ${BINDER_SIZE}"><i style="width:${Math.round(binder.records.length / BINDER_SIZE * 100)}%"></i></span><span class="badge">${binder.records.length}</span></button>`;
+        ${binder.special ? `<span class="fill none"></span>` : `<span class="fill ${full ? "full" : ""}" title="${binder.records.length} iš ${BINDER_SIZE}"><i style="width:${Math.round(binder.records.length / BINDER_SIZE * 100)}%"></i></span>`}<span class="badge">${binder.records.length}</span></button>`;
     }).join("")
     : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
   $("folders").innerHTML = special.map((folder) => `<option value="${esc(folder.name)}">`).join("");
@@ -1610,8 +1612,9 @@ function renderFolders() {
 function openCodes() {
   const view = binderContents(records, binders);
   $("codes-list").innerHTML = view.map((binder) => `
-    <label class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(binder.code)}" value="${esc(binder.code)}">
-      <span>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span><small>${binder.records.length}/${BINDER_SIZE} CoC</small></label>`).join("")
+    <div class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(binder.code)}" value="${esc(binder.code)}" aria-label="Kodas">
+      <span>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span><small>${binderFill(binder.records.length, binder.special)}${binder.special ? "" : " CoC"}</small>
+      <span class="order"><button type="button" class="icon-btn sm" data-move="-1" aria-label="Aukščiau">↑</button><button type="button" class="icon-btn sm" data-move="1" aria-label="Žemiau">↓</button></span></div>`).join("")
     || `<p class="muted">Aplankų dar nėra.</p>`;
   $("sidebar").classList.remove("open");
   $("codes").showModal();
@@ -1645,7 +1648,7 @@ async function reorganizeBinders() {
   $("sidebar").classList.remove("open");
   if (!await ask(
     `Perrūšiuoti visus aplankus po ${BINDER_SIZE}?`,
-    "Kiekvieno modelio CoC bus išdėlioti pagal VIN į aplankus po 20. Aplankų kodai lieka. Po to atsispausdinkite perkėlimo sąrašą – jame nurodyta, kurį CoC į kurį aplanką perkelti.",
+    "Kiekvieno modelio CoC bus išdėlioti pagal VIN į aplankus po 20 (specialūs aplankai, pvz. vardais, nekeičiami). Aplankų kodai lieka. Po to atsispausdinkite perkėlimo sąrašą – jame nurodyta, kurį CoC į kurį aplanką perkelti.",
     "Perrūšiuoti",
   )) return;
   const moved = applyBinders(true);
@@ -1674,7 +1677,7 @@ function openStickers() {
   if (!view.length) { toast("Aplankų dar nėra.", "warn"); return; }
   $("stickers-list").innerHTML = view.map((binder) => `
     <label class="choice"><input type="checkbox" value="${esc(binder.code)}" checked>
-      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}<small>${binder.records.length}/${BINDER_SIZE}</small></label>`).join("");
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}<small>${binderFill(binder.records.length, binder.special)}</small></label>`).join("");
   $("stickers").showModal();
 }
 
@@ -2489,6 +2492,23 @@ $("incomplete").addEventListener("click", (event) => {
   const action = event.target.closest("[data-binders]")?.dataset.binders;
   if (action === "moves") printMoves();
   if (action === "stickers") openStickers();
+});
+
+// Aplankų eilė: ↑ ↓ perkelia eilutę, „Numeruoti iš eilės“ – A-01, A-02… pagal rodomą tvarką.
+$("codes-list").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-move]");
+  if (!button) return;
+  const row = button.closest(".code-row");
+  const target = Number(button.dataset.move) < 0 ? row.previousElementSibling : row.nextElementSibling;
+  if (!target) return;
+  if (Number(button.dataset.move) < 0) target.before(row); else target.after(row);
+  row.animate([{ background: "rgba(226, 20, 63, .18)" }, { background: "transparent" }], { duration: 500 });
+});
+$("codes-number").addEventListener("click", () => {
+  const start = Math.max(1, Number($("codes-start").value) || 1);
+  [...$("codes-list").querySelectorAll("[data-code-for]")].forEach((input, index) => {
+    input.value = `A-${String(start + index).padStart(2, "0")}`;
+  });
 });
 
 $("codes-form").addEventListener("submit", async (event) => {

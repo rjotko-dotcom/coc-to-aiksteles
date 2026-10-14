@@ -392,7 +392,8 @@ const inBinderOrder = (a, b) => String(a.vin || "").localeCompare(String(b.vin |
 /**
  * Kuriame aplanke (įmautėje) guli kiekvienas turimas CoC.
  *
- * Aplankai – pagal grupę (modelį arba specialų aplanką), po `size` CoC. Atiduotas
+ * Aplankai – pagal modelį, po `size` CoC. Specialūs aplankai (pvz. žmonių vardais)
+ * neskaidomi: visas aplankas – vienas, kad ir kiek jame būtų, modeliai maišosi. Atiduotas
  * CoC vietą atlaisvina; naujas dedamas į pirmą tos grupės aplanką, kuriame yra
  * vietos, o jei visi pilni – sukuriamas naujas su kitu laisvu kodu.
  * `reorganize` – perrūšiuoti viską iš naujo (pagal VIN), paliekant esamus kodus.
@@ -426,6 +427,15 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
 
   for (const [group, members] of groups) {
     const own = () => list.filter((binder) => binder.group === group).sort(byCode);
+    if (members.some(inSpecialFolder)) {
+      // Specialus aplankas – visada vienas (jei anksčiau buvo padalintas – sujungiamas).
+      const [keep, ...extra] = own();
+      const target = keep || create(group);
+      for (const binder of extra) list.splice(list.indexOf(binder), 1);
+      for (const record of members) assign[record.id] = target.code;
+      continue;
+    }
+    const limit = size;
     const filled = new Map();
     const put = (record, binder) => {
       assign[record.id] = binder.code;
@@ -439,13 +449,13 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
       // Tie, kurie jau guli savo aplanke, ten ir lieka (kol telpa).
       for (const record of [...members].sort((a, b) => String(a.added || "").localeCompare(String(b.added || "")))) {
         const code = record.binder;
-        if (valid.has(code) && (filled.get(code) || 0) < size) put(record, { code });
+        if (valid.has(code) && (filled.get(code) || 0) < limit) put(record, { code });
         else waiting.push(record);
       }
       waiting.sort(inBinderOrder);
     }
     for (const record of waiting) {
-      let binder = own().find((item) => (filled.get(item.code) || 0) < size);
+      let binder = own().find((item) => (filled.get(item.code) || 0) < limit);
       if (!binder) binder = create(group);
       put(record, binder);
     }
@@ -467,11 +477,13 @@ export function binderContents(records, binders) {
   for (const binder of binders) perGroup.set(binder.group, [...(perGroup.get(binder.group) || []), binder.code]);
   return [...binders].sort(byCode).map((binder) => {
     const siblings = perGroup.get(binder.group);
+    const items = byBinder.get(binder.code);
     return {
       ...binder,
+      special: items.some(inSpecialFolder),
       index: siblings.indexOf(binder.code) + 1,
       of: siblings.length,
-      records: byBinder.get(binder.code).sort(inBinderOrder),
+      records: items.sort(inBinderOrder),
     };
   });
 }
