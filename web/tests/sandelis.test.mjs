@@ -240,3 +240,19 @@ test("aplankai po 20: skirstymas, nauji, atsilaisvinusi vieta", async () => {
   const re = planBinders(all.map((r) => ({ ...r, binder: assign[r.id] })), binders, { reorganize: true });
   assert.deepEqual(re.binders.map((b) => b.code), ["A-02", "A-10", "A-11"]);
 });
+
+test("specialūs aplankai neskaidomi po 20", async () => {
+  const { planBinders, STATUS } = await import("../js/sandelis/logic.js");
+  const recs = Array.from({ length: 27 }, (_, i) => ({ id: `k${i}`, model: i % 2 ? "JUKE" : "QASHQAI", vin: `V${i}`, status: STATUS.IN, folder: "Kazieras" }));
+  const { binders, assign } = planBinders(recs, [], { codes: { Kazieras: "A-05" } });
+  assert.deepEqual(binders, [{ code: "A-05", group: "Kazieras" }]);
+  assert.ok(Object.values(assign).every((c) => c === "A-05"));
+});
+
+test("anksčiau padalintas specialus aplankas sujungiamas", async () => {
+  const { planBinders, STATUS } = await import("../js/sandelis/logic.js");
+  const recs = Array.from({ length: 25 }, (_, i) => ({ id: `a${i}`, model: "JUKE", vin: `V${i}`, status: STATUS.IN, folder: "Audrius", binder: i < 20 ? "A-06" : "A-12" }));
+  const { binders, assign } = planBinders(recs, [{ code: "A-06", group: "Audrius" }, { code: "A-12", group: "Audrius" }]);
+  assert.deepEqual(binders, [{ code: "A-06", group: "Audrius" }]);
+  assert.ok(Object.values(assign).every((c) => c === "A-06"));
+});
