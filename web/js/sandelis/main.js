@@ -933,6 +933,8 @@ const bulkVins = (query = $("q").value) => {
   return list.length >= 2 ? list : null;
 };
 let bulkResult = [];
+/** Kelių VIN sąraše pažymėti turimi CoC (atiduoti vienam žmogui). */
+const bulkPicked = new Set();
 
 const BULK_STATE = {
   in: ["turimas", "Turime"], out: ["out", "Atiduotas"], review: ["tikrinti", "Netikrintas"], none: ["none", "Neturime"],
@@ -941,6 +943,9 @@ const BULK_STATE = {
 /** Kelių VIN atsakymas: santrauka ir kiekvieno VIN eilutė. */
 function renderBulkAnswer(vins) {
   bulkResult = bulkCheck(records, vins);
+  const haveIds = bulkResult.filter((row) => row.state === "in").map((row) => row.hits[0].id);
+  for (const id of [...bulkPicked]) if (!haveIds.includes(id)) bulkPicked.delete(id);
+  const picked = bulkPicked.size;
   const count = (state) => bulkResult.filter((row) => row.state === state).length;
   const have = count("in"); const none = count("none");
   const rows = bulkResult.map((row) => {
@@ -949,7 +954,11 @@ function renderBulkAnswer(vins) {
     const name = record ? folderOf(record) : "";
     const extra = record && row.state === "out"
       ? `${esc(shortDate(record.given_date))}${record.given_to ? ` · ${esc(record.given_to)}` : ""}` : "";
-    return `<li class="b-${row.state}">
+    const pick = row.state === "in"
+      ? `<input type="checkbox" data-pick="${record.id}" ${bulkPicked.has(record.id) ? "checked" : ""} aria-label="Pažymėti ${esc(row.query)}">`
+      : "";
+    return `<li class="b-${row.state} ${record && bulkPicked.has(record.id) ? "picked" : ""}">
+      <span class="b-pick">${pick}</span>
       <span class="b-vin">${esc(row.query)}${row.hits.length > 1 ? ` <small>(${row.hits.length} CoC)</small>` : ""}</span>
       <span class="b-state"><i class="dot ${cls}"></i>${label}${extra ? `<small>${extra}</small>` : ""}</span>
       <span class="b-model">${record ? esc(displayModel(record)) : "—"}</span>
@@ -964,8 +973,9 @@ function renderBulkAnswer(vins) {
     <div class="bulk-head">
       <b>Patikrinta ${bulkResult.length} VIN: turime ${have}${count("out") ? ` · atiduota ${count("out")}` : ""}${count("review") ? ` · netikrinta ${count("review")}` : ""} · neturime ${none}</b>
       <span class="bulk-actions">
-        ${have ? `<button type="button" class="btn primary sm" data-bulk="give">${icon("send")}Atiduoti turimus</button>
-          <button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti turimus</button>
+        ${have ? `<label class="pick-all"><input type="checkbox" data-bulk="pick-all" ${picked === have ? "checked" : ""}>Visi turimi</label>
+          <button type="button" class="btn primary sm" data-bulk="give" ${picked ? "" : "disabled"}>${icon("send")}Atiduoti pažymėtus${picked ? ` (${picked})` : ""}</button>
+          <button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti sąraše</button>
           <button type="button" class="btn sm" data-bulk="pazyma">${icon("doc")}Pažymos turimiems</button>` : ""}
         ${none ? `<button type="button" class="btn sm" data-bulk="copy">${icon("file")}Kopijuoti neturimus</button>` : ""}
         <button type="button" class="icon-btn sm" data-bulk="clear" aria-label="Išvalyti">${icon("x")}</button>
@@ -1513,7 +1523,7 @@ async function give() {
     if (record) await update(record, note ? { ...changes, note } : changes);
   }
   toast(giveIds.length === 1 ? `Atiduota: ${changes.given_to}.` : `Atiduota ${giveIds.length} CoC: ${changes.given_to}.`);
-  giveIds.forEach((id) => selected.delete(id));
+  giveIds.forEach((id) => { selected.delete(id); bulkPicked.delete(id); });
   giveIds = [];
   animateRows = true;
   render();
@@ -1919,13 +1929,26 @@ $("q").addEventListener("paste", (event) => {
   input.setRangeText(joined, input.selectionStart, input.selectionEnd, "end");
   input.dispatchEvent(new Event("input"));
 });
+$("answer").addEventListener("change", (event) => {
+  const box = event.target;
+  if (box.dataset.pick) {
+    if (box.checked) bulkPicked.add(box.dataset.pick); else bulkPicked.delete(box.dataset.pick);
+  } else if (box.dataset.bulk === "pick-all") {
+    const have = bulkResult.filter((row) => row.state === "in").map((row) => row.hits[0].id);
+    have.forEach((id) => (box.checked ? bulkPicked.add(id) : bulkPicked.delete(id)));
+  } else return;
+  const scroll = $("answer").scrollTop;
+  renderAnswer($("q").value);
+  $("answer").scrollTop = scroll;
+});
 $("answer").addEventListener("click", async (event) => {
+  if (event.target.closest("[data-bulk=pick-all]")) return;
   const action = event.target.closest("[data-bulk]")?.dataset.bulk;
   if (!action) return;
   const have = bulkResult.filter((row) => row.state === "in").map((row) => row.hits[0].id);
   if (action === "select") { have.forEach((id) => selected.add(id)); renderTable(); toast(`Pažymėta: ${have.length}.`); }
   if (action === "pazyma") makePazymos(have);
-  if (action === "give") openGive(have);
+  if (action === "give") { if (bulkPicked.size) openGive([...bulkPicked]); }
   if (action === "clear") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
   if (action === "copy") {
     const missing = bulkResult.filter((row) => row.state === "none").map((row) => row.query).join("\n");
