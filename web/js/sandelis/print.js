@@ -177,18 +177,17 @@ export function printMoveSheet(binders, moves, stamp, { print = true } = {}) {
 
 /**
  * Lipdukų lapų formatai (standartiniai A4 lipdukų lapai):
- * didelis – 99,1×67,7 mm, 8 lape (Avery L7165 / J8165);
+ * siauras – 99,1×38,1 mm, 14 lape (Avery L7163 / J8163);
  * mažas – 63,5×38,1 mm, 21 lape (Avery L7160 / J8160).
  */
 export const LABEL_SIZES = {
-  large: { w: 99.1, h: 67.7, cols: 2, rows: 4, top: 13.1, left: 4.65, gapX: 2.5, gapY: 0 },
-  small: { w: 63.5, h: 38.1, cols: 3, rows: 7, top: 15.15, left: 7.2, gapX: 2.5, gapY: 0 },
+  large: { w: 99.1, h: 38.1, cols: 2, rows: 7, top: 15.15, left: 4.65, gapX: 2.5, gapY: 0, code: 30, group: 11.5 },
+  small: { w: 63.5, h: 38.1, cols: 3, rows: 7, top: 15.15, left: 7.2, gapX: 2.5, gapY: 0, code: 26, group: 9.5 },
 };
 
 /** Spausdina lipdukus aplankams. `binders` – iš `binderContents()`; `logo` – NISSAN užrašo SVG turinys. */
 export function printBinderLabels(binders, size = "large", { print = true, logo = "" } = {}) {
   const f = LABEL_SIZES[size] || LABEL_SIZES.large;
-  const k = f.h / 67.7;
   const word = logo || (typeof document !== "undefined" ? document.getElementById("nissan-word")?.innerHTML || "" : "");
   const style = `
     @page { size: A4; margin: 0; }
@@ -199,27 +198,23 @@ export function printBinderLabels(binders, size = "large", { print = true, logo 
       grid-template-columns: repeat(${f.cols}, ${f.w}mm); grid-auto-rows: ${f.h}mm; column-gap: ${f.gapX}mm; row-gap: ${f.gapY}mm;
       break-after: page; overflow: hidden; }
     .sheet:last-child { break-after: auto; }
-    .label { position: relative; overflow: hidden; border-radius: 2.5mm; padding: ${6 * k}mm ${6.5 * k}mm ${5 * k}mm;
-      display: flex; flex-direction: column; background: #fff; outline: .2mm dashed #e2e2e2; outline-offset: -.1mm; }
-    .label::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: ${3.2 * k}mm; background: #111; }
-    .label::after { content: ""; position: absolute; left: ${6.5 * k}mm; right: ${6.5 * k}mm; bottom: ${4.2 * k}mm; height: ${0.9 * k}mm; background: #c3002f; }
-    .top { display: flex; justify-content: space-between; align-items: center; margin-left: ${1.5 * k}mm; }
-    .top svg { height: ${3.4 * k}mm; width: auto; fill: #111; }
-    .top span { font-size: ${7 * k}pt; font-weight: 700; letter-spacing: .24em; color: #111; }
+    .label { position: relative; overflow: hidden; border-radius: 2mm; padding: 4.2mm 5mm 0 7mm;
+      display: flex; flex-direction: column; justify-content: center; background: #fff; outline: .2mm dashed #e2e2e2; outline-offset: -.1mm; }
+    .label::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2.6mm; background: #111; }
+    .top { display: flex; justify-content: space-between; align-items: center; }
+    .top svg { height: 2.6mm; width: auto; fill: #111; }
+    .top span { font-size: 6pt; font-weight: 700; letter-spacing: .24em; color: #111; }
     .top span i { font-style: normal; font-weight: 300; color: #777; margin-left: .3em; }
-    .code { margin: ${2.5 * k}mm 0 0 ${1.2 * k}mm; font-size: ${44 * k}pt; font-weight: 800; line-height: .95; letter-spacing: -.02em; }
-    .group { margin: ${1.6 * k}mm 0 0 ${1.5 * k}mm; display: flex; align-items: center; gap: ${2.4 * k}mm; }
-    .group b { font-size: ${13 * k}pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .group em { font-style: normal; font-size: ${8.5 * k}pt; font-weight: 700; padding: ${0.5 * k}mm ${2 * k}mm; border: ${0.35 * k}mm solid #111; border-radius: 99px; white-space: nowrap; }
-    .cap { margin: auto 0 ${3 * k}mm ${1.5 * k}mm; font-size: ${7 * k}pt; color: #777; letter-spacing: .08em; text-transform: uppercase; }
-    ${size === "small" ? ".top span, .cap { display: none; } .code { margin-top: 1mm; }" : ""}
+    .code { margin: 1.4mm 0 0 -.3mm; font-size: ${f.code}pt; font-weight: 800; line-height: .95; letter-spacing: -.02em; }
+    .group { margin: 1.4mm 0 4mm; font-size: ${f.group}pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    ${size === "small" ? ".top span { display: none; }" : ""}
   `;
   const per = f.cols * f.rows;
   const cards = binders.map((binder) => `<div class="label">
       <div class="top"><svg viewBox="0 0 300 44.174264">${word}</svg><span>FAKTO<i>auto</i></span></div>
       <div class="code">${esc(binder.code)}</div>
-      <div class="group"><b>${esc(binder.group)}</b>${binder.of > 1 ? `<em>${binder.index}/${binder.of}</em>` : ""}</div>
-      <div class="cap">CoC aplankas · iki 20 liudijimų</div>
+      <div class="group">${esc(binder.group)}</div>
     </div>`);
   const sheets = [];
   for (let i = 0; i < cards.length; i += per) sheets.push(`<div class="sheet">${cards.slice(i, i + per).join("")}</div>`);
