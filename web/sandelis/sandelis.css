@@ -529,6 +529,8 @@ b.code {
    „Dokumentų centras“ – du skydai su įstrižu kraštu (kaip Nissan pavyzdyje)
    ===================================================================== */
 html, body { height: 100%; }
+/* Kompiuteryje – visas langas be slinkimo (slenka tik sąrašas). */
+@media (min-width: 1100px) { html, body { overflow: hidden; } }
 body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); overflow: hidden; }
 .shell {
   --skew: -14deg;
@@ -540,7 +542,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 /* ---- Kairė pusė ---- */
 /* Visas kairys skydas apkarpytas įstrižai – mašina „užlenda“ už dešinio skydo krašto. */
 .pane-left {
-  position: relative; z-index: 2; min-height: 0; display: grid; grid-template-columns: 118px minmax(0, 1fr);
+  position: relative; z-index: 2; min-height: 0; display: grid; grid-template-columns: 72px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr); padding: 26px 0 24px 30px; margin-right: -3%;
   clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
 }
@@ -558,20 +560,24 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .brand-fakto b { font-weight: 800; letter-spacing: .24em; color: #fff; }
 .brand-fakto i { font-style: normal; font-weight: 300; letter-spacing: .38em; color: var(--muted); }
 
-.rail { grid-column: 1; align-self: center; display: flex; flex-direction: column; gap: 30px; margin-top: -40px; }
+/* Šoninės ikonos (be teksto – pavadinimas rodomas užvedus pelę). */
+.rail {
+  grid-column: 1; align-self: center; display: flex; flex-direction: column; gap: 26px; margin: -40px 0 0; padding: 0;
+  overflow: visible; flex: none;
+}
 .rail-item {
-  position: relative; display: flex; align-items: center; gap: 14px; padding: 6px 0; background: none; border: 0;
+  position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 12px; background: none; border: 0;
   color: var(--dim); font: 500 13px var(--sans); cursor: pointer; text-align: left; transition: color .2s;
 }
 .rail-item svg { width: 26px; height: 26px; stroke-width: 1.5; }
-.rail-item:hover { color: var(--soft); }
-.rail-item.on { color: #fff; font-weight: 600; }
+.rail-item:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+.rail-item.on { color: #fff; background: rgba(255, 255, 255, .08); }
 .rail-item.on::before {
-  content: ""; position: absolute; left: -30px; top: -6px; bottom: -6px; width: 3px; border-radius: 0 3px 3px 0;
+  content: ""; position: absolute; left: -30px; top: 4px; bottom: 4px; width: 3px; border-radius: 0 3px 3px 0;
   background: var(--accent-hi); box-shadow: 0 0 18px rgba(226, 20, 63, .6);
 }
 .rail-badge {
-  position: absolute; left: 16px; top: -2px; font: 700 10px var(--sans); font-style: normal; color: #111;
+  position: absolute; right: 0; top: 2px; font: 700 10px var(--sans); font-style: normal; color: #111;
   background: var(--amber); border-radius: 99px; padding: 1px 5px;
 }
 .rail-badge:empty { display: none; }
@@ -583,7 +589,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .center-title::after { display: none; }
 
-.stage { --paint: rgb(120 124 130); flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 4.5vh; }
+.stage { --paint: rgb(120 124 130); flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 5.5vh; }
 .stage-head { display: flex; flex-direction: column; gap: 4px; padding-left: 28px; }
 .stage-kicker { font-size: 12px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
 .stage-head h2 {
@@ -824,7 +830,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .pane-right .drop-target { min-height: 190px; background: rgba(255, 255, 255, .02); }
 
 .lib-foot {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 18px; margin-top: 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; margin-top: 14px;
 }
 .scan-pill {
   justify-self: start; max-width: 100%; display: inline-flex; align-items: center; position: relative; border: 0; color: #fff; background: #222225;
@@ -849,14 +855,15 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .lib-foot .progress small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-foot .progress .bar { grid-column: 1 / -1; height: 4px; }
 .lib-foot > .scan-pill, .lib-foot > .progress, .open-btn { grid-row: 1; height: 54px; }
-.open-btn { grid-column: 2; padding: 0 34px; font-size: 16px; }
+.open-btn { grid-column: 3; padding: 0 34px; font-size: 16px; }
+.excel-btn { grid-column: 2; grid-row: 1; height: 54px; padding: 0 22px; font-size: 15px; border-color: rgba(255, 255, 255, .35); }
+.excel-btn svg { color: var(--green); }
+.excel-label { font-style: normal; }
+/* Siauresniame lange – tik ikona, kad juosta tilptų. */
+@media (max-width: 1700px) { .excel-label { display: none; } .excel-btn { padding: 0 18px; } }
+.scan-pill { min-width: 0; overflow: hidden; }
+.scan-pill > span { min-width: 0; }
 .lib-foot .progress { padding-block: 6px; }
-.excel-link {
-  grid-column: 1; grid-row: 2; justify-self: end; display: inline-flex; align-items: center; gap: 8px; border: 0; background: none;
-  color: var(--muted); font: 13px var(--sans); cursor: pointer; padding: 4px 6px;
-}
-.excel-link:hover { color: #fff; }
-.excel-link svg { width: 17px; height: 17px; }
 
 /* Patikra – atsidaro virš bibliotekos */
 .review-panel {
@@ -932,6 +939,37 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .bulk-list .b-act .icon-btn svg { width: 16px; height: 16px; }
 .bulk-list .b-act .icon-btn.give { color: #fff; border-color: rgba(226, 20, 63, .55); background: var(--accent-bg); }
 .bulk-list .b-act .icon-btn.give:hover { background: var(--accent); }
+
+/* Atsisiuntimai */
+.dl-btn {
+  position: relative; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 10px;
+  background: none; color: #fff; cursor: pointer;
+}
+.dl-btn:hover { background: rgba(255, 255, 255, .08); }
+.dl-btn svg { width: 24px; height: 24px; stroke-width: 1.6; }
+.dl-btn em {
+  position: absolute; right: 2px; top: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px;
+  background: var(--accent-hi); color: #fff; font: 700 10px/16px var(--sans); font-style: normal;
+}
+.dl-btn em:empty { display: none; }
+.downloads {
+  position: fixed; z-index: 75; right: 22px; top: 86px; width: 380px; max-width: calc(100vw - 32px);
+  background: #1b1b1e; border: 1px solid var(--line-2); border-radius: 14px; box-shadow: 0 30px 60px -24px #000; padding: 10px;
+}
+.downloads[hidden] { display: none; }
+.downloads.pop { animation: pop .25s var(--ease); }
+.downloads header { display: flex; align-items: center; justify-content: space-between; padding: 2px 4px 8px 8px; }
+.downloads header b { font-size: 14px; }
+.downloads ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.downloads li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px; border-radius: 10px; background: var(--card-2); }
+.downloads li:first-child { box-shadow: inset 3px 0 0 var(--accent-hi); }
+.dl-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--card-3); color: var(--soft); }
+.dl-icon.doc { color: #7cb3ff; } .dl-icon.sheet { color: var(--green); } .dl-icon.pdf { color: var(--accent-hi); }
+.dl-icon svg { width: 18px; height: 18px; }
+.dl-name { min-width: 0; display: flex; flex-direction: column; }
+.dl-name b { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-name small { color: var(--dim); font-size: 11.5px; }
+.dl-hint { margin: 8px 6px 2px; color: var(--dim); font-size: 11.5px; line-height: 1.45; }
 
 /* PDF peržiūra programoje */
 .viewer-dialog {
@@ -1032,7 +1070,7 @@ textarea:focus { outline: none; border-color: #5a5a62; }
   .lib-foot { grid-template-columns: minmax(0, 1fr); }
   .scan-pill { padding: 13px 16px; font-size: 13.5px; }
   .scan-pill > span { overflow: hidden; }
-  .open-btn { grid-column: 1; grid-row: auto; }
+  .open-btn, .excel-btn { grid-column: 1; grid-row: auto; }
   .form-grid { grid-template-columns: 1fr; }
   .review-panel .rcard { grid-template-columns: 1fr; }
 }
