@@ -115,6 +115,7 @@
   <main class="pane-right">
     <header class="right-top">
       <span class="store-dot" id="store-dot" title="Duomenų saugojimas"></span>
+      <button type="button" class="dl-btn excel" data-action="excel" title="Eksportuoti į Excel" aria-label="Eksportuoti į Excel"><svg><use href="#i-sheet"/></svg></button>
       <button type="button" class="dl-btn" data-action="downloads" title="Atsisiuntimai" aria-label="Atsisiuntimai"><svg><use href="#i-download"/></svg><em id="downloads-badge"></em></button>
       <button type="button" class="burger menu-btn" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
     </header>
@@ -185,15 +186,12 @@
     </section>
 
     <footer class="lib-foot">
-      <span class="foot-space"></span>
       <div class="progress hidden" id="progress">
         <span class="spinner"></span>
         <div class="progress-text"><b id="progress-title">Skaitoma…</b><small id="progress-text"></small></div>
         <span class="progress-eta" id="progress-eta"></span>
         <div class="bar"><i id="progress-bar"></i></div>
       </div>
-      <button type="button" class="skew-btn excel-btn" data-action="excel" title="Eksportuoti visą sąrašą į Excel"><span><svg><use href="#i-sheet"/></svg><i class="excel-label">Excel</i></span></button>
-      <button type="button" class="skew-btn open-btn" data-action="open-staged"><span>Atidaryti<svg><use href="#i-chev"/></svg></span></button>
     </footer>
 
     <!-- Patikra: atsidaro virš bibliotekos -->
@@ -236,7 +234,7 @@
     <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
       <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
     <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
-    <button type="button" class="nav" data-action="reread-missing" id="reread-nav"><svg><use href="#i-undo"/></svg><span class="nav-two">Perskaityti trūkstamus duomenis<small id="reread-count"></small></span></button>
+    <button type="button" class="nav" data-action="reread-missing" id="reread-nav"><svg><use href="#i-doc"/></svg><span class="nav-two">Trūkstami pažymos duomenys<small id="reread-count"></small></span></button>
     <button type="button" class="nav" data-action="print-folders"><svg><use href="#i-printer"/></svg>Spausdinti aplankų sąrašus</button>
     <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
     <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
@@ -343,7 +341,7 @@
           <div class="wide"><label for="d-note">Pastaba</label><input type="text" id="d-note" autocomplete="off"></div>
         </div>
 
-        <details class="more">
+        <details class="more" id="detail-coc">
           <summary>Pažymos laukai</summary>
           <p class="muted">Perskaityta iš CoC skenuojant. Jei kas nors neperskaityta – įrašykite prieš generuodami pažymą.</p>
           <div class="form-grid">
@@ -353,7 +351,7 @@
               <input type="text" id="d-approval-date" class="mono" autocomplete="off" placeholder="DD.MM.MMMM"></div>
             <div><label for="d-national">Nacionalinis patvirtinimo Nr.</label>
               <input type="text" id="d-national" class="mono" autocomplete="off"></div>
-            <div><label for="d-colour">Spalva</label><input type="text" id="d-colour" autocomplete="off"></div>
+            <div><label for="d-colour">Spalva</label><input type="text" id="d-colour" list="lt-colours" autocomplete="off"></div>
           </div>
         </details>
 
@@ -397,6 +395,30 @@
   </header>
   <iframe id="viewer-frame" title="CoC dokumentas"></iframe>
 </dialog>
+
+<dialog id="missing" class="sheet-dialog missing-dialog">
+  <form method="dialog" id="missing-form">
+    <header class="dialog-head">
+      <div><span class="pill tikrinti" id="missing-count"></span><h2>Trūkstami pažymos duomenys</h2></div>
+      <button type="button" class="icon-btn" data-action="missing-close" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Šių CoC programa neperskaitė iki galo (dažniausiai – prastas skenas). Paspauskite <b>PDF</b>, pažiūrėkite į lapą
+      ir įrašykite trūkstamus laukus ranka. Rodomi tik tušti laukai.</p>
+    <div class="missing-list" id="missing-list"></div>
+    <div class="dialog-actions">
+      <button type="submit" class="btn primary" value="save"><svg><use href="#i-check"/></svg>Išsaugoti įrašytus</button>
+      <button type="button" class="btn" data-action="missing-reread"><svg><use href="#i-undo"/></svg>Bandyti perskaityti dar kartą</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" data-action="missing-close">Uždaryti</button>
+    </div>
+  </form>
+</dialog>
+<datalist id="lt-colours">
+  <option value="BALTA"><option value="JUODA"><option value="PILKA"><option value="SIDABRINĖ"><option value="MĖLYNA">
+  <option value="RAUDONA"><option value="ŽALIA"><option value="RUDA"><option value="GELTONA"><option value="ORANŽINĖ">
+  <option value="BALTA/JUODA"><option value="PILKA/JUODA"><option value="SIDABRINĖ/JUODA"><option value="MĖLYNA/JUODA">
+  <option value="RAUDONA/JUODA"><option value="ŽALIA/JUODA">
+</datalist>
 
 <dialog id="codes" class="small-dialog">
   <form method="dialog" id="codes-form">
