@@ -954,6 +954,7 @@ function renderBulkAnswer(vins) {
     const name = record ? folderOf(record) : "";
     const extra = record && row.state === "out"
       ? `${esc(shortDate(record.given_date))}${record.given_to ? ` · ${esc(record.given_to)}` : ""}` : "";
+    // Atiduotas CoC aplanke nebeguli – vietoje aplanko rodoma, kam atiduotas.
     const pick = row.state === "in"
       ? `<input type="checkbox" data-pick="${record.id}" ${bulkPicked.has(record.id) ? "checked" : ""} aria-label="Pažymėti ${esc(row.query)}">`
       : "";
@@ -962,7 +963,7 @@ function renderBulkAnswer(vins) {
       <span class="b-vin">${esc(row.query)}${row.hits.length > 1 ? ` <small>(${row.hits.length} CoC)</small>` : ""}</span>
       <span class="b-state"><i class="dot ${cls}"></i>${label}${extra ? `<small>${extra}</small>` : ""}</span>
       <span class="b-model">${record ? esc(displayModel(record)) : "—"}</span>
-      <span class="b-folder">${record ? `${icon("folder")}${esc(codeOf(name) || name)}` : ""}</span>
+      <span class="b-folder">${record && row.state !== "out" ? `${icon("folder")}${esc(codeOf(name) || name)}` : ""}</span>
       <span class="b-act">${record ? `
         <button type="button" class="icon-btn sm" data-detail="${record.id}" title="Atidaryti" aria-label="Atidaryti">${icon("eye")}</button>
         ${record.status === STATUS.IN ? `<button type="button" class="icon-btn sm give" data-give="${record.id}" title="Atiduoti" aria-label="Atiduoti">${icon("send")}</button>`
@@ -1011,7 +1012,7 @@ function renderAnswer(query) {
         : `Atiduotas ${esc(showDate(one.given_date))}${one.given_to ? ` – ${esc(one.given_to)}` : ""}.`;
     html = `<div class="answer ${kind}"><span class="mark">${icon(one.status === STATUS.IN ? "check" : one.status === STATUS.OUT ? "send" : "scan")}</span>
       <div><b>${title}</b> <span>${vinLabel(one, part)}</span>
-        <span class="where">${icon("folder")} Aplanke ${codeOf(folderOf(one)) ? `<b class="code">${esc(codeOf(folderOf(one)))}</b> ` : ""}<b>${esc(folderOf(one))}</b></span></div>
+        ${one.status === STATUS.OUT ? "" : `<span class="where">${icon("folder")} Aplanke ${codeOf(folderOf(one)) ? `<b class="code">${esc(codeOf(folderOf(one)))}</b> ` : ""}<b>${esc(folderOf(one))}</b></span>`}</div>
       <div class="actions">${answerButtons(one)}</div></div>`;
   } else {
     // Keli CoC su tokia VIN pabaiga – parodomi visi, kad išsirinktumėte.
@@ -1024,7 +1025,7 @@ function renderAnswer(query) {
         <b>Rasta ${hits.length} CoC su „${esc(part)}“${have ? ` (turime ${have})` : ""} – kurio ieškote?</b>
         <ul>${shown.map((record) => `
           <li><span class="opt-main">${vinLabel(record, part)}</span>
-            <span class="opt-where">${folderChip(record)}</span>
+            <span class="opt-where">${record.status === STATUS.OUT ? "" : folderChip(record)}</span>
             <span class="opt-status">${statusLine(record)}</span>
             <span class="opt-actions">${answerButtons(record)}</span></li>`).join("")}</ul>
         ${hits.length > shown.length ? `<span class="where">Ir dar ${hits.length - shown.length} – įveskite daugiau VIN ženklų.</span>` : ""}
@@ -1154,7 +1155,7 @@ function renderTable() {
     const paint = paintOf(record);
     const vin = record.vin || "";
     const status = record.status === STATUS.OUT
-      ? `<i class="dot out"></i><span>Atiduotas<small>${esc(shortDate(record.given_date))}${record.given_to ? ` · ${esc(record.given_to)}` : ""}</small></span>`
+      ? `<i class="dot out"></i><span>Atiduotas<small>${esc(shortDate(record.given_date))}</small></span>`
       : `<i class="dot ${record.status}"></i><span>${esc(statusName(record.status))}</span>`;
     const name = folderOf(record);
     return `<div data-row="${record.id}" class="lrow ${selected.has(record.id) ? "selected" : ""} ${record.id === stageId ? "staged" : ""} ${animateRows && index < 30 ? "enter" : ""}" style="--i:${index}">
@@ -1165,8 +1166,10 @@ function renderTable() {
         <b>${esc(displayModel(record))}${generation ? ` <em class="gen">${esc(generation)}</em>` : ""}${paint ? ` <i class="paint-dot" style="--paint:${cssColour(paint)}" title="${esc(record.coc.colour)}"></i>` : ""}</b>
         <span class="lrow-vin">${vin ? `${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b>` : "VIN nėra"}</span>
       </div>
-      <div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(codeOf(name) || name)}${
-        inSpecialFolder(record) && codeOf(name) ? `<small>${esc(name)}</small>` : ""}</span></div>
+      ${record.status === STATUS.OUT
+        ? `<div class="lrow-folder given" title="${esc(record.given_to || "")}">${icon("send")}<span>${esc(record.given_to || "—")}</span></div>`
+        : `<div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(codeOf(name) || name)}${
+        inSpecialFolder(record) && codeOf(name) ? `<small>${esc(name)}</small>` : ""}</span></div>`}
       <div class="lrow-status">${status}</div>
       <button type="button" class="kebab" data-menu="${record.id}" aria-label="Veiksmai">${icon("dots")}</button>
     </div>`;
@@ -1247,7 +1250,9 @@ function renderStage(animate = false) {
     ? `Atiduotas <i class="dot out"></i>` : `${esc(statusName(record.status))} <i class="dot ${record.status}"></i>`;
   $("stage-facts").innerHTML = `
     <div>${icon("file")}<dt>CoC</dt><dd>${status}</dd></div>
-    <div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(codeOf(name) || name)}</dd></div>
+    ${record.status === STATUS.OUT
+      ? `<div title="${esc(record.given_to || "")}">${icon("send")}<dt>Kam atiduota</dt><dd>${esc(record.given_to || "—")}</dd></div>`
+      : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(codeOf(name) || name)}</dd></div>`}
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
   const busy = ["laukia", "skaitoma"].includes(record.ocr);
