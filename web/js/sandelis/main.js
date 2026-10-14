@@ -954,14 +954,18 @@ function renderBulkAnswer(vins) {
       <span class="b-state"><i class="dot ${cls}"></i>${label}${extra ? `<small>${extra}</small>` : ""}</span>
       <span class="b-model">${record ? esc(displayModel(record)) : "—"}</span>
       <span class="b-folder">${record ? `${icon("folder")}${esc(codeOf(name) || name)}` : ""}</span>
-      <span class="b-act">${record ? `<button type="button" class="btn sm" data-detail="${record.id}">Atidaryti</button>` : ""}</span>
+      <span class="b-act">${record ? `
+        <button type="button" class="icon-btn sm" data-detail="${record.id}" title="Atidaryti" aria-label="Atidaryti">${icon("eye")}</button>
+        ${record.status === STATUS.IN ? `<button type="button" class="icon-btn sm give" data-give="${record.id}" title="Atiduoti" aria-label="Atiduoti">${icon("send")}</button>`
+          : record.status === STATUS.OUT ? `<button type="button" class="icon-btn sm" data-return="${record.id}" title="Grąžinti į turimus" aria-label="Grąžinti">${icon("undo")}</button>` : ""}` : ""}</span>
     </li>`;
   }).join("");
   return `<div class="answer bulk-answer ${none ? "warn" : "ok"}">
     <div class="bulk-head">
       <b>Patikrinta ${bulkResult.length} VIN: turime ${have}${count("out") ? ` · atiduota ${count("out")}` : ""}${count("review") ? ` · netikrinta ${count("review")}` : ""} · neturime ${none}</b>
       <span class="bulk-actions">
-        ${have ? `<button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti turimus</button>
+        ${have ? `<button type="button" class="btn primary sm" data-bulk="give">${icon("send")}Atiduoti turimus</button>
+          <button type="button" class="btn sm" data-bulk="select">${icon("check")}Pažymėti turimus</button>
           <button type="button" class="btn sm" data-bulk="pazyma">${icon("doc")}Pažymos turimiems</button>` : ""}
         ${none ? `<button type="button" class="btn sm" data-bulk="copy">${icon("file")}Kopijuoti neturimus</button>` : ""}
         <button type="button" class="icon-btn sm" data-bulk="clear" aria-label="Išvalyti">${icon("x")}</button>
@@ -1921,6 +1925,7 @@ $("answer").addEventListener("click", async (event) => {
   const have = bulkResult.filter((row) => row.state === "in").map((row) => row.hits[0].id);
   if (action === "select") { have.forEach((id) => selected.add(id)); renderTable(); toast(`Pažymėta: ${have.length}.`); }
   if (action === "pazyma") makePazymos(have);
+  if (action === "give") openGive(have);
   if (action === "clear") { $("q").value = ""; $("q").dispatchEvent(new Event("input")); }
   if (action === "copy") {
     const missing = bulkResult.filter((row) => row.state === "none").map((row) => row.query).join("\n");
@@ -2035,6 +2040,7 @@ $("folder-nav").addEventListener("click", (event) => {
 $("answer").addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (button?.dataset.give) openGive([button.dataset.give]);
+  if (button?.dataset.return) returnRecords([button.dataset.return]);
   if (button?.dataset.detail) openDetail(button.dataset.detail);
 });
 $("check-all").addEventListener("change", (event) => {
