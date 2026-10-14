@@ -687,7 +687,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 
 /* ---- Dešinė pusė ---- */
 .pane-right {
-  position: relative; z-index: 3; min-height: 0; display: flex; flex-direction: column; padding: 26px 30px 20px 0;
+  position: relative; z-index: 3; min-height: 0; display: flex; flex-direction: column; padding: 26px 30px 26px 0;
 }
 /* Elementai atsitraukia nuo įstrižo krašto – kaip pavyzdyje. */
 @media (min-width: 1100px) {
@@ -769,7 +769,13 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   flex: 1; min-height: 0; overflow-y: auto; margin: 0 -12px 0 -14px; padding: 0 12px 0 14px;
   scrollbar-width: thin; scrollbar-color: #3a3a40 transparent;
 }
-.rows { display: flex; flex-direction: column; }
+.rows { display: flex; flex-direction: column; padding-bottom: 30px; }
+.rows .lrow:last-child { border-bottom: 0; }
+/* Sąrašo apačia švelniai išblunka – paskutinė eilutė nenukerpama aštriai. */
+.rows-wrap {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+}
 .lrow {
   position: relative; display: grid; grid-template-columns: 34px 104px minmax(190px, 1fr) minmax(56px, auto) minmax(96px, auto) 30px;
   gap: 16px; align-items: center; min-height: 86px; padding: 10px 10px 10px 26px; cursor: pointer;
