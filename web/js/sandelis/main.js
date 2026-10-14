@@ -1369,8 +1369,8 @@ function renderLastScan() {
   const review = records.filter((record) => record.status === STATUS.REVIEW).length;
   pill.hidden = false;
   pill.classList.toggle("todo", review > 0);
-  pill.innerHTML = `<span>${icon("file")}<b>Paskutinis skenas</b><em>·</em>${pages} ${plural(pages, "dokumentas", "dokumentai", "dokumentų")}
-    <em>·</em><i class="dot ${review ? "tikrinti" : "turimas"}"></i><span class="${review ? "todo-text" : ""}">${review ? `${review} patikrinti` : "viskas patikrinta"}</span>${icon("chev")}</span>`;
+  pill.innerHTML = `<span>${icon("file")}<span class="scan-text"><b><span class="wide-only">Paskutinis skenas</span><span class="narrow-only">Skenas</span></b><em>·</em>${pages} <span class="wide-only">${plural(pages, "dokumentas", "dokumentai", "dokumentų")}</span><span class="narrow-only">dok.</span>
+    <em>·</em><i class="dot ${review ? "tikrinti" : "turimas"}"></i><span class="${review ? "todo-text" : ""}">${review ? `${review} patikrinti` : `<span class="wide-only">viskas </span>patikrinta`}</span></span>${icon("chev")}</span>`;
 }
 
 function openReview() {
