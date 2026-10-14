@@ -1,29 +1,28 @@
 // Automobilio paveikslas pagal CoC: modelis ir karta – iš VIN, spalva – iš CoC
-// 38 punkto. Paveikslai paruošti iš anksto (`tools/cars_prep.py`): iškirptas
-// automobilis be dažų spalvos + dažų kaukė. Naršyklė tik nuspalvina dažus
-// (išlaikydama šviesą ir šešėlius) – jokio interneto ir jokio AI.
+// 38 punkto. Paveikslas paruoštas iš anksto (`tools/cars_xtrail.py`): automobilis
+// be fono + dažų kaukė. Naršyklė tik nuspalvina dažus (išlaikydama šviesą ir
+// šešėlius) – jokio interneto ir jokio AI.
 
 import { cleanVin, modelFromVin } from "./logic.js";
 
 /**
- * Turimi modeliai. `lmed` – vidutinis dažų šviesumas originalioje nuotraukoje
- * (nuo jo skaičiuojami šešėliai ir atspindžiai). `exact` – spalvos, kurių
- * nuotrauka tikra (rodoma be perdažymo). `author` – Commons nuotraukoms. Nuotraukos – Wikimedia Commons,
- * CC BY-SA 4.0: fonas pašalintas, dažai perdažomi (žr. `web/sandelis/cars/CREDITS.md`).
+ * Paveikslai. `lmed` – vidutinis dažų šviesumas nuotraukoje (nuo jo skaičiuojami
+ * šešėliai ir atspindžiai); `exact` – spalvos, kurių nuotrauka tikra (rodoma be
+ * perdažymo). Kol kas yra tik X-Trail – jis rodomas visiems modeliams.
  */
+const IMAGES = {
+  "x-trail": { lmed: 98.9, w: 960, h: 600, exact: ["PILKA"] },
+};
+const PLACEHOLDER = "x-trail";
+
+/** Modeliai: pavadinimas sąrašui, dabartinė karta ir kurį paveikslą rodyti. */
 export const CARS = {
-  qashqai: { name: "Qashqai", generation: "J12", lmed: 81.5, w: 960, h: 502,
-    author: "Alexander Migl", file: "Nissan Qashqai (J12) Automesse Ludwigsburg 2022 1X7A5875.jpg" },
-  // Oficiali pilka nuotrauka: pilka rodoma tokia, kokia yra, kitos spalvos – perdažomos.
-  "x-trail": { name: "X-Trail", generation: "T33", lmed: 98.9, w: 960, h: 600, exact: ["PILKA"] },
-  juke: { name: "Juke", generation: "F16", lmed: 87.9, w: 960, h: 659,
-    author: "Damian B Oh", file: "Nissan Juke N Design F16 Flame Red (1).jpg" },
-  ariya: { name: "Ariya", generation: "FE0", lmed: 131.6, w: 960, h: 525,
-    author: "Alexander Migl", file: "Nissan Ariya IMG 8787.jpg" },
-  leaf: { name: "Leaf", generation: "ZE2", lmed: 120.7, w: 960, h: 520,
-    author: "Alexander Migl", file: "Nissan Leaf (ZE2) Auto Zuerich 2025 DSC 3011.jpg" },
-  micra: { name: "Micra", generation: "K15", lmed: 105.5, w: 960, h: 504,
-    author: "Alexander Migl", file: "Nissan Micra EV IMG 4967.jpg" },
+  qashqai: { name: "Qashqai", generation: "J12", image: PLACEHOLDER },
+  "x-trail": { name: "X-Trail", generation: "T33", image: "x-trail" },
+  juke: { name: "Juke", generation: "F16", image: PLACEHOLDER },
+  ariya: { name: "Ariya", generation: "FE0", image: PLACEHOLDER },
+  leaf: { name: "Leaf", generation: "ZE2", image: PLACEHOLDER },
+  micra: { name: "Micra", generation: "K15", image: PLACEHOLDER },
 };
 
 const NAMES = [
@@ -71,8 +70,8 @@ export function paintOf(record) {
   return { name: coc.colour, rgb };
 }
 
-/** Nuoroda į nuotraukos puslapį Commons (autorystei nurodyti). */
-export const creditUrl = (car) => !car.file ? "" : `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(car.file.replace(/ /g, "_"))}`;
+/** Paveikslo matmenys (rodymui). */
+export const imageSize = (key) => IMAGES[CARS[key]?.image || PLACEHOLDER];
 
 export const cssColour = (paint) => (paint ? `rgb(${paint.rgb.join(" ")})` : "");
 
@@ -133,12 +132,12 @@ function paintPixels(pixels, mask, lmed, rgb) {
  * rezultatas įsimenamas, todėl tas pats modelis ir spalva dažomi tik kartą.
  */
 export function carImage(key, paint, width = 960) {
-  const car = CARS[key];
-  if (!car) return Promise.resolve(null);
-  const id = `${key}|${paint ? paint.rgb.join(",") : "-"}|${width}`;
+  const name = CARS[key]?.image || PLACEHOLDER;
+  const car = IMAGES[name];
+  const id = `${name}|${paint ? paint.rgb.join(",") : "-"}|${width}`;
   if (!painted.has(id)) {
     painted.set(id, (async () => {
-      const [image, mask] = await source(key);
+      const [image, mask] = await source(name);
       const w = Math.min(width, car.w);
       const h = Math.round(car.h * (w / car.w));
       const canvas = document.createElement("canvas");
