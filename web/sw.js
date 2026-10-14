@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-6de1717c0a65";
+const VERSION = "aikstele-f295c7f09eec";
 const ASSETS = [
   "./",
   "./version.js",
