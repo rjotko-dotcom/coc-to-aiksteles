@@ -592,10 +592,11 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 }
 .stage-sub { color: var(--muted); font-size: 13px; letter-spacing: .04em; min-height: 18px; }
 .stage-car {
-  position: relative; flex: 1 1 0; min-height: 110px; margin: 10px -9% 12px 5%; display: grid; place-items: center; isolation: isolate;
+  position: relative; flex: 1 1 0; min-height: 110px; margin: 10px -9% 14px 2%; display: grid; place-items: center; isolation: isolate;
 }
 .stage-car img {
-  position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: center 70%;
+  /* Paveikslas didesnis už savo plotą (į viršų ir šonus), bet ne ant VIN apačioje. */
+  position: absolute; z-index: 2; inset: -20% -5% -2% -5%; width: 110%; height: 122%; object-fit: contain; object-position: center bottom;
   filter: drop-shadow(0 26px 22px rgba(0, 0, 0, .6));
 }
 .stage-glow {
