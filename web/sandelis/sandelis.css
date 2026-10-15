@@ -554,21 +554,23 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
     radial-gradient(60% 45% at 48% 58%, rgba(255, 255, 255, .075), transparent 70%),
     linear-gradient(165deg, #333336 0%, #262629 42%, #1b1b1e 100%);
 }
-/* Raudona šviesa – visame fone (be kraštų), kaip salono apšvietimas */
+/* Studijos apšvietimas: šviesa iš viršaus, švelnus raudonas švytėjimas už mašinos
+   (laipsniškai blunkantis, be jokių linijų) ir smulkus grūdėtumas, kad nesimatytų juostų. */
 .pane-left-bg::before, .pane-left-bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; transition: opacity .8s ease; }
 .pane-left-bg::before {
   background:
-    radial-gradient(38% 34% at 58% 50%, rgba(195, 0, 47, .14), transparent 100%),
-    radial-gradient(70% 55% at 60% 42%, rgba(195, 0, 47, .07), transparent 100%);
+    radial-gradient(ellipse 50% 36% at 60% 47%,
+      rgba(210, 10, 50, .24) 0%, rgba(205, 8, 48, .19) 16%, rgba(200, 4, 48, .13) 32%, rgba(195, 0, 47, .08) 48%,
+      rgba(195, 0, 47, .04) 64%, rgba(195, 0, 47, .014) 80%, transparent 100%),
+    radial-gradient(ellipse 52% 46% at 52% 0%,
+      rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .045) 30%, rgba(255, 255, 255, .02) 60%, transparent 100%),
+    radial-gradient(ellipse 60% 30% at 50% 100%, rgba(0, 0, 0, .35), transparent 100%);
 }
 .pane-left-bg::after {
-  /* Plonas šviesos spindulys lygiagretus įstrižam kraštui, išblunkantis abiem galais */
-  background: linear-gradient(101deg, transparent 63%, rgba(226, 20, 63, .05) 66.5%, rgba(255, 90, 110, .13) 67.4%, rgba(226, 20, 63, .05) 68.3%, transparent 71.5%);
-  -webkit-mask: linear-gradient(180deg, transparent 2%, #000 22%, #000 48%, transparent 78%);
-  mask: linear-gradient(180deg, transparent 2%, #000 22%, #000 48%, transparent 78%);
+  opacity: .5; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .pane-left:has(.stage.empty) .pane-left-bg::before { opacity: .35; }
-.pane-left:has(.stage.empty) .pane-left-bg::after { opacity: .5; }
 .brandbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .brandbar .logo, .brandbar .logo svg { width: 54px; height: 54px; }
 .brand-word { width: auto; height: 17px; color: #fff; fill: currentColor; stroke: none; }
