@@ -42,15 +42,20 @@ let giveIds = [];
 let animateRows = true;
 /** Aplankų filtras: "" – visi, MODEL_FOLDERS – tik modelių aplankai, kitaip – specialaus aplanko vardas. */
 let folderFilter = "";
-const MODEL_FOLDERS = "\u0000modeliai";
+// Filtrų reikšmės prasideda „@“ (NUL ženklo naršyklė HTML atributuose nepalieka).
+const MODEL_FOLDERS = "@modeliai";
 /** Filtras pagal vieną aplanką (įmautę): BINDER_PREFIX + kodas. */
-const BINDER_PREFIX = "\u0000aplankas:";
+const BINDER_PREFIX = "@aplankas:";
+/** Filtras: turimi CoC, dar neįdėti į jokį aplanką. */
+const NO_BINDER = "@be-aplanko";
 /** Sukurti, bet dar tušti specialūs aplankai (kad nedingtų iš sąrašo). */
 let savedFolders = [];
 /** Seni grupių kodai: { „X-TRAIL“: „A-01“, … } – pirmas grupės aplankas gauna jį. */
 let folderCodes = {};
 /** Fiziniai aplankai (įmautės) po 20 CoC: [{ code: "A-10", group: "QASHQAI" }]. */
 let binders = [];
+/** Ar naujus modelių CoC į aplankus skirstyti automatiškai (išjungus – dedama ranka). */
+let binderAuto = true;
 /** Šablonas pasikeitė – įrašyti ir į duomenų aplanką. */
 let templateDirty = false;
 /** Kuris CoC rodomas automobilio skydelyje. */
@@ -245,7 +250,8 @@ async function mergeFromFolder(handle) {
 
 /** Aplankų kodai iš aplanko ar kopijos: esami čia nekeičiami, trūkstami pridedami. */
 async function mergeSettings(settings = {}) {
-  if (!binders.length && Array.isArray(settings.binders) && settings.binders.length) {
+  if (!binders.length && Array.isArray(settings.binders) && settings.binders.length
+      && records.some((record) => record.binder)) {
     binders = settings.binders;
     await setMeta("binders", binders);
   }
@@ -879,6 +885,7 @@ async function confirmRecord(id, quiet = false) {
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
   applyBinders();
+  if (!quiet && !record.binder) toast("Patvirtinta. Į aplanką įdėkite patys: ⋮ → „Perkelti į kitą aplanką“.");
   if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record))}.`);
   animateOut(id);
   if (!quiet) {
@@ -1112,7 +1119,7 @@ function renderAnswer(query) {
  */
 function applyBinders(reorganize = false) {
   const first = !binders.length;
-  const plan = planBinders(records, binders, { codes: folderCodes, reorganize });
+  const plan = planBinders(records, binders, { codes: folderCodes, reorganize, auto: binderAuto });
   const moved = [];
   for (const record of records) {
     const to = plan.assign[record.id] ?? "";
@@ -1132,10 +1139,45 @@ function applyBinders(reorganize = false) {
   }
   if (moved.length || changedBinders) scheduleSync();
   // Pirmą kartą suskirsčius – priminimas atsispausdinti perkėlimo sąrašą ir lipdukus.
-  if (first && binders.length) setMeta("bindersNotice", true).then(() => { bindersNotice = true; renderIncomplete(); }).catch(() => {});
+  if (first && binders.length && binderAuto) setMeta("bindersNotice", true).then(() => { bindersNotice = true; renderIncomplete(); }).catch(() => {});
   return moved;
 }
 let bindersNotice = false;
+
+/**
+ * Vienkartinis tvarkymas (vartotojo prašymu): visi CoC išimami iš modelių
+ * aplankų, kad juos būtų galima sudėti ranka; specialūs aplankai nekeičiami.
+ * Automatinis skirstymas išjungiamas, kol žmogus jo vėl neįjungs.
+ */
+async function clearModelBindersOnce() {
+  if (await getMeta("modelBindersCleared").catch(() => true)) return;
+  await setMeta("modelBindersCleared", true);
+  // Tik ten, kur modelių aplankai jau buvo sudaryti (naujame kompiuteryje nieko nekeičiama).
+  if (!records.some((record) => record.binder && !inSpecialFolder(record))) return;
+  const removed = clearModelBinders();
+  if (removed) toast(`Visi CoC išimti iš modelių aplankų (${removed}). Sudėkite juos: pažymėkite ir spauskite „Į aplanką“.`, "warn");
+}
+
+/** Išima visus CoC iš modelių aplankų (specialūs lieka). Grąžina, kiek išimta. */
+function clearModelBinders() {
+  const special = new Set(records.filter(inSpecialFolder).map((record) => folderOf(record)));
+  let removed = 0;
+  for (const record of records) {
+    if (!record.binder || inSpecialFolder(record)) continue;
+    record.binder = "";
+    record.updated = now();
+    saveRecord(record).catch(() => {});
+    removed += 1;
+  }
+  binders = binders.filter((binder) => special.has(binder.group));
+  binderAuto = false;
+  bindersNotice = false;
+  setMeta("binders", binders).catch(() => {});
+  setMeta("binderAuto", false).catch(() => {});
+  setMeta("bindersNotice", false).catch(() => {});
+  scheduleSync();
+  return removed;
+}
 
 /** Aplanko kodas: CoC aplankas arba (senas) grupės kodas. */
 const codeOf = (name) => binders.find((binder) => binder.group === name)?.code || folderCodes[name] || "";
@@ -1214,6 +1256,7 @@ function inFolderFilter(record) {
   if (!folderFilter) return true;
   if (folderFilter === MODEL_FOLDERS) return !inSpecialFolder(record);
   if (folderFilter.startsWith(BINDER_PREFIX)) return record.binder === folderFilter.slice(BINDER_PREFIX.length);
+  if (folderFilter === NO_BINDER) return record.status === STATUS.IN && !record.binder;
   return folderOf(record) === folderFilter;
 }
 
@@ -1268,6 +1311,7 @@ function renderTable() {
       </div>
       ${record.status === STATUS.OUT
         ? `<div class="lrow-folder given" title="${esc(record.given_to || "")}">${icon("send")}<span>${esc(record.given_to || "—")}</span></div>`
+        : !binderOfRecord(record) ? `<div class="lrow-folder loose" title="Dar neįdėtas į aplanką">${icon("folder")}<span>—<small>be aplanko</small></span></div>`
         : `<div class="lrow-folder" title="${esc(name)}">${icon("folder")}<span>${esc(binderOfRecord(record) || name)}${
         inSpecialFolder(record) && binderOfRecord(record) ? `<small>${esc(name)}</small>` : ""}</span></div>`}
       <div class="lrow-status">${status}</div>
@@ -1416,7 +1460,7 @@ function renderStage(animate = false) {
     <div>${icon("file")}<dt>CoC</dt><dd>${status}</dd></div>
     ${record.status === STATUS.OUT
       ? `<div title="${esc(record.given_to || "")}">${icon("send")}<dt>Kam atiduota</dt><dd>${esc(record.given_to || "—")}</dd></div>`
-      : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${esc(binderOfRecord(record) || name)}${
+      : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${binderOfRecord(record) ? esc(binderOfRecord(record)) : `<span class="muted-inline">be aplanko</span>`}${
         binderOfRecord(record) ? ` <small class="muted-inline">${binderFill(binderCount(record.binder), inSpecialFolder(record))}</small>` : ""}</dd></div>`}
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
@@ -1645,13 +1689,16 @@ function renderFolders() {
   const inStock = (name) => records.filter((record) => record.status === STATUS.IN && folderOf(record) === name).length;
   const view = binderContents(records, binders);
   if (folderFilter.startsWith(BINDER_PREFIX) && !binders.some((binder) => BINDER_PREFIX + binder.code === folderFilter)) folderFilter = "";
-  if (folderFilter && !folderFilter.startsWith("\u0000") && !names.includes(folderFilter)) folderFilter = "";
+  if (folderFilter === NO_BINDER && !records.some((record) => record.status === STATUS.IN && !record.binder)) folderFilter = "";
+  if (folderFilter && !folderFilter.startsWith("@") && !names.includes(folderFilter)) folderFilter = "";
   const groupOption = (name) => {
     const codes = view.filter((binder) => binder.group === name).map((binder) => binder.code);
     return `<option value="${esc(name)}">${esc(name)} (${inStock(name)})${codes.length ? ` · ${esc(codes.join(", "))}` : ""}</option>`;
   };
+  const loose = records.filter((record) => record.status === STATUS.IN && !record.binder).length;
   $("folder-filter").innerHTML = [
     `<option value="">Visi aplankai</option>`,
+    loose ? `<option value="${NO_BINDER}">Be aplanko – dar nesudėti (${loose})</option>` : "",
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
     models.length ? `<optgroup label="Modeliai">${models.map(groupOption).join("")}</optgroup>` : "",
     special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => groupOption(folder.name)).join("")}</optgroup>` : "",
@@ -1662,14 +1709,18 @@ function renderFolders() {
   $("folder-filter").closest(".folder-filter").classList.toggle("on", Boolean(folderFilter));
   $("filters-btn").classList.toggle("on", Boolean(folderFilter) || !$("filter-row").hidden);
   $("folders-title").textContent = `Aplankai (po ${BINDER_SIZE})`;
-  $("folder-nav").innerHTML = view.length
+  $("auto-state").textContent = binderAuto ? "įjungtas – nauji CoC dedami patys" : "išjungtas – CoC dedate patys";
+  $("auto-nav").classList.toggle("warn", !binderAuto);
+  const looseNav = loose ? `<button type="button" class="nav binder loose ${folderFilter === NO_BINDER ? "on-folder" : ""}" data-folder="${NO_BINDER}">
+      <b class="code">—</b><span class="nav-name">Be aplanko</span><span class="badge warn">${loose}</span></button>` : "";
+  $("folder-nav").innerHTML = looseNav + (view.length
     ? view.map((binder) => {
       const full = !binder.special && binder.records.length >= BINDER_SIZE;
       return `<button type="button" class="nav binder ${folderFilter === BINDER_PREFIX + binder.code ? "on-folder" : ""} ${specialNames.has(binder.group) ? "special" : ""}"
         data-folder="${BINDER_PREFIX}${esc(binder.code)}"><b class="code">${esc(binder.code)}</b><span class="nav-name">${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span>
         ${binder.special ? `<span class="fill none"></span>` : `<span class="fill ${full ? "full" : ""}" title="${binder.records.length} iš ${BINDER_SIZE}"><i style="width:${Math.round(binder.records.length / BINDER_SIZE * 100)}%"></i></span>`}<span class="badge">${binder.records.length}</span></button>`;
     }).join("")
-    : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`;
+    : loose ? "" : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`);
   $("folders").innerHTML = special.map((folder) => `<option value="${esc(folder.name)}">`).join("");
 }
 
@@ -1716,6 +1767,8 @@ async function reorganizeBinders() {
     "Kiekvieno modelio CoC bus išdėlioti pagal VIN į aplankus po 20 (specialūs aplankai, pvz. vardais, nekeičiami). Aplankų kodai lieka. Po to atsispausdinkite perkėlimo sąrašą – jame nurodyta, kurį CoC į kurį aplanką perkelti.",
     "Perrūšiuoti",
   )) return;
+  binderAuto = true;
+  await setMeta("binderAuto", true);
   const moved = applyBinders(true);
   render();
   await setMeta("bindersNotice", true);
@@ -2466,6 +2519,22 @@ const ACTIONS = {
   "folder-allow": allowFolder,
   "print-folders": printFolders,
   reorganize: reorganizeBinders,
+  "binder-auto": async () => {
+    binderAuto = !binderAuto;
+    await setMeta("binderAuto", binderAuto);
+    const placed = binderAuto ? applyBinders().length : 0;
+    render();
+    toast(binderAuto
+      ? `Automatinis skirstymas įjungtas${placed ? ` – ${placed} CoC be aplanko sudėti automatiškai` : ""}.`
+      : "Automatinis skirstymas išjungtas – CoC į aplankus dėsite patys.");
+  },
+  "clear-model-binders": async () => {
+    $("sidebar").classList.remove("open");
+    if (!await ask("Išimti visus CoC iš modelių aplankų?", "Specialūs aplankai (pvz. vardais) liks nepaliesti. Automatinis skirstymas bus išjungtas – CoC sudėsite patys.", "Išimti")) return;
+    const removed = clearModelBinders();
+    render();
+    toast(`Išimta iš modelių aplankų: ${removed}.`);
+  },
   stickers: openStickers,
   "stickers-cancel": () => $("stickers").close(),
   "print-moves": () => { $("stickers").close(); printFolders(true); },
@@ -2637,6 +2706,7 @@ async function start() {
   folderCodes = (await getMeta("folderCodes").catch(() => null)) || {};
   binders = (await getMeta("binders").catch(() => null)) || [];
   bindersNotice = Boolean(await getMeta("bindersNotice").catch(() => false));
+  binderAuto = (await getMeta("binderAuto").catch(() => null)) !== false;
   renderTemplateState();
   await loadFolderState();
   try {
@@ -2645,6 +2715,7 @@ async function start() {
     toast(`Nepavyko atidaryti duomenų: ${error.message || error}`, "err");
     records = [];
   }
+  await clearModelBindersOnce();
   // Puslapį uždarius vidury skaitymo, tas lapas skaitomas iš naujo.
   for (const record of records) if (record.ocr === "skaitoma") record.ocr = "laukia";
   render();

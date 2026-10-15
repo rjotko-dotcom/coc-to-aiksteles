@@ -256,3 +256,15 @@ test("anksčiau padalintas specialus aplankas sujungiamas", async () => {
   assert.deepEqual(binders, [{ code: "A-06", group: "Audrius" }]);
   assert.ok(Object.values(assign).every((c) => c === "A-06"));
 });
+
+test("be automatinio skirstymo: modelių CoC lieka be aplanko, rankiniai išlieka", async () => {
+  const { planBinders, STATUS } = await import("../js/sandelis/logic.js");
+  const recs = [
+    { id: "a", model: "QASHQAI", vin: "1", status: STATUS.IN, binder: "" },
+    { id: "b", model: "QASHQAI", vin: "2", status: STATUS.IN, binder: "A-20" },
+    { id: "c", model: "JUKE", vin: "3", status: STATUS.IN, folder: "Olifeja", binder: "A-05" },
+  ];
+  const { binders, assign } = planBinders(recs, [{ code: "A-20", group: "QASHQAI" }, { code: "A-05", group: "Olifeja" }], { auto: false });
+  assert.deepEqual(assign, { a: "", b: "A-20", c: "A-05" });
+  assert.equal(binders.length, 2);
+});
