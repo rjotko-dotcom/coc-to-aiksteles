@@ -1706,6 +1706,7 @@ function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
   $("bulk").classList.toggle("on", selected.size > 0);
   if (selected.size) $("bulk-count").textContent = `Pažymėta: ${selected.size}`;
+  $("select-hint").hidden = selected.size > 0;
 }
 
 function renderFolders() {
@@ -2393,11 +2394,53 @@ function setTab(next) {
 
 document.querySelectorAll("#tabs button").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
 
+/** Paskutinė pažymėta eilutė – Shift paspaudimui (pažymima visa eilė tarp jų). */
+let lastPick = null;
+
+function pickRow(id, on) {
+  if (on) selected.add(id); else selected.delete(id);
+  const row = document.querySelector(`#rows [data-row="${CSS.escape(id)}"]`);
+  row?.classList.toggle("selected", on);
+  const input = row?.querySelector("[data-select]");
+  if (input) input.checked = on;
+}
+
 $("rows").addEventListener("click", (event) => {
+  // Shift ant PDF ženkliuko: pažymima (ar atžymima) visa eilė nuo paskutinio pažymėto.
+  const label = event.target.closest(".doc-check");
+  if (label && event.shiftKey && !event.target.matches("input")) {
+    event.preventDefault();
+    const id = label.querySelector("[data-select]").dataset.select;
+    const ids = [...$("rows").querySelectorAll("[data-row]")].map((row) => row.dataset.row);
+    const on = !selected.has(id);
+    if (lastPick && ids.includes(lastPick)) {
+      const [from, to] = [ids.indexOf(lastPick), ids.indexOf(id)].sort((x, y) => x - y);
+      ids.slice(from, to + 1).forEach((item) => pickRow(item, on));
+    } else {
+      pickRow(id, on);
+    }
+    lastPick = id;
+    renderBulk();
+    return;
+  }
   const box = event.target.closest("[data-select]");
   if (box) {
-    if (box.checked) selected.add(box.dataset.select); else selected.delete(box.dataset.select);
-    box.closest("[data-row]").classList.toggle("selected", box.checked);
+    const ids = [...$("rows").querySelectorAll("[data-row]")].map((row) => row.dataset.row);
+    if (event.shiftKey && lastPick && ids.includes(lastPick)) {
+      const [from, to] = [ids.indexOf(lastPick), ids.indexOf(box.dataset.select)].sort((x, y) => x - y);
+      ids.slice(from, to + 1).forEach((id) => pickRow(id, box.checked));
+    } else {
+      pickRow(box.dataset.select, box.checked);
+    }
+    lastPick = box.dataset.select;
+    renderBulk();
+    return;
+  }
+  // Ctrl / ⌘ + paspaudimas ant eilutės – pažymi (kaip Windows'e).
+  const clickedRow = event.target.closest("[data-row]");
+  if (clickedRow && (event.ctrlKey || event.metaKey) && !event.target.closest(".kebab")) {
+    pickRow(clickedRow.dataset.row, !selected.has(clickedRow.dataset.row));
+    lastPick = clickedRow.dataset.row;
     renderBulk();
     return;
   }
