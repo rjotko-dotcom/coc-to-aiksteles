@@ -639,13 +639,6 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .stage-empty p { margin: 0; color: var(--dim); font-size: 13.5px; text-align: center; line-height: 1.6; }
 .stage-empty p kbd { font-size: 11px; margin: 0 2px; }
 @keyframes emblem { 50% { color: rgba(255, 255, 255, .11); transform: translateY(-4px); } }
-/* Keičiant CoC tekstas švelniai pasikeičia kartu su mašina */
-.stage.swap :is(.stage-head h2, .stage-sub, .stage-vin b, .stage-facts, .stage-ready) { animation: text-in .45s var(--ease) both; }
-.stage.swap .stage-sub { animation-delay: 40ms; }
-.stage.swap .stage-vin b { animation-delay: 80ms; }
-.stage.swap .stage-facts { animation-delay: 120ms; }
-.stage.swap .stage-ready { animation-delay: 160ms; }
-@keyframes text-in { from { opacity: 0; transform: translateY(6px); } }
 @keyframes car-in { from { opacity: 0; transform: translateX(120px) scale(.97); } }
 /* Senas automobilis greitai išvažiuoja į kairę, tik tada atvažiuoja naujas */
 .stage-car img.leaving { animation: car-out .28s cubic-bezier(.55, 0, .9, .3) forwards; }
