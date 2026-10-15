@@ -1514,11 +1514,6 @@ function renderStage(animate = false) {
   const generation = generationOf(record);
   const year = yearOf(record);
   const coc = record.coc || {};
-  if (animate && !reduceMotion()) {
-    stage.classList.remove("swap");
-    void stage.offsetWidth;
-    stage.classList.add("swap");
-  }
   $("stage-model").textContent = [record.make || "NISSAN", record.model || car?.name || ""].filter(Boolean).join(" ");
   $("stage-sub").innerHTML = [esc(generation), year, coc.colour ? colourTag(record) : ""].filter(Boolean).join(" · ");
   stage.style.setProperty("--paint", paint ? cssColour(paint) : "rgb(120 124 130)");
