@@ -956,15 +956,33 @@ async function removeRecord(id) {
 // Skaičiai
 // ---------------------------------------------------------------------------
 
+/** Skaičius pasikeičia „pribėgdamas“ iki naujos reikšmės (pirmą kartą – iš karto). */
+function countTo(element, value) {
+  const from = Number(element.dataset.value);
+  element.dataset.value = value;
+  if (!Number.isFinite(from) || from === value || reduceMotion()) { element.textContent = value; return; }
+  const start = performance.now();
+  const duration = Math.min(700, 250 + Math.abs(value - from) * 25);
+  cancelAnimationFrame(Number(element.dataset.raf));
+  const step = (time) => {
+    const t = Math.min(1, (time - start) / duration);
+    const eased = 1 - (1 - t) ** 3;
+    element.textContent = Math.round(from + (value - from) * eased);
+    if (t < 1) element.dataset.raf = requestAnimationFrame(step);
+  };
+  element.dataset.raf = requestAnimationFrame(step);
+  element.classList.remove("bump"); void element.offsetWidth; element.classList.add("bump");
+}
+
 function renderCounts() {
   const n = counts(records);
   const ready = n.all - n[STATUS.REVIEW];
   $("nav-in").textContent = n[STATUS.IN] || "";
   $("nav-out").textContent = n[STATUS.OUT] || "";
   $("nav-review").textContent = n[STATUS.REVIEW] || "";
-  $("t-in").textContent = n[STATUS.IN];
-  $("t-out").textContent = n[STATUS.OUT];
-  $("t-all").textContent = ready;
+  countTo($("t-in"), n[STATUS.IN]);
+  countTo($("t-out"), n[STATUS.OUT]);
+  countTo($("t-all"), ready);
 
   $("greeting").textContent = records.length ? `Turime ${n[STATUS.IN]} CoC` : "Pradėkime nuo pirmo skeno";
   $("summary").textContent = records.length
@@ -1293,6 +1311,12 @@ function renderTable() {
   document.querySelectorAll("#tabs button").forEach((button) => button.classList.toggle("on", button.dataset.tab === tab));
   moveIndicator();
 
+  // Eilučių vietos prieš perpiešiant – kad pasikeitusios galėtų sklandžiai pajudėti.
+  const flip = !animateRows && !reduceMotion();
+  const stageIndex = [...$("rows").querySelectorAll(":scope > [data-row]")].findIndex((row) => row.dataset.row === stageId);
+  const before = new Map();
+  if (flip) for (const row of $("rows").querySelectorAll(":scope > [data-row]")) before.set(row.dataset.row, { top: row.offsetTop, node: row });
+
   const rows = list.slice(0, shown).map((record, index) => {
     const generation = generationOf(record);
     const paint = paintOf(record);
@@ -1328,6 +1352,8 @@ function renderTable() {
     ? `Rodoma ${shown} iš ${list.length}. <button type="button" class="btn sm" data-action="more" id="more-btn">Rodyti daugiau</button>`
     : query ? `Rasta: ${list.length} · ieškoma visuose sąrašuose ir aplankuose` : "";
 
+  if (flip && before.size) animateRowMoves(before);
+
   const visibleIds = list.slice(0, shown).map((record) => record.id);
   $("check-all").checked = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
   renderBulk();
@@ -1336,8 +1362,39 @@ function renderTable() {
   const moreButton = $("more-btn");
   if (moreButton) moreObserver.observe(moreButton);
   // Skydelyje – pasirinktas CoC; jei jo sąraše nebėra, pirmas sąrašo.
-  if (!stageId || !list.some((record) => record.id === stageId)) setStage(list[0]?.id || null, false);
+  // Atidavus ar perkėlus CoC – parenkamas kitas toje pačioje vietoje (ne sąrašo pradžia).
+  if (!stageId || !list.some((record) => record.id === stageId)) {
+    const next = list[Math.min(Math.max(stageIndex, 0), list.length - 1)];
+    setStage(next?.id || null, false);
+  }
   else renderStage();
+}
+
+/**
+ * Sklandus sąrašo pasikeitimas: likusios eilutės nuslenka į naują vietą,
+ * išnykusios (atiduotos, perkeltos) išslysta į kairę. Didelių pokyčių neanimuoja.
+ */
+function animateRowMoves(before) {
+  const container = $("rows");
+  const now = new Map([...container.querySelectorAll(":scope > [data-row]")].map((row) => [row.dataset.row, row]));
+  const gone = [...before].filter(([id]) => !now.has(id));
+  let moves = 0;
+  for (const [id, row] of now) {
+    const old = before.get(id);
+    if (!old) continue;
+    const dy = old.top - row.offsetTop;
+    if (!dy) continue;
+    if (++moves > 30) break;
+    row.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(.22, 1, .36, 1)" });
+  }
+  if (gone.length > 12) return;
+  for (const [, { top, node }] of gone) {
+    node.classList.remove("enter", "staged");
+    Object.assign(node.style, { position: "absolute", top: `${top}px`, left: "0", right: "0", pointerEvents: "none", zIndex: "2" });
+    container.append(node);
+    node.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(-60px)" }], { duration: 380, easing: "ease-in", fill: "forwards" })
+      .finished.then(() => node.remove(), () => node.remove());
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1487,6 +1544,15 @@ function renderStage(animate = false) {
   stageShown = shownKey;
   carImage(key, paint, 960, (record.coc || {}).colour, (record.coc || {}).colour_raw).then((url) => {
     if (!url || stageShown !== shownKey) return;
+    // Senas automobilis „išvažiuoja“ į kairę, naujas atvažiuoja iš dešinės.
+    if (animate && !sameCar && !reduceMotion() && !image.hidden && image.src) {
+      const ghost = image.cloneNode();
+      ghost.removeAttribute("id");
+      ghost.className = "car-ghost";
+      image.after(ghost);
+      ghost.addEventListener("animationend", () => ghost.remove(), { once: true });
+      setTimeout(() => ghost.remove(), 1200);
+    }
     image.src = url;
     image.hidden = false;
     $("stage-car").style.setProperty("--car", `url("${url}")`);
@@ -1741,6 +1807,8 @@ function renderFolders() {
   $("auto-nav").classList.toggle("warn", !binderAuto);
   const looseNav = loose ? `<button type="button" class="nav binder loose ${folderFilter === NO_BINDER ? "on-folder" : ""}" data-folder="${NO_BINDER}">
       <b class="code">—</b><span class="nav-name">Be aplanko</span><span class="badge warn">${loose}</span></button>` : "";
+  const prevFill = new Map([...$("folder-nav").querySelectorAll("[data-folder]")]
+    .map((button) => [button.dataset.folder, Number(button.querySelector(".badge")?.textContent || 0)]));
   $("folder-nav").innerHTML = looseNav + (view.length
     ? view.map((binder) => {
       const full = !binder.special && binder.records.length >= BINDER_SIZE;
@@ -1750,6 +1818,22 @@ function renderFolders() {
     }).join("")
     : loose ? "" : `<p class="nav-empty">Dar nėra. Sukursite įkeldami skeną.</p>`);
   $("folders").innerHTML = special.map((folder) => `<option value="${esc(folder.name)}">`).join("");
+  // Pasikeitę aplankai: juostelė „užsipildo“ nuo senos reikšmės, eilutė trumpai sužyba.
+  if (prevFill.size && !reduceMotion()) {
+    for (const button of $("folder-nav").querySelectorAll("[data-folder]")) {
+      const was = prevFill.get(button.dataset.folder);
+      const count = Number(button.querySelector(".badge")?.textContent || 0);
+      if (was === undefined || was === count) continue;
+      const bar = button.querySelector(".fill i");
+      if (bar) {
+        const target = bar.style.width;
+        bar.style.width = `${Math.round(Math.min(was, BINDER_SIZE) / BINDER_SIZE * 100)}%`;
+        requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = target; }));
+      }
+      button.classList.add("changed");
+      setTimeout(() => button.classList.remove("changed"), 1400);
+    }
+  }
 }
 
 /** Aplankų kodų langas: kodą galima pakeisti, kad atitiktų lipduką ant aplanko. */
@@ -2481,6 +2565,39 @@ document.querySelectorAll(".rail-item").forEach((item) => item.addEventListener(
   }
   renderRail();
 }));
+// Spartieji klavišai sąraše: ↑ ↓ – kitas CoC, Enter – atidaryti, G – atiduoti,
+// M – į aplanką, P – pažyma, D – dokumentas, tarpas – pažymėti.
+document.addEventListener("keydown", (event) => {
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  if (/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement?.tagName) && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return;
+  if (document.querySelector("dialog[open]") || $("sidebar").classList.contains("open") || $("review").classList.contains("open")) return;
+  const ids = [...$("rows").querySelectorAll(":scope > [data-row]")].map((row) => row.dataset.row).filter((id) => byId(id));
+  const index = ids.indexOf(stageId);
+  const key = event.key.toLowerCase();
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (!ids.length) return;
+    event.preventDefault();
+    const next = ids[Math.max(0, Math.min(ids.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))];
+    setStage(next);
+    document.querySelector(`#rows [data-row="${CSS.escape(next)}"]`)?.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
+    return;
+  }
+  if (!stageId) return;
+  const record = byId(stageId);
+  if (event.key === "Enter") { event.preventDefault(); openDetail(stageId); }
+  else if (key === "g" && record?.status === STATUS.IN) { event.preventDefault(); openGive(selected.size ? [...selected] : [stageId]); }
+  else if (key === "m" && record) { event.preventDefault(); openBinderDialog(selected.size ? [...selected] : [stageId]); }
+  else if (key === "p") { event.preventDefault(); makePazymos(selected.size ? [...selected] : [stageId]); }
+  else if (key === "d") { event.preventDefault(); openPdf(stageId); }
+  else if (event.key === " ") {
+    event.preventDefault();
+    pickRow(stageId, !selected.has(stageId));
+    lastPick = stageId;
+    renderBulk();
+  }
+});
+
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape" || document.querySelector("dialog[open]")) return;
   if (!$("row-menu").hidden) closeRowMenu();

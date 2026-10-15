@@ -115,7 +115,6 @@
   <main class="pane-right">
     <header class="right-top">
       <span class="store-dot" id="store-dot" title="Duomenų saugojimas"></span>
-      <button type="button" class="dl-btn excel" data-action="excel" title="Eksportuoti į Excel" aria-label="Eksportuoti į Excel"><svg><use href="#i-sheet"/></svg></button>
       <button type="button" class="dl-btn" data-action="downloads" title="Atsisiuntimai" aria-label="Atsisiuntimai"><svg><use href="#i-download"/></svg><em id="downloads-badge"></em></button>
       <button type="button" class="burger menu-btn" data-action="menu" aria-label="Meniu"><svg><use href="#i-menu"/></svg></button>
     </header>
@@ -182,7 +181,11 @@
             <li><i>3</i><div><b>Raskite ir atiduokite</b><span>Paieška atsako „turime / neturime“ ir parodo aplanką.</span></div></li>
           </ol>
         </div>
-        <div class="rows" id="rows"></div>
+        <div class="rows" id="rows">
+          <div class="lrow skeleton"><i></i><i></i><i></i><i></i></div><div class="lrow skeleton"><i></i><i></i><i></i><i></i></div>
+          <div class="lrow skeleton"><i></i><i></i><i></i><i></i></div><div class="lrow skeleton"><i></i><i></i><i></i><i></i></div>
+          <div class="lrow skeleton"><i></i><i></i><i></i><i></i></div>
+        </div>
         <p class="list-note" id="list-note"></p>
       </div>
     </section>
@@ -242,7 +245,6 @@
     <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
     <button type="button" class="nav" data-action="reread-missing" id="reread-nav"><svg><use href="#i-doc"/></svg><span class="nav-two">Trūkstami pažymos duomenys<small id="reread-count"></small></span></button>
     <button type="button" class="nav" data-action="print-folders"><svg><use href="#i-printer"/></svg>Spausdinti aplankų sąrašus</button>
-    <a href="../" class="nav"><svg><use href="#i-doc"/></svg>Pažymų generatorius<svg class="ext"><use href="#i-arrow"/></svg></a>
     <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
     <button type="button" class="nav" data-action="restore"><svg><use href="#i-upload"/></svg>Įkelti kopiją</button>
   </nav>
@@ -254,6 +256,12 @@
     <button type="button" class="btn block" id="store-btn" data-action="folder-connect"><svg><use href="#i-folder"/></svg><span>Pasirinkti aplanką</span></button>
     <button type="button" class="link-btn" data-action="backup">Atsisiųsti kopiją (.zip)</button>
     <small id="usage"></small>
+  </div>
+  <div class="keys-help">
+    <b>Spartieji klavišai</b>
+    <span><kbd>↑</kbd><kbd>↓</kbd> kitas CoC</span><span><kbd>Enter</kbd> atidaryti</span><span><kbd>G</kbd> atiduoti</span>
+    <span><kbd>M</kbd> į aplanką</span><span><kbd>P</kbd> pažyma</span><span><kbd>D</kbd> dokumentas</span>
+    <span><kbd>Tarpas</kbd> pažymėti</span><span><kbd>/</kbd> paieška</span>
   </div>
   <p class="drawer-foot">
     Liudijimai niekur nesiunčiami – nei į internetą, nei į jokį AI. <span id="version"></span>
