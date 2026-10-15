@@ -175,15 +175,38 @@ function paintPixels(pixels, mask, lmed, rgb) {
   }
 }
 
+const small = new Map();
+
+/** Sumažinta kopija sąrašo miniatiūroms – naršyklei nereikia kiekvienoje eilutėje iškoduoti 960 px paveikslo. */
+function shrunk(href, w, h) {
+  const id = `${href}|${w}`;
+  if (!small.has(id)) {
+    small.set(id, (async () => {
+      const image = await load(href);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const context = canvas.getContext("2d");
+      context.imageSmoothingQuality = "high";
+      context.drawImage(image, 0, 0, w, h);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+      return blob ? URL.createObjectURL(blob) : href;
+    })().catch(() => href));
+  }
+  return small.get(id);
+}
+
 /**
  * Nuspalvinto automobilio paveikslo adresas (blob:). `width` – pikseliais;
  * rezultatas įsimenamas, todėl tas pats modelis ir spalva dažomi tik kartą.
  */
 export function carImage(key, paint, width = 960, colour = paint?.name, raw = "") {
   const shot = shotFor(key, colour, raw);
-  if (shot) return Promise.resolve(new URL(`../../sandelis/cars/${shot}.webp`, import.meta.url).href);
   const name = CARS[key]?.image || PLACEHOLDER;
   const car = IMAGES[name];
+  if (shot) {
+    const href = new URL(`../../sandelis/cars/${shot}.webp`, import.meta.url).href;
+    return width >= car.w ? Promise.resolve(href) : shrunk(href, width, Math.round(car.h * (width / car.w)));
+  }
   const id = `${name}|${paint ? paint.rgb.join(",") : "-"}|${width}`;
   if (!painted.has(id)) {
     painted.set(id, (async () => {
