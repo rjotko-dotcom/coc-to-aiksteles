@@ -1515,7 +1515,6 @@ function renderStage(animate = false) {
       : "Nuskenuotus CoC PDF įkelkite dešinėje –<br>čia pamatysite pasirinktą automobilį";
     $("stage-img").hidden = true;
     $("stage-img").classList.remove("leaving");
-    $("stage-reflect").hidden = true;
     swapToken++;
     stageShown = "";
     return;
@@ -1588,10 +1587,6 @@ function renderStage(animate = false) {
     image.classList.remove("leaving");
     image.src = url;
     image.hidden = false;
-    const mirror = $("stage-reflect");
-    mirror.classList.remove("leaving");
-    mirror.src = url;
-    mirror.hidden = false;
     $("stage-car").style.setProperty("--car", `url("${url}")`);
     $("stage-car").style.setProperty("--ratio", `${size.w} / ${size.h}`);
     if (animate && !sameCar && !reduceMotion()) {
@@ -1599,7 +1594,7 @@ function renderStage(animate = false) {
       void $("stage-car").offsetWidth;
       $("stage-car").classList.add("enter");
     }
-  }).catch(() => { image.hidden = true; $("stage-reflect").hidden = true; });
+  }).catch(() => { image.hidden = true; });
 }
 
 let swapToken = 0;
@@ -1622,12 +1617,9 @@ function preloadAround(ids, index) {
 /** Sena mašina išvažiuoja į kairę; grąžina pažadą, kuris išsipildo jai išvažiavus. */
 function leaveCar(image) {
   $("stage-car").classList.remove("enter");
-  const mirror = $("stage-reflect");
   image.classList.remove("leaving");
-  mirror.classList.remove("leaving");
   void image.offsetWidth;
   image.classList.add("leaving");
-  mirror.classList.add("leaving");
   return new Promise((resolve) => {
     const done = () => { clearTimeout(timer); resolve(); };
     const timer = setTimeout(done, 320);
