@@ -398,10 +398,11 @@ const inBinderOrder = (a, b) => String(a.vin || "").localeCompare(String(b.vin |
  * vietos, o jei visi pilni – sukuriamas naujas su kitu laisvu kodu.
  * `reorganize` – perrūšiuoti viską iš naujo (pagal VIN), paliekant esamus kodus.
  * `codes` – senieji grupių kodai (pirmas grupės aplankas gauna jį).
+ * `auto: false` – modelių CoC be aplanko taip ir paliekami (žmogus juos sudeda pats).
  *
  * Grąžina { binders: [{ code, group }], assign: { įrašo id: kodas arba "" } }.
  */
-export function planBinders(records, binders = [], { size = BINDER_SIZE, reorganize = false, codes = {} } = {}) {
+export function planBinders(records, binders = [], { size = BINDER_SIZE, reorganize = false, codes = {}, auto = true } = {}) {
   const list = binders.map((binder) => ({ ...binder }));
   const used = new Set(list.map((binder) => binder.code));
   let next = Math.max(0, ...list.map((binder) => codeNumber(binder.code)), ...Object.values(codes).map(codeNumber)) + 1;
@@ -455,6 +456,7 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
       waiting.sort(inBinderOrder);
     }
     for (const record of waiting) {
+      if (!auto && !reorganize) { assign[record.id] = ""; continue; }
       let binder = own().find((item) => (filled.get(item.code) || 0) < limit);
       if (!binder) binder = create(group);
       put(record, binder);

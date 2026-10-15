@@ -511,7 +511,9 @@ b.code {
 .code-row small { color: var(--dim); }
 .nav-two { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .nav-two small { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px; }
-#template-nav.warn small, #reread-nav.warn small { color: var(--amber); }
+#template-nav.warn small, #reread-nav.warn small, #auto-nav.warn small { color: var(--amber); }
+.lrow-folder.loose { color: var(--dim); }
+#folder-nav .nav.loose .code { color: var(--amber); }
 
 /* ===== Mažesni ekranai ===== */
 /* Žemas ekranas (nešiojamas kompiuteris): kortelė kompaktiška. */
