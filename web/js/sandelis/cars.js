@@ -9,9 +9,15 @@ import { cleanVin, modelFromVin } from "./logic.js";
  * Paveikslai. `shots` – spalvos, kurių nuotrauka yra (failas `<paveikslas>-<spalva>.webp`,
  * pvz. `x-trail-zalia-juoda.webp` = žalia su juodu stogu). Kitoms spalvoms perdažomas
  * `<paveikslas>.webp` pagal kaukę: `lmed` – vidutinis jo dažų šviesumas, `exact` –
- * spalvos, kurių jis tikras. Kol kas yra tik X-Trail – jis rodomas visiems modeliams.
+ * spalvos, kurių jis tikras. Modelis be perdažomo paveikslo (be `lmed`) neturimai spalvai
+ * rodo `fallback` spalvos nuotrauką. Modeliai be savo nuotraukų rodo X-Trail.
  */
 const IMAGES = {
+  juke: {
+    w: 960, h: 600, fallback: "pilka",
+    shots: ["balta", "balta-perlas", "balta-juoda", "juoda", "pilka", "pilka-juoda", "tamsiai-pilka", "tamsiai-pilka-juoda",
+      "melyna", "melyna-juoda", "raudona", "raudona-juoda", "ocean-deep-juoda"],
+  },
   "x-trail": {
     lmed: 98.9, w: 960, h: 600, exact: ["PILKA"],
     shots: ["balta", "balta-juoda", "juoda", "melyna", "melyna-juoda", "pilka", "pilka-juoda", "raudona",
@@ -24,7 +30,7 @@ const PLACEHOLDER = "x-trail";
 export const CARS = {
   qashqai: { name: "Qashqai", generation: "J12", image: PLACEHOLDER },
   "x-trail": { name: "X-Trail", generation: "T33", image: "x-trail" },
-  juke: { name: "Juke", generation: "F16", image: PLACEHOLDER },
+  juke: { name: "Juke", generation: "F16", image: "juke" },
   ariya: { name: "Ariya", generation: "FE0", image: PLACEHOLDER },
   leaf: { name: "Leaf", generation: "ZE2", image: PLACEHOLDER },
   micra: { name: "Micra", generation: "K15", image: PLACEHOLDER },
@@ -86,12 +92,24 @@ export function colourSlug(colour) {
  * Kuri spalvos nuotrauka tinka: pirmiausia tikslus derinys („žalia su juodu stogu“),
  * tada pagrindinė spalva; spalvos nežinant – pilka. null – reikia perdažyti.
  */
-export function shotFor(key, colour) {
+export function shotFor(key, colour, raw = "") {
   const name = CARS[key]?.image || PLACEHOLDER;
-  const shots = IMAGES[name].shots || [];
+  const image = IMAGES[name];
+  const shots = image.shots || [];
   const slug = colourSlug(colour);
-  const main = slug.split("-")[0];
-  const pick = shots.includes(slug) ? slug : shots.includes(main) ? main : !slug && shots.includes("pilka") ? "pilka" : "";
+  const [main, roof] = slug.split("-");
+  const text = fold(raw);
+  // Gamintojo pavadinimas patikslina atspalvį: „Gun Metallic“ / „Dark Grey“, „Pearl White“, „Ocean Deep“.
+  let variant = main;
+  if (/ocean/.test(text)) variant = "ocean-deep";
+  else if (main === "pilka" && /dark|gun|tams/.test(text)) variant = "tamsiai-pilka";
+  else if (main === "balta" && /pearl|perl/.test(text) && !roof) variant = "balta-perlas";
+  const candidates = [
+    roof ? `${variant}-${roof}` : variant, roof ? variant : "",
+    variant === "ocean-deep" ? "ocean-deep-juoda" : "", slug, main, !slug ? "pilka" : "",
+  ].filter(Boolean);
+  const pick = candidates.find((candidate) => shots.includes(candidate))
+    || (!image.lmed && image.fallback && shots.includes(image.fallback) ? image.fallback : "");
   return pick ? `${name}-${pick}` : null;
 }
 
@@ -156,8 +174,8 @@ function paintPixels(pixels, mask, lmed, rgb) {
  * Nuspalvinto automobilio paveikslo adresas (blob:). `width` – pikseliais;
  * rezultatas įsimenamas, todėl tas pats modelis ir spalva dažomi tik kartą.
  */
-export function carImage(key, paint, width = 960, colour = paint?.name) {
-  const shot = shotFor(key, colour);
+export function carImage(key, paint, width = 960, colour = paint?.name, raw = "") {
+  const shot = shotFor(key, colour, raw);
   if (shot) return Promise.resolve(new URL(`../../sandelis/cars/${shot}.webp`, import.meta.url).href);
   const name = CARS[key]?.image || PLACEHOLDER;
   const car = IMAGES[name];

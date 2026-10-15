@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-3e5e06d6c25c";
+const VERSION = "aikstele-e89881709f58";
 const ASSETS = [
   "./",
   "./version.js",
@@ -34,6 +34,19 @@ const ASSETS = [
   "./js/store.js",
   "./manifest.webmanifest",
   "./sandelis/brand/nissan.svg",
+  "./sandelis/cars/juke-balta-juoda.webp",
+  "./sandelis/cars/juke-balta-perlas.webp",
+  "./sandelis/cars/juke-balta.webp",
+  "./sandelis/cars/juke-juoda.webp",
+  "./sandelis/cars/juke-melyna-juoda.webp",
+  "./sandelis/cars/juke-melyna.webp",
+  "./sandelis/cars/juke-ocean-deep-juoda.webp",
+  "./sandelis/cars/juke-pilka-juoda.webp",
+  "./sandelis/cars/juke-pilka.webp",
+  "./sandelis/cars/juke-raudona-juoda.webp",
+  "./sandelis/cars/juke-raudona.webp",
+  "./sandelis/cars/juke-tamsiai-pilka-juoda.webp",
+  "./sandelis/cars/juke-tamsiai-pilka.webp",
   "./sandelis/cars/x-trail-balta-juoda.webp",
   "./sandelis/cars/x-trail-balta.webp",
   "./sandelis/cars/x-trail-juoda.webp",

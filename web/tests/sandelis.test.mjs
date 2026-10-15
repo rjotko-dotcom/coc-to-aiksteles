@@ -290,3 +290,19 @@ test("ištuštėjusio specialaus aplanko vardas nesikeičia", async () => {
   const { binders } = planBinders([], [{ code: "A-04", group: "Kazimieras ir Audrius" }, { code: "A-07", group: "Micra" }]);
   assert.deepEqual(binders, [{ code: "A-04", group: "Kazimieras ir Audrius" }, { code: "A-07", group: "MICRA" }]);
 });
+
+test("Juke nuotraukos pagal CoC spalvą ir gamintojo pavadinimą", async () => {
+  const { shotFor } = await import("../js/sandelis/cars.js");
+  assert.equal(shotFor("juke", "PILKA", "Ceramic Grey"), "juke-pilka");
+  assert.equal(shotFor("juke", "PILKA", "Gun Metallic"), "juke-tamsiai-pilka");
+  assert.equal(shotFor("juke", "PILKA/JUODA", "Dark Grey / Black"), "juke-tamsiai-pilka-juoda");
+  assert.equal(shotFor("juke", "BALTA", "Pearl White"), "juke-balta-perlas");
+  assert.equal(shotFor("juke", "BALTA", "White"), "juke-balta");
+  assert.equal(shotFor("juke", "BALTA/JUODA", "Pearl White/Black"), "juke-balta-juoda");
+  assert.equal(shotFor("juke", "MĖLYNA/JUODA", "Ocean Deep / Black"), "juke-ocean-deep-juoda");
+  assert.equal(shotFor("juke", "MĖLYNA", "Ocean Deep"), "juke-ocean-deep-juoda");
+  assert.equal(shotFor("juke", "ŽALIA"), "juke-pilka", "neturimos spalvos – pilkas Juke");
+  assert.equal(shotFor("juke", ""), "juke-pilka");
+  assert.equal(shotFor("x-trail", "PILKA", "Gun Metallic"), "x-trail-pilka");
+  assert.equal(shotFor("x-trail", "GELTONA"), null);
+});
