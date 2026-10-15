@@ -654,17 +654,13 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .stage-bottom { display: flex; flex-direction: column; gap: 14px; max-width: min(580px, 80%); }
 .stage-vin span { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
 .stage-vin b { font-size: 16px; font-weight: 500; letter-spacing: .3em; }
-.stage-facts {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, .12);
-}
+.stage-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
 .stage-facts:empty { display: none; }
 .stage-facts > div {
-  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 0 16px;
-  border-left: 1px solid rgba(255, 255, 255, .12); min-width: 0;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; padding: 11px 14px; min-width: 0;
+  border: 1px solid rgba(255, 255, 255, .09); border-radius: 12px; background: rgba(255, 255, 255, .025);
 }
-.stage-facts > div:first-child { border-left: 0; padding-left: 0; }
-.stage-facts svg { grid-row: span 2; width: 24px; height: 24px; stroke-width: 1.5; color: var(--soft); }
+.stage-facts svg { grid-row: span 2; width: 22px; height: 22px; stroke-width: 1.5; color: var(--muted); }
 .stage-facts dt { font-size: 14px; font-weight: 500; color: #fff; }
 .stage-facts dd { margin: 0; font-size: 14px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 8px; }
 .stage-ready { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
@@ -684,6 +680,45 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .stage-actions { display: flex; flex-wrap: nowrap; gap: 8px; padding-left: 6px; }
 .stage-actions .skew-btn { padding: 10px 16px; font-size: 14px; min-width: 0; }
 .stage-actions .skew-btn svg { width: 18px; height: 18px; }
+/* Pagrindinis veiksmas – užpildytas raudonas, kiti – su rėmeliu */
+.skew-btn.primary { background: var(--accent); border-color: var(--accent); box-shadow: 0 12px 28px -16px rgba(226, 20, 63, .9); }
+.skew-btn.primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+.skew-btn:not(.primary) { border-color: rgba(255, 255, 255, .35); }
+.skew-btn:not(.primary):hover { border-color: rgba(255, 255, 255, .7); }
+.stage-actions .skew-btn.icon { padding: 10px 12px; }
+.stage-actions .skew-btn.icon svg { width: 18px; height: 18px; }
+
+/* Būsenos žymės po pavadinimu */
+.stage-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-height: 30px; }
+.stage-chips:empty { display: none; }
+.stage-chips .chip {
+  display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border-radius: 99px; max-width: 220px;
+  background: rgba(255, 255, 255, .055); border: 1px solid rgba(255, 255, 255, .08); color: var(--soft); font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.stage-chips .chip svg { width: 15px; height: 15px; flex: none; color: var(--muted); }
+.stage-chips .dot { width: 8px; height: 8px; }
+
+/* VIN su kopijavimo mygtuku */
+.vin-line { display: flex; align-items: center; gap: 10px; }
+.copy-btn {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s;
+}
+.copy-btn:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+.copy-btn.done { color: var(--green); }
+.copy-btn svg { width: 16px; height: 16px; }
+.copy-btn[hidden] { display: none; }
+
+/* Raudona šviesa už automobilio */
+.stage-light {
+  position: absolute; z-index: 0; inset: -30% -14% -4% -4%; pointer-events: none;
+  background:
+    radial-gradient(46% 50% at 54% 52%, rgba(195, 0, 47, .2), rgba(195, 0, 47, .06) 60%, transparent 80%),
+    linear-gradient(118deg, transparent 58%, rgba(226, 20, 63, .07) 61%, transparent 66%);
+}
+.stage.empty .stage-light { opacity: .35; }
+.stage-car.enter .stage-light { animation: fade 1.2s both; }
 .stage-actions:empty { display: none; }
 .stage-credit { color: var(--dim); font-size: 10.5px; }
 .stage-credit a { color: var(--muted); }
@@ -738,6 +773,40 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 
 .library { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 22px; }
 .tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.tabs-tools { display: flex; align-items: center; gap: 10px; flex: none; }
+.sort-box {
+  position: relative; display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 0 12px 0 14px; margin: 0;
+  border: 1px solid rgba(255, 255, 255, .22); border-radius: 8px; background: #1d1d20; color: var(--muted); font-size: 13.5px; cursor: pointer;
+  transition: border-color .15s;
+}
+.sort-box:hover { border-color: rgba(255, 255, 255, .4); }
+.sort-box select {
+  appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: #fff; font: 500 13.5px var(--sans);
+  padding: 0 22px 0 4px; height: 100%; cursor: pointer; outline: none; box-shadow: none; width: auto; min-width: 0;
+}
+.sort-box > svg { position: absolute; right: 10px; width: 16px; height: 16px; pointer-events: none; color: var(--muted); }
+.sort-box:has(select:focus-visible) { outline: 2px solid var(--text); outline-offset: 2px; }
+@media (max-width: 1350px) { .sort-box > span { display: none; } }
+.stage-actions .short { display: none; }
+@media (max-width: 1699px) {
+  .stage-actions .long { display: none; }
+  .stage-actions .short { display: inline; }
+}
+@media (max-width: 1439px) {
+  .stage-actions { gap: 6px; }
+  .stage-actions .skew-btn { padding: 8px 11px; font-size: 13px; }
+  .stage-actions .skew-btn.icon { padding: 8px 9px; }
+  .stage-actions .skew-btn > span { gap: 7px; }
+  .stage-actions .skew-btn svg { width: 16px; height: 16px; }
+  .stage-facts { gap: 8px; }
+  .stage-facts > div { padding: 9px 10px; column-gap: 9px; }
+  .stage-facts svg { width: 18px; height: 18px; }
+  .stage-facts dt, .stage-facts dd { font-size: 13px; }
+  .binders-notice .where { display: none; }
+  .binders-notice b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .binders-notice > div:not(.actions) { min-width: 0; }
+}
+.stage-actions .skew-btn { flex: none; }
 .pane-right .segmented { background: none; border: 0; padding: 0; gap: 18px; }
 .pane-right .segmented button { font-size: 16px; padding: 9px 26px; color: var(--muted); }
 .pane-right .segmented button.on { color: #fff; font-weight: 600; }
