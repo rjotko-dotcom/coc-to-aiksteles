@@ -268,3 +268,19 @@ test("be automatinio skirstymo: modelių CoC lieka be aplanko, rankiniai išliek
   assert.deepEqual(assign, { a: "", b: "A-20", c: "A-05" });
   assert.equal(binders.length, 2);
 });
+
+test("modelio užrašo skirtumai – tas pats aplankas", async () => {
+  const { folderOf, canonicalModel, planBinders, STATUS } = await import("../js/sandelis/logic.js");
+  assert.equal(folderOf({ model: "Micra" }), "MICRA");
+  assert.equal(folderOf({ model: "MICRA EV" }), "MICRA");
+  assert.equal(folderOf({ model: "NISSAN MICRA" }), "MICRA");
+  assert.equal(folderOf({ model: "X TRAIL" }), "X-TRAIL");
+  assert.equal(folderOf({ model: "", vin: "SJNJ12TA9U2374201" }), "QASHQAI");
+  assert.equal(folderOf({ model: "Micra", folder: "Olifeja" }), "Olifeja");
+  assert.equal(canonicalModel("Kažkas"), "KAŽKAS");
+  // senas aplankas „MICRA EV“ priima ir „Micra“
+  const recs = [{ id: "a", model: "Micra", vin: "1", status: STATUS.IN, binder: "A-07" }, { id: "b", model: "MICRA EV", vin: "2", status: STATUS.IN, binder: "A-07" }];
+  const { assign, binders } = planBinders(recs, [{ code: "A-07", group: "MICRA EV" }], { auto: false });
+  assert.deepEqual(assign, { a: "A-07", b: "A-07" });
+  assert.deepEqual(binders, [{ code: "A-07", group: "MICRA" }]);
+});
