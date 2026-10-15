@@ -1492,10 +1492,15 @@ function renderStage(animate = false) {
   stage.classList.toggle("empty", !record);
   if (!record) {
     $("stage-model").textContent = records.length ? "Pasirinkite CoC" : "Sandėlis tuščias";
-    $("stage-sub").innerHTML = records.length ? "" : "Įkelkite nuskenuotą PDF dešinėje";
+    $("stage-sub").innerHTML = "";
     $("stage-vin").textContent = "—";
     for (const id of ["stage-facts", "stage-actions", "stage-ready"]) $(id).innerHTML = "";
+    $("stage-empty-text").innerHTML = records.length
+      ? "Spustelėkite CoC sąraše dešinėje<br>arba naudokite <kbd>↑</kbd> <kbd>↓</kbd>"
+      : "Nuskenuotus CoC PDF įkelkite dešinėje –<br>čia pamatysite pasirinktą automobilį";
     $("stage-img").hidden = true;
+    $("stage-img").classList.remove("leaving");
+    swapToken++;
     stageShown = "";
     return;
   }
@@ -1542,17 +1547,18 @@ function renderStage(animate = false) {
   if (shownKey === stageShown && !animate) return;
   const sameCar = shownKey === stageShown;
   stageShown = shownKey;
-  carImage(key, paint, 960, (record.coc || {}).colour, (record.coc || {}).colour_raw).then((url) => {
-    if (!url || stageShown !== shownKey) return;
-    // Senas automobilis „išvažiuoja“ į kairę, naujas atvažiuoja iš dešinės.
-    if (animate && !sameCar && !reduceMotion() && !image.hidden && image.src) {
-      const ghost = image.cloneNode();
-      ghost.removeAttribute("id");
-      ghost.className = "car-ghost";
-      image.after(ghost);
-      ghost.addEventListener("animationend", () => ghost.remove(), { once: true });
-      setTimeout(() => ghost.remove(), 1200);
-    }
+  const token = ++swapToken;
+  const swap = animate && !sameCar && !reduceMotion() && !image.hidden && Boolean(image.getAttribute("src"));
+  // Sena mašina išvažiuoja (kol tuo metu kraunasi nauja), tik tada atvažiuoja nauja –
+  // jos niekada nesipina. Greitai perjunginėjant tarpinės praleidžiamos.
+  const leave = swap ? leaveCar(image) : Promise.resolve();
+  carImage(key, paint, 960, (record.coc || {}).colour, (record.coc || {}).colour_raw).then(async (url) => {
+    if (!url) return;
+    const next = new Image();
+    next.src = url;
+    await Promise.all([next.decode().catch(() => {}), leave]);
+    if (token !== swapToken || stageShown !== shownKey) return;
+    image.classList.remove("leaving");
     image.src = url;
     image.hidden = false;
     $("stage-car").style.setProperty("--car", `url("${url}")`);
@@ -1563,6 +1569,21 @@ function renderStage(animate = false) {
       $("stage-car").classList.add("enter");
     }
   }).catch(() => { image.hidden = true; });
+}
+
+let swapToken = 0;
+
+/** Sena mašina išvažiuoja į kairę; grąžina pažadą, kuris išsipildo jai išvažiavus. */
+function leaveCar(image) {
+  $("stage-car").classList.remove("enter");
+  image.classList.remove("leaving");
+  void image.offsetWidth;
+  image.classList.add("leaving");
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); resolve(); };
+    const timer = setTimeout(done, 320);
+    image.addEventListener("animationend", done, { once: true });
+  });
 }
 
 // ---------------------------------------------------------------------------
