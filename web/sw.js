@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-764f8bc0b730";
+const VERSION = "aikstele-33257a8ce912";
 const ASSETS = [
   "./",
   "./version.js",
@@ -47,6 +47,18 @@ const ASSETS = [
   "./sandelis/cars/juke-raudona.webp",
   "./sandelis/cars/juke-tamsiai-pilka-juoda.webp",
   "./sandelis/cars/juke-tamsiai-pilka.webp",
+  "./sandelis/cars/qashqai-balta-juoda.webp",
+  "./sandelis/cars/qashqai-balta.webp",
+  "./sandelis/cars/qashqai-juoda.webp",
+  "./sandelis/cars/qashqai-melyna-juoda.webp",
+  "./sandelis/cars/qashqai-melyna.webp",
+  "./sandelis/cars/qashqai-ocean-deep-juoda.webp",
+  "./sandelis/cars/qashqai-ocean-deep.webp",
+  "./sandelis/cars/qashqai-pilka-juoda.webp",
+  "./sandelis/cars/qashqai-pilka.webp",
+  "./sandelis/cars/qashqai-raudona-juoda.webp",
+  "./sandelis/cars/qashqai-raudona.webp",
+  "./sandelis/cars/qashqai-tamsiai-pilka.webp",
   "./sandelis/cars/x-trail-balta-juoda.webp",
   "./sandelis/cars/x-trail-balta.webp",
   "./sandelis/cars/x-trail-juoda.webp",

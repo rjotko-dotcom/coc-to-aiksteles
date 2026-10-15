@@ -209,7 +209,7 @@ test("spalvos nuotrauka: derinys su juodu stogu, pagrindinė spalva, perdažymas
   assert.equal(colourSlug("SIDABRINĖ"), "sidabrine");
   assert.equal(shotFor("x-trail", "ŽALIA/JUODA"), "x-trail-zalia-juoda");
   assert.equal(shotFor("x-trail", "RUDA/JUODA"), "x-trail-ruda");
-  assert.equal(shotFor("qashqai", "MĖLYNA"), "x-trail-melyna");
+  assert.equal(shotFor("micra", "MĖLYNA"), "x-trail-melyna");
   assert.equal(shotFor("x-trail", ""), "x-trail-pilka");
   assert.equal(shotFor("x-trail", "GELTONA"), null);
 });
@@ -305,4 +305,16 @@ test("Juke nuotraukos pagal CoC spalvą ir gamintojo pavadinimą", async () => {
   assert.equal(shotFor("juke", ""), "juke-pilka");
   assert.equal(shotFor("x-trail", "PILKA", "Gun Metallic"), "x-trail-pilka");
   assert.equal(shotFor("x-trail", "GELTONA"), null);
+});
+
+test("Qashqai nuotraukos pagal CoC spalvą", async () => {
+  const { shotFor } = await import("../js/sandelis/cars.js");
+  assert.equal(shotFor("qashqai", "MĖLYNA"), "qashqai-melyna");
+  assert.equal(shotFor("qashqai", "MĖLYNA", "Ocean Deep"), "qashqai-ocean-deep");
+  assert.equal(shotFor("qashqai", "MĖLYNA/JUODA", "Ocean Deep / Black"), "qashqai-ocean-deep-juoda");
+  assert.equal(shotFor("qashqai", "PILKA", "Gun Metallic"), "qashqai-tamsiai-pilka");
+  assert.equal(shotFor("qashqai", "PILKA/JUODA", "Dark Grey / Black"), "qashqai-tamsiai-pilka", "be dviejų spalvų tamsiai pilko – be stogo");
+  assert.equal(shotFor("qashqai", "RAUDONA/JUODA"), "qashqai-raudona-juoda");
+  assert.equal(shotFor("qashqai", "BALTA", "Pearl White"), "qashqai-balta");
+  assert.equal(shotFor("qashqai", "ŽALIA"), "qashqai-pilka", "neturimos spalvos – pilkas Qashqai");
 });
