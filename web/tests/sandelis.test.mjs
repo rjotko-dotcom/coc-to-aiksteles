@@ -284,3 +284,9 @@ test("modelio užrašo skirtumai – tas pats aplankas", async () => {
   assert.deepEqual(assign, { a: "A-07", b: "A-07" });
   assert.deepEqual(binders, [{ code: "A-07", group: "MICRA" }]);
 });
+
+test("ištuštėjusio specialaus aplanko vardas nesikeičia", async () => {
+  const { planBinders } = await import("../js/sandelis/logic.js");
+  const { binders } = planBinders([], [{ code: "A-04", group: "Kazimieras ir Audrius" }, { code: "A-07", group: "Micra" }]);
+  assert.deepEqual(binders, [{ code: "A-04", group: "Kazimieras ir Audrius" }, { code: "A-07", group: "MICRA" }]);
+});

@@ -421,8 +421,14 @@ const inBinderOrder = (a, b) => String(a.vin || "").localeCompare(String(b.vin |
 export function planBinders(records, binders = [], { size = BINDER_SIZE, reorganize = false, codes = {}, auto = true } = {}) {
   // Seni aplankai galėjo būti pavadinti pagal netikslų užrašą („MICRA EV“) – suvienodinama.
   const specials = new Set(records.filter(inSpecialFolder).map((record) => String(record.folder).trim()));
-  const list = binders.map((binder) => ({ ...binder, group: specials.has(binder.group) ? binder.group : canonicalModel(binder.group) }));
-  codes = Object.fromEntries(Object.entries(codes).map(([group, code]) => [specials.has(group) ? group : canonicalModel(group), code]));
+  // Keičiamas tik atpažintas modelio pavadinimas – specialių aplankų vardai (net ir ištuštėję) lieka.
+  const known = (group) => {
+    if (specials.has(group)) return group;
+    const name = canonicalModel(group);
+    return MODEL_NAMES.some(([model]) => model === name) ? name : group;
+  };
+  const list = binders.map((binder) => ({ ...binder, group: known(binder.group) }));
+  codes = Object.fromEntries(Object.entries(codes).map(([group, code]) => [known(group), code]));
   const used = new Set(list.map((binder) => binder.code));
   let next = Math.max(0, ...list.map((binder) => codeNumber(binder.code)), ...Object.values(codes).map(codeNumber)) + 1;
   const create = (group) => {

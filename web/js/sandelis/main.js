@@ -15,7 +15,7 @@ import { printBinderLabels, printFolderSheets, printMoveSheet } from "./print.js
 import * as disk from "./folder.js";
 import { CARS, carImage, carKeyOf, cssColour, generationOf, imageSize, paintOf, yearOf } from "./cars.js";
 import {
-  STATUS, BINDER_SIZE, assignFolderCodes, backupDue, binderContents, bulkCheck, planBinders, vinList, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
+  STATUS, BINDER_SIZE, canonicalModel, assignFolderCodes, backupDue, binderContents, bulkCheck, planBinders, vinList, cleanFolderCode, excelColumns, folderNames, folderGroups, cleanVin, counts, duplicatesOf, excelSheets, folderOf, inSpecialFolder, matches,
   localDay, mergePlan, newestFirst, modelFromVin, pdfName, showDate, specialFolders, splitMakeModel, statusName, todayIso, vinDoubtful, vinHits,
   vinProblems,
 } from "./logic.js";
@@ -1597,26 +1597,43 @@ const nextBinderCode = () => {
   return `A-${String(Math.max(0, ...numbers) + 1).padStart(2, "0")}`;
 };
 
-/** Pasirinktus CoC perkelia į pasirinktą (ar naują) to paties modelio aplanką. */
+/** Specialių aplankų (pvz. vardais) pavadinimai. */
+const specialNames = () => new Set(allFolders().map((folder) => folder.name));
+const modelOfRecord = (record) => canonicalModel(record.model, record.vin) || "Be modelio";
+
+/**
+ * Ar aplankas tinka visiems pasirinktiems CoC: specialus – visada (modeliai
+ * maišosi), modelio – tik to paties modelio CoC.
+ */
+function binderAccepts(binder, list) {
+  if (specialNames().has(binder.group)) return true;
+  return list.every((record) => modelOfRecord(record) === binder.group);
+}
+
+/** Pasirinktus CoC perkelia į bet kurį tinkamą (ar naują) aplanką. */
 function openBinderDialog(ids) {
   const list = ids.map(byId).filter((record) => record && record.status === STATUS.IN);
   if (!list.length) { toast("Į aplanką dedami tik turimi CoC.", "warn"); return; }
-  const groups = [...new Set(list.map(folderOf))];
-  if (groups.length > 1) { toast(`Pažymėti skirtingi modeliai (${groups.join(", ")}) – viename aplanke modeliai nemaišomi.`, "warn"); return; }
-  const [group] = groups;
   binderIds = list.map((record) => record.id);
-  const special = list.some(inSpecialFolder);
-  const own = binderContents(records, binders).filter((binder) => binder.group === group);
+  const specials = specialNames();
+  const view = binderContents(records, binders);
+  const models = [...new Set(list.map(modelOfRecord))];
   const current = new Set(list.map((record) => record.binder));
+  // Pirmiausia tinkami (to paties modelio, tada specialūs), po to – netinkami (pilki).
+  const ordered = [...view].sort((a, b) => Number(!binderAccepts(a, list)) - Number(!binderAccepts(b, list))
+    || Number(specials.has(a.group)) - Number(specials.has(b.group)));
   $("binder-count").textContent = list.length === 1 ? (list[0].vin || "").slice(-6) : `${list.length} CoC`;
-  $("binder-text").textContent = `${group}: pasirinkite aplanką. ${special ? "Specialus aplankas – vietų nevaržo." : `Viename aplanke telpa ${BINDER_SIZE}; kas netilps, bus perkelta į kitą to modelio aplanką.`}`;
-  $("binder-choices").innerHTML = own.map((binder) => {
+  $("binder-text").textContent = `${models.join(", ")}: pasirinkite aplanką. Modelio aplanke telpa ${BINDER_SIZE} to paties modelio CoC; specialiuose aplankuose modeliai maišosi.`;
+  $("binder-choices").innerHTML = ordered.map((binder) => {
+    const special = specials.has(binder.group);
+    const ok = binderAccepts(binder, list);
     const moving = binderIds.filter((id) => byId(id).binder !== binder.code).length;
     const after = binder.records.length + moving;
-    const over = !special && after > BINDER_SIZE;
-    return `<label class="choice ${over ? "over" : ""}"><input type="radio" name="binder" value="${esc(binder.code)}" ${current.size === 1 && current.has(binder.code) ? "checked" : ""}>
-      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}<small>${binderFill(binder.records.length, special)}${moving && binder.records.length !== after ? ` → ${binderFill(after, special)}` : ""}${over ? " – netilps" : ""}</small></label>`;
-  }).join("") || `<p class="muted">Šio modelio aplankų dar nėra – įrašykite naujo kodą.</p>`;
+    const over = ok && !special && after > BINDER_SIZE;
+    return `<label class="choice ${over ? "over" : ""} ${ok ? "" : "disabled"} ${special ? "special" : ""}" ${ok ? "" : `title="Kitas modelis – ${esc(binder.group)}"`}>
+      <input type="radio" name="binder" value="${esc(binder.code)}" ${ok ? "" : "disabled"} ${current.size === 1 && current.has(binder.code) ? "checked" : ""}>
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}<small>${binderFill(binder.records.length, special)}${ok && moving && binder.records.length !== after ? ` → ${binderFill(after, special)}` : ""}${over ? " – netilps" : ""}${ok ? "" : " · kitas modelis"}</small></label>`;
+  }).join("") || `<p class="muted">Aplankų dar nėra – įrašykite naujo kodą.</p>`;
   $("binder-new").value = "";
   $("binder-new").placeholder = `pvz. ${nextBinderCode()}`;
   $("sidebar").classList.remove("open");
@@ -1626,24 +1643,34 @@ function openBinderDialog(ids) {
 async function moveToBinder(code) {
   const list = binderIds.map(byId).filter(Boolean);
   if (!list.length || !code) return false;
-  const group = folderOf(list[0]);
-  const existing = binders.find((binder) => binder.code === code);
-  if (existing && existing.group !== group) {
+  const specials = specialNames();
+  let binder = binders.find((item) => item.code === code);
+  if (binder && !binderAccepts(binder, list)) {
     const used = records.some((record) => record.status === STATUS.IN && record.binder === code);
-    if (used) { toast(`Aplankas ${code} skirtas „${existing.group}“ – kitų modelių nemaišome.`, "err"); return false; }
-    existing.group = group; // tuščias aplankas gali būti panaudotas kitam modeliui
+    if (used) { toast(`Aplankas ${code} skirtas ${binder.group} – kitų modelių nemaišome.`, "err"); return false; }
+    binder = null; // tuščias aplankas gali būti panaudotas kitam modeliui
+    binders = binders.filter((item) => item.code !== code);
   }
-  if (!existing) binders.push({ code, group });
+  if (!binder) {
+    // Naujas aplankas – modelio (visi pasirinkti turi būti to paties modelio).
+    const models = [...new Set(list.map(modelOfRecord))];
+    if (models.length > 1) { toast(`Pažymėti skirtingi modeliai (${models.join(", ")}) – naujame aplanke modelių nemaišome.`, "warn"); return false; }
+    binder = { code, group: models[0] };
+    binders.push(binder);
+  }
   await setMeta("binders", binders);
+  const special = specials.has(binder.group);
   for (const record of list) {
-    if (record.binder !== code) await update(record, { binder: code });
+    // Į specialų aplanką – CoC tampa jo dalimi; į modelio – išimamas iš specialaus.
+    const folder = special ? binder.group : "";
+    if (record.binder !== code || (record.folder || "") !== folder) await update(record, { binder: code, folder });
   }
   applyBinders();
   render();
   const overflow = list.filter((record) => record.binder !== code).length;
   toast(overflow
-    ? `Į ${code} perkelta ${list.length - overflow}; ${overflow} netilpo ir liko kitame ${group} aplanke.`
-    : `Perkelta į ${code}: ${list.length} CoC.`, overflow ? "warn" : "ok");
+    ? `Į ${code} perkelta ${list.length - overflow}; ${overflow} netilpo ir liko kitame ${binder.group} aplanke.`
+    : `Perkelta į ${code} (${binder.group}): ${list.length} CoC.`, overflow ? "warn" : "ok");
   return true;
 }
 
