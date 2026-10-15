@@ -1045,6 +1045,8 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 #stickers .choices { max-height: 38vh; }
 #binder-dialog .choice b.code { margin-right: 4px; }
 #binder-dialog .choice.over small { color: var(--amber); }
+#binder-dialog .choice.disabled { opacity: .38; cursor: not-allowed; }
+#binder-dialog .choices { max-height: 46vh; }
 #stickers .choice b.code { margin-right: 4px; }
 .binders-notice .actions { flex-wrap: wrap; }
 
