@@ -1482,6 +1482,10 @@ function setStage(id, animate = true) {
   document.querySelectorAll("#rows .staged").forEach((row) => row.classList.toggle("staged", row.dataset.row === id));
   if (id) document.querySelector(`#rows [data-row="${CSS.escape(id)}"]`)?.classList.add("staged");
   renderStage(changed && animate);
+  if (id && changed) {
+    const ids = [...$("rows").querySelectorAll(":scope > [data-row]")].map((row) => row.dataset.row);
+    (window.requestIdleCallback || setTimeout)(() => preloadAround(ids, ids.indexOf(id)));
+  }
 }
 
 let stageShown = "";
@@ -1510,6 +1514,11 @@ function renderStage(animate = false) {
   const generation = generationOf(record);
   const year = yearOf(record);
   const coc = record.coc || {};
+  if (animate && !reduceMotion()) {
+    stage.classList.remove("swap");
+    void stage.offsetWidth;
+    stage.classList.add("swap");
+  }
   $("stage-model").textContent = [record.make || "NISSAN", record.model || car?.name || ""].filter(Boolean).join(" ");
   $("stage-sub").innerHTML = [esc(generation), year, coc.colour ? colourTag(record) : ""].filter(Boolean).join(" · ");
   stage.style.setProperty("--paint", paint ? cssColour(paint) : "rgb(120 124 130)");
@@ -1572,6 +1581,21 @@ function renderStage(animate = false) {
 }
 
 let swapToken = 0;
+
+/** Gretimų CoC mašinos iš anksto užkraunamos – spaudžiant ↑ ↓ jos atsiranda be laukimo. */
+function preloadAround(ids, index) {
+  for (const id of [ids[index - 1], ids[index + 1], ids[index + 2]]) {
+    const record = byId(id);
+    if (!record) continue;
+    const coc = record.coc || {};
+    carImage(carKeyOf(record), paintOf(record), 960, coc.colour, coc.colour_raw).then((url) => {
+      if (!url) return;
+      const image = new Image();
+      image.src = url;
+      image.decode().catch(() => {});
+    }).catch(() => {});
+  }
+}
 
 /** Sena mašina išvažiuoja į kairę; grąžina pažadą, kuris išsipildo jai išvažiavus. */
 function leaveCar(image) {
@@ -1793,7 +1817,6 @@ function renderBulk() {
   for (const id of [...selected]) if (!byId(id)) selected.delete(id);
   $("bulk").classList.toggle("on", selected.size > 0);
   if (selected.size) $("bulk-count").textContent = `Pažymėta: ${selected.size}`;
-  $("select-hint").hidden = selected.size > 0;
 }
 
 function renderFolders() {
@@ -1996,13 +2019,13 @@ function render() {
 
 function renderIncomplete() {
   const notice = bindersNotice && binders.length ? `
-    <div class="answer ok binders-notice"><span class="mark">${icon("folder")}</span>
-      <div><b>CoC suskirstyti į aplankus po ${BINDER_SIZE}: ${binders.length} aplank.</b>
-        <span class="where">Atsispausdinkite perkėlimo sąrašą, sudėkite CoC ir užklijuokite lipdukus.</span></div>
+    <div class="answer binders-notice"><span class="mark">${icon("folder")}</span>
+      <div><b>${binders.length} ${plural(binders.length, "aplankas", "aplankai", "aplankų")} po ${BINDER_SIZE} CoC paruošti</b>
+        <span class="where">Atsispausdinkite sąrašą, sudėkite CoC ir užklijuokite lipdukus.</span></div>
       <div class="actions">
         <button type="button" class="btn primary sm" data-binders="moves">${icon("printer")}Perkėlimo sąrašas</button>
         <button type="button" class="btn sm" data-binders="stickers">${icon("doc")}Lipdukai</button>
-        <button type="button" class="btn sm" data-action="binders-notice-done" title="Paslėpti">${icon("check")}Sutvarkyta</button>
+        <button type="button" class="icon-btn sm" data-action="binders-notice-done" title="Sutvarkyta – paslėpti" aria-label="Sutvarkyta – paslėpti">${icon("x")}</button>
       </div></div>` : "";
   $("incomplete").innerHTML = notice + incompleteScans().map((scan) => `
     <div class="answer warn"><span class="mark">${icon("file")}</span>
