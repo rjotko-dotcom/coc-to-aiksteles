@@ -554,6 +554,21 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
     radial-gradient(60% 45% at 48% 58%, rgba(255, 255, 255, .075), transparent 70%),
     linear-gradient(165deg, #333336 0%, #262629 42%, #1b1b1e 100%);
 }
+/* Raudona šviesa – visame fone (be kraštų), kaip salono apšvietimas */
+.pane-left-bg::before, .pane-left-bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; transition: opacity .8s ease; }
+.pane-left-bg::before {
+  background:
+    radial-gradient(38% 34% at 58% 50%, rgba(195, 0, 47, .14), transparent 100%),
+    radial-gradient(70% 55% at 60% 42%, rgba(195, 0, 47, .07), transparent 100%);
+}
+.pane-left-bg::after {
+  /* Plonas šviesos spindulys lygiagretus įstrižam kraštui, išblunkantis abiem galais */
+  background: linear-gradient(101deg, transparent 63%, rgba(226, 20, 63, .05) 66.5%, rgba(255, 90, 110, .13) 67.4%, rgba(226, 20, 63, .05) 68.3%, transparent 71.5%);
+  -webkit-mask: linear-gradient(180deg, transparent 2%, #000 22%, #000 48%, transparent 78%);
+  mask: linear-gradient(180deg, transparent 2%, #000 22%, #000 48%, transparent 78%);
+}
+.pane-left:has(.stage.empty) .pane-left-bg::before { opacity: .35; }
+.pane-left:has(.stage.empty) .pane-left-bg::after { opacity: .5; }
 .brandbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .brandbar .logo, .brandbar .logo svg { width: 54px; height: 54px; }
 .brand-word { width: auto; height: 17px; color: #fff; fill: currentColor; stroke: none; }
@@ -710,15 +725,7 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .copy-btn svg { width: 16px; height: 16px; }
 .copy-btn[hidden] { display: none; }
 
-/* Raudona šviesa už automobilio */
-.stage-light {
-  position: absolute; z-index: 0; inset: -30% -14% -4% -4%; pointer-events: none;
-  background:
-    radial-gradient(46% 50% at 54% 52%, rgba(195, 0, 47, .2), rgba(195, 0, 47, .06) 60%, transparent 80%),
-    linear-gradient(118deg, transparent 58%, rgba(226, 20, 63, .07) 61%, transparent 66%);
-}
-.stage.empty .stage-light { opacity: .35; }
-.stage-car.enter .stage-light { animation: fade 1.2s both; }
+
 .stage-actions:empty { display: none; }
 .stage-credit { color: var(--dim); font-size: 10.5px; }
 .stage-credit a { color: var(--muted); }
