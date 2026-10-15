@@ -16,7 +16,7 @@ const IMAGES = {
   juke: {
     w: 960, h: 600, fallback: "pilka",
     shots: ["balta", "balta-perlas", "balta-juoda", "juoda", "pilka", "pilka-juoda", "tamsiai-pilka", "tamsiai-pilka-juoda",
-      "melyna", "melyna-juoda", "raudona", "raudona-juoda", "ocean-deep-juoda"],
+      "melyna", "melyna-juoda", "raudona", "raudona-juoda", "ocean-deep-juoda", "geltona", "geltona-juoda"],
   },
   qashqai: {
     w: 960, h: 600, fallback: "pilka",
