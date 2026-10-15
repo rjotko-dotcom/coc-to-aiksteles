@@ -569,6 +569,12 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
 .pane-left:has(.stage.empty) .pane-left-bg::before { opacity: .35; }
 .brandbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .brandbar .logo, .brandbar .logo svg { width: 54px; height: 54px; }
+/* Programos logotipas – juodoje plytelėje, kaip programos ikona */
+.brandbar .app-logo {
+  border-radius: 14px; background: radial-gradient(circle at 50% 35%, #1c1c1f, #000 72%);
+  border: 1px solid rgba(255, 255, 255, .08); box-shadow: 0 10px 24px -12px rgba(0, 0, 0, .9);
+}
+.brandbar .app-logo img { width: 44px; height: 44px; display: block; }
 .brand-word { width: auto; height: 17px; color: #fff; fill: currentColor; stroke: none; }
 .brand-sep { width: 1px; height: 26px; background: linear-gradient(180deg, transparent, rgba(255, 255, 255, .45), transparent); margin: 0 8px; }
 .brand-fakto { display: inline-flex; align-items: baseline; gap: .55em; font-size: 15px; line-height: 1; text-transform: uppercase; }
