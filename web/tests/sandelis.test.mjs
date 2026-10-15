@@ -302,6 +302,8 @@ test("Juke nuotraukos pagal CoC spalvą ir gamintojo pavadinimą", async () => {
   assert.equal(shotFor("juke", "MĖLYNA/JUODA", "Ocean Deep / Black"), "juke-ocean-deep-juoda");
   assert.equal(shotFor("juke", "MĖLYNA", "Ocean Deep"), "juke-ocean-deep-juoda");
   assert.equal(shotFor("juke", "ŽALIA"), "juke-pilka", "neturimos spalvos – pilkas Juke");
+  assert.equal(shotFor("juke", "GELTONA"), "juke-geltona");
+  assert.equal(shotFor("juke", "GELTONA/JUODA"), "juke-geltona-juoda");
   assert.equal(shotFor("juke", ""), "juke-pilka");
   assert.equal(shotFor("x-trail", "PILKA", "Gun Metallic"), "x-trail-pilka");
   assert.equal(shotFor("x-trail", "GELTONA"), null);
