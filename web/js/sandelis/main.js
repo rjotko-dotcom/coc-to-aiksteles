@@ -1223,7 +1223,7 @@ function displayModel(record) {
 /** Mažas automobilio paveikslėlis eilutėje (nuspalvinamas po atvaizdavimo). */
 /** Jau nuspalvintos miniatiūros – kad perpiešiant sąrašą jos atsirastų iš karto. */
 const thumbUrls = new Map();
-const thumbKey = (record) => `${carKeyOf(record) || ""}|${(record.coc || {}).colour || ""}|${(paintOf(record)?.rgb || []).join(",")}`;
+const thumbKey = (record) => `${carKeyOf(record) || ""}|${(record.coc || {}).colour || ""}|${(record.coc || {}).colour_raw || ""}|${(paintOf(record)?.rgb || []).join(",")}`;
 
 function thumbHtml(record) {
   const key = carKeyOf(record);
@@ -1238,7 +1238,7 @@ function hydrateThumbs(root = document) {
     const image = box.querySelector("img");
     if (!record || image.dataset.ready === box.dataset.id) return;
     image.dataset.ready = box.dataset.id;
-    carImage(box.dataset.car, paintOf(record), 240, (record.coc || {}).colour).then((url) => {
+    carImage(box.dataset.car, paintOf(record), 240, (record.coc || {}).colour, (record.coc || {}).colour_raw).then((url) => {
       if (url) thumbUrls.set(thumbKey(record), url);
       if (!url || image.dataset.ready !== box.dataset.id) return;
       image.src = url;
@@ -1479,13 +1479,13 @@ function renderStage(animate = false) {
     ${record.status === STATUS.IN ? `<button type="button" class="skew-btn red" data-stage="give"><span>${icon("send")}Atiduoti</span></button>`
       : record.status === STATUS.OUT ? `<button type="button" class="skew-btn" data-stage="return"><span>${icon("undo")}Grąžinti</span></button>` : ""}`;
 
-  const shownKey = `${key}|${(record.coc || {}).colour || ""}|${paint ? paint.rgb.join(",") : "-"}`;
+  const shownKey = `${key}|${(record.coc || {}).colour || ""}|${(record.coc || {}).colour_raw || ""}|${paint ? paint.rgb.join(",") : "-"}`;
   const image = $("stage-img");
   const size = imageSize(key);
   if (shownKey === stageShown && !animate) return;
   const sameCar = shownKey === stageShown;
   stageShown = shownKey;
-  carImage(key, paint, 960, (record.coc || {}).colour).then((url) => {
+  carImage(key, paint, 960, (record.coc || {}).colour, (record.coc || {}).colour_raw).then((url) => {
     if (!url || stageShown !== shownKey) return;
     image.src = url;
     image.hidden = false;
