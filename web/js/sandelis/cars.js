@@ -18,6 +18,11 @@ const IMAGES = {
     shots: ["balta", "balta-perlas", "balta-juoda", "juoda", "pilka", "pilka-juoda", "tamsiai-pilka", "tamsiai-pilka-juoda",
       "melyna", "melyna-juoda", "raudona", "raudona-juoda", "ocean-deep-juoda"],
   },
+  qashqai: {
+    w: 960, h: 600, fallback: "pilka",
+    shots: ["balta", "balta-juoda", "juoda", "pilka", "pilka-juoda", "tamsiai-pilka", "melyna", "melyna-juoda",
+      "raudona", "raudona-juoda", "ocean-deep", "ocean-deep-juoda"],
+  },
   "x-trail": {
     lmed: 98.9, w: 960, h: 600, exact: ["PILKA"],
     shots: ["balta", "balta-juoda", "juoda", "melyna", "melyna-juoda", "pilka", "pilka-juoda", "raudona",
@@ -28,7 +33,7 @@ const PLACEHOLDER = "x-trail";
 
 /** Modeliai: pavadinimas sąrašui, dabartinė karta ir kurį paveikslą rodyti. */
 export const CARS = {
-  qashqai: { name: "Qashqai", generation: "J12", image: PLACEHOLDER },
+  qashqai: { name: "Qashqai", generation: "J12", image: "qashqai" },
   "x-trail": { name: "X-Trail", generation: "T33", image: "x-trail" },
   juke: { name: "Juke", generation: "F16", image: "juke" },
   ariya: { name: "Ariya", generation: "FE0", image: PLACEHOLDER },
