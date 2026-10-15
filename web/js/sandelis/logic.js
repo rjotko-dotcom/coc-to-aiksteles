@@ -100,10 +100,26 @@ export function splitMakeModel(make, model) {
  * skirtingi modeliai: tokio aplanko pavadinimas įrašomas `record.folder` ir
  * modelis jo nebekeičia.
  */
+/** Žinomi modeliai: koks bebūtų užrašas CoC („Micra“, „MICRA EV“, „NISSAN MICRA“), modelis vienas. */
+const MODEL_NAMES = [
+  ["QASHQAI", /QASH?Q?AI|QASHOAI/], ["X-TRAIL", /X\W?TRA[I1L]L/], ["JUKE", /JUKE/], ["ARIYA", /ARIYA/],
+  ["LEAF", /LEAF/], ["MICRA", /MICRA|M[I1L]CRA/], ["TOWNSTAR", /TOWNSTAR/], ["NOTE", /\bNOTE\b/],
+  ["NAVARA", /NAVARA/], ["PRIMASTAR", /PRIMASTAR/], ["INTERSTAR", /INTERSTAR/],
+];
+
+/** Vienodas modelio pavadinimas aplankams: pagal pavadinimą, o neatpažinus – pagal VIN. */
+export function canonicalModel(text, vin = "") {
+  const upper = String(text || "").trim().toUpperCase();
+  for (const [name, pattern] of MODEL_NAMES) if (pattern.test(upper)) return name;
+  const fromVin = modelFromVin(vin);
+  if (fromVin) return fromVin.model;
+  return upper.replace(/^NISSAN\s+/, "").replace(/\s+/g, " ");
+}
+
 export function folderOf(record) {
   const special = String(record.folder || "").trim();
   if (special) return special;
-  return String(record.model || "").trim().toUpperCase() || "Be modelio";
+  return canonicalModel(record.model, record.vin) || "Be modelio";
 }
 
 /** Ar liudijimas guli specialiame (ne modelio) aplanke. */
@@ -403,7 +419,10 @@ const inBinderOrder = (a, b) => String(a.vin || "").localeCompare(String(b.vin |
  * Grąžina { binders: [{ code, group }], assign: { įrašo id: kodas arba "" } }.
  */
 export function planBinders(records, binders = [], { size = BINDER_SIZE, reorganize = false, codes = {}, auto = true } = {}) {
-  const list = binders.map((binder) => ({ ...binder }));
+  // Seni aplankai galėjo būti pavadinti pagal netikslų užrašą („MICRA EV“) – suvienodinama.
+  const specials = new Set(records.filter(inSpecialFolder).map((record) => String(record.folder).trim()));
+  const list = binders.map((binder) => ({ ...binder, group: specials.has(binder.group) ? binder.group : canonicalModel(binder.group) }));
+  codes = Object.fromEntries(Object.entries(codes).map(([group, code]) => [specials.has(group) ? group : canonicalModel(group), code]));
   const used = new Set(list.map((binder) => binder.code));
   let next = Math.max(0, ...list.map((binder) => codeNumber(binder.code)), ...Object.values(codes).map(codeNumber)) + 1;
   const create = (group) => {
