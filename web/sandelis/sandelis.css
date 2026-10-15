@@ -554,14 +554,10 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
     radial-gradient(60% 45% at 48% 58%, rgba(255, 255, 255, .075), transparent 70%),
     linear-gradient(165deg, #333336 0%, #262629 42%, #1b1b1e 100%);
 }
-/* Studijos apšvietimas: šviesa iš viršaus, švelnus raudonas švytėjimas už mašinos
-   (laipsniškai blunkantis, be jokių linijų) ir smulkus grūdėtumas, kad nesimatytų juostų. */
+/* Studijos apšvietimas: šviesa iš viršaus, tamsesnė apačia ir smulkus grūdėtumas, kad nesimatytų juostų. */
 .pane-left-bg::before, .pane-left-bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; transition: opacity .8s ease; }
 .pane-left-bg::before {
   background:
-    radial-gradient(ellipse 50% 36% at 60% 47%,
-      rgba(210, 10, 50, .24) 0%, rgba(205, 8, 48, .19) 16%, rgba(200, 4, 48, .13) 32%, rgba(195, 0, 47, .08) 48%,
-      rgba(195, 0, 47, .04) 64%, rgba(195, 0, 47, .014) 80%, transparent 100%),
     radial-gradient(ellipse 52% 46% at 52% 0%,
       rgba(255, 255, 255, .07) 0%, rgba(255, 255, 255, .045) 30%, rgba(255, 255, 255, .02) 60%, transparent 100%),
     radial-gradient(ellipse 60% 30% at 50% 100%, rgba(0, 0, 0, .35), transparent 100%);
