@@ -812,10 +812,20 @@ body { background: radial-gradient(120% 90% at 30% 0%, #222225, #141416 70%); ov
   .binders-notice > div:not(.actions) { min-width: 0; }
 }
 .stage-actions .skew-btn { flex: none; }
-.pane-right .segmented { background: none; border: 0; padding: 0; gap: 18px; }
-.pane-right .segmented button { font-size: 16px; padding: 9px 26px; color: var(--muted); }
+.pane-right .segmented { background: none; border: 0; padding: 0; gap: 6px; flex-wrap: nowrap; }
+.pane-right .segmented button {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  font-size: 15px; padding: 8px 20px; color: var(--muted);
+}
 .pane-right .segmented button.on { color: #fff; font-weight: 600; }
-.pane-right .segmented em { margin-left: 8px; color: inherit; opacity: .85; }
+/* Skaičius – mažas ženkliukas šalia žodžio */
+.pane-right .segmented em {
+  margin: 0; min-width: 22px; padding: 2px 7px; border-radius: 99px; text-align: center;
+  font-size: 12px; font-weight: 600; line-height: 16px; color: var(--muted); background: rgba(255, 255, 255, .07);
+  transition: background .25s, color .25s;
+}
+.pane-right .segmented em:empty { display: none; }
+.pane-right .segmented button.on em { color: #fff; background: rgba(255, 255, 255, .14); }
 .pane-right .seg-indicator { top: 0; bottom: 0; background: none; box-shadow: none; }
 .pane-right .seg-indicator::before {
   content: ""; position: absolute; inset: 0; transform: skewX(var(--skew, -14deg)); border-radius: 8px;
@@ -1209,7 +1219,7 @@ textarea:focus { outline: none; border-color: #5a5a62; }
   .doc-check svg { width: 26px; height: 26px; }
   .stage-actions .skew-btn { padding: 9px 13px; font-size: 13.5px; }
   .stage-actions { gap: 8px; flex-wrap: nowrap; }
-  .pane-right .segmented button { padding: 8px 18px; font-size: 15px; }
+  .pane-right .segmented button { padding: 8px 16px; font-size: 14.5px; }
   .scan-pill { padding: 13px 18px; font-size: 14px; }
 }
 
