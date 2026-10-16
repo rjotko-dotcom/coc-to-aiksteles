@@ -1314,6 +1314,10 @@ function moveIndicator() {
   indicator.style.transform = `translateX(${active.offsetLeft}px)`;
 }
 
+// Skaičiui skirtuke pasikeitus (ir jam „skaičiuojant“) aktyvaus skirtuko fonas prisitaiko prie naujo pločio.
+new ResizeObserver(() => moveIndicator()).observe($("tabs"));
+document.querySelectorAll("#tabs button").forEach((button) => new ResizeObserver(() => moveIndicator()).observe(button));
+
 function renderTable() {
   const query = $("q").value.trim();
   const list = visibleRecords();
