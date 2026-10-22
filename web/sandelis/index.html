@@ -446,6 +446,22 @@
   <option value="RAUDONA/JUODA"><option value="ŽALIA/JUODA">
 </datalist>
 
+<dialog id="placed" class="placed-dialog">
+  <form method="dialog">
+    <header class="dialog-head">
+      <div><span class="pill" id="placed-count"></span><h2>Kur dėti naujus CoC</h2></div>
+      <button type="submit" class="icon-btn" value="close" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted" id="placed-text"></p>
+    <div class="placed-list" id="placed-list"></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn primary" data-placed="print"><svg><use href="#i-printer"/></svg>Spausdinti sąrašą</button>
+      <button type="button" class="btn" data-placed="stickers" id="placed-stickers" hidden><svg><use href="#i-doc"/></svg>Lipdukai naujiems aplankams</button>
+      <button type="submit" class="btn" value="ok">Gerai</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="binder-dialog" class="small-dialog">
   <form method="dialog" id="binder-form">
     <header class="dialog-head">

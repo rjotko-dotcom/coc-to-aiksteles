@@ -884,6 +884,7 @@ async function confirmRecord(id, quiet = false) {
   const next = quiet ? null : nextReviewAfter(id);
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
+  batchConfirmed.add(id);
   applyBinders();
   if (!quiet && !record.binder) toast("Patvirtinta. Kur dėti – parodyta virš sąrašo.");
   if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record))}.`);
@@ -895,6 +896,88 @@ async function confirmRecord(id, quiet = false) {
   }
   return true;
 }
+
+// Šios partijos patvirtinti CoC – kai patikroje nieko nebelieka, parodoma, kur kiekvieną dėti.
+const batchConfirmed = new Set();
+let placedIds = [];
+let placedNew = [];
+
+async function maybeShowPlaced() {
+  if (!batchConfirmed.size || reviewList().length || $("placed").open) return;
+  const ids = [...batchConfirmed];
+  batchConfirmed.clear();
+  const list = ids.map(byId).filter((record) => record && record.status === STATUS.IN);
+  if (!list.length) return;
+  // Nesudėtus – į pirmą laisvą to modelio aplanką (jei visi pilni – naujas).
+  const loose = list.filter((record) => !record.binder && !inSpecialFolder(record));
+  placedNew = [];
+  if (loose.length) {
+    const plan = planBinders(records, binders, { codes: folderCodes, auto: true });
+    const used = new Set(loose.map((record) => plan.assign[record.id]).filter(Boolean));
+    const known = new Set(binders.map((binder) => binder.code));
+    placedNew = plan.binders.filter((binder) => !known.has(binder.code) && used.has(binder.code)).map((binder) => binder.code);
+    binders = [...binders.map((binder) => plan.binders.find((item) => item.code === binder.code) || binder),
+      ...plan.binders.filter((binder) => placedNew.includes(binder.code))];
+    await setMeta("binders", binders).catch(() => {});
+    for (const record of loose) if (plan.assign[record.id]) await update(record, { binder: plan.assign[record.id] });
+    render();
+  }
+  placedIds = list.map((record) => record.id);
+  renderPlaced();
+  if (!$("placed").open) $("placed").showModal();
+}
+
+function renderPlaced() {
+  const list = placedIds.map(byId).filter((record) => record && record.status === STATUS.IN);
+  const specials = specialNames();
+  const groups = new Map();
+  for (const record of list) {
+    const key = record.binder || (inSpecialFolder(record) ? record.folder : "");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(record);
+  }
+  const info = new Map(binders.map((binder) => [binder.code, binder]));
+  $("placed-count").textContent = `${list.length} CoC`;
+  $("placed-text").textContent = "Kiekvienas CoC priskirtas aplankui. Sudėkite pagal sąrašą; jei norite kitur – pakeiskite šalia VIN.";
+  $("placed-stickers").hidden = !placedNew.some((code) => list.some((record) => record.binder === code));
+  $("placed-list").innerHTML = [...groups].sort(([a], [b]) => (a || "~").localeCompare(b || "~", "lt", { numeric: true })).map(([code, items]) => {
+    const binder = info.get(code);
+    const special = binder ? specials.has(binder.group) : Boolean(code);
+    const title = binder ? displayGroup(binder.group) : code || "Be aplanko";
+    items.sort((a, b) => String(a.vin).localeCompare(String(b.vin)));
+    const rows = items.map((record) => {
+      const options = binders.filter((item) => binderAccepts(item, [record]))
+        .sort((a, b) => a.code.localeCompare(b.code, "lt", { numeric: true }))
+        .map((item) => `<option value="${esc(item.code)}" ${item.code === record.binder ? "selected" : ""}>${esc(item.code)} · ${esc(displayGroup(item.group))} (${binderFill(binderCount(item.code), specials.has(item.group))})</option>`).join("");
+      const vin = record.vin || "";
+      return `<li><span class="pvin">${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b></span><span class="pmodel">${esc(displayModel(record))}</span>
+        <select data-placed-id="${esc(record.id)}" aria-label="Aplankas">${record.binder ? "" : `<option value="" selected>— pasirinkite —</option>`}${options}</select></li>`;
+    }).join("");
+    return `<section class="pgroup"><header><b class="code">${esc(code || "—")}</b><span>${esc(title)}</span>
+        ${binder ? `<small>${binderFill(binderCount(code), special)}</small>` : ""}${placedNew.includes(code) ? `<i>naujas aplankas</i>` : ""}
+        <em>${items.length} CoC</em></header><ul>${rows}</ul></section>`;
+  }).join("");
+}
+
+$("placed").addEventListener("change", async (event) => {
+  const select = event.target.closest("[data-placed-id]");
+  if (!select || !select.value) return;
+  binderIds = [select.dataset.placedId];
+  await moveToBinder(select.value);
+  renderPlaced();
+});
+$("placed").addEventListener("click", (event) => {
+  const action = event.target.closest("[data-placed]")?.dataset.placed;
+  const list = placedIds.map(byId).filter((record) => record && record.status === STATUS.IN && record.binder);
+  if (action === "print") {
+    if (!list.length) { toast("Sąraše nėra sudėtų CoC.", "warn"); return; }
+    printMoveSheet(binderContents(records, binders), list.map((record) => ({ record, from: "", to: record.binder })), stampNow());
+  }
+  if (action === "stickers") {
+    const view = binderContents(records, binders).filter((binder) => placedNew.includes(binder.code));
+    if (view.length) printBinderLabels(view, $("stickers-size").value);
+  }
+});
 
 async function confirmClean() {
   const clean = records.filter(isClean);
@@ -2084,6 +2167,7 @@ function render() {
   renderBackupState();
   renderIncomplete();
   highlightNav();
+  maybeShowPlaced();
 }
 
 function renderIncomplete() {
