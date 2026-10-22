@@ -601,6 +601,8 @@ class Langas(tk.Tk):
         eilute(en, 1, "RIDA", "Rida pristatant", 8)
         eilute(en, 5, "NARSYKLE", "Naršyklė", 12, reiksmes=["auto", "chrome", "brave", "edge"],
                pastaba="auto – Chrome, jei nėra – Brave, tada Edge")
+        ttk.Button(en, text="Pamiršti B2B prisijungimą (kita paskyra)", command=self.pamirsti_prisijungima).grid(
+            row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
         eilute(en, 2, "DATOS_FORMATAS", "Datos formatas eNEWS", 12, pastaba="%d/%m/%Y → 22/09/2026")
         eilute(en, 3, "LAUKTI_SEK", "Kiek laukti mygtuko (s)", 8, pastaba="jei eNEWS lėtas – padidinkite")
         eilute(en, 4, "SAUGOTI_DIENU", "Kiek dienų saugoti PDF ir klaidų nuotraukas", 8,
@@ -671,6 +673,27 @@ class Langas(tk.Tk):
         except Exception as e:  # noqa: BLE001
             messagebox.showerror(PAVADINIMAS, f"Nepavyko atidaryti spausdintuvo nuostatų:\n{e}")
         self.nuostatu_busena[rusis].set(self._spausdinimo_busena(rusis))
+
+    def pamirsti_prisijungima(self):
+        """Ištrina roboto naršyklės profilius – kitą kartą B2B prisijungsite iš naujo (kita paskyra)."""
+        if self.gija and self.gija.is_alive():
+            messagebox.showwarning(PAVADINIMAS, "Robotas dirba – sustabdykite jį ir uždarykite jo naršyklę.")
+            return
+        if not messagebox.askyesno(PAVADINIMAS, "Robotas pamirš B2B prisijungimą (ir įsimintus slaptažodžius "
+                                                "roboto naršyklėje). Kitą kartą reikės prisijungti iš naujo – "
+                                                "galėsite kita paskyra. Tęsti?"):
+            return
+        import shutil
+        istrinta = 0
+        for aplankas in robotas.ARCH.glob("*_profilis"):
+            try:
+                shutil.rmtree(aplankas)
+                istrinta += 1
+            except OSError as e:
+                messagebox.showerror(PAVADINIMAS, f"Nepavyko ištrinti {aplankas.name} – ar uždaryta roboto "
+                                                  f"naršyklė?\n{e}")
+                return
+        self.log(f"✔ B2B prisijungimas pamirštas ({istrinta} prof.). Kitą kartą prisijunkite norima paskyra.")
 
     def bandomasis_spausdinimas(self, rusis: str):
         if self.gija and self.gija.is_alive():
