@@ -1148,6 +1148,20 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 #binder-dialog .choice.disabled { opacity: .38; cursor: not-allowed; }
 #binder-dialog .choices { max-height: 46vh; }
 #stickers .choice b.code { margin-right: 4px; }
+/* Nauji CoC – kur dėti */
+.place-card { align-items: center; padding: 12px 14px; background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .09); }
+.place-card .mark { background: rgba(255, 255, 255, .07); color: var(--soft); }
+.place-card b { font-size: 14px; }
+.place-main { min-width: 0; flex: 1; }
+.places { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.place {
+  display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 4px 0 9px; border-radius: 7px;
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); font-size: 12.5px; color: var(--soft); white-space: nowrap;
+}
+.place b { font-size: 12.5px; color: #fff; letter-spacing: .02em; }
+.place em { font-style: normal; font-weight: 600; font-size: 11.5px; min-width: 20px; text-align: center; padding: 1px 6px; border-radius: 99px; background: rgba(255, 255, 255, .1); color: #fff; }
+.place i { font-style: normal; font-size: 11px; color: var(--amber); padding-right: 4px; }
+.place-card .actions { flex-wrap: nowrap; align-items: center; }
 .binders-notice { align-items: center; padding: 12px 14px; background: rgba(255, 255, 255, .035); border-color: rgba(255, 255, 255, .09); }
 .binders-notice .mark { background: rgba(255, 255, 255, .07); color: var(--soft); }
 .binders-notice b { font-size: 14px; }
