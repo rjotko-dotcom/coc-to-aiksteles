@@ -885,7 +885,7 @@ async function confirmRecord(id, quiet = false) {
   // Peržiūros paveikslėlių sąraše nebereikia – jie tik didintų duomenis.
   await update(record, { vin, status: STATUS.IN, thumb: "", snippets: {} });
   applyBinders();
-  if (!quiet && !record.binder) toast("Patvirtinta. Į aplanką įdėkite patys: ⋮ → „Perkelti į kitą aplanką“.");
+  if (!quiet && !record.binder) toast("Patvirtinta. Kur dėti – parodyta virš sąrašo.");
   if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record))}.`);
   animateOut(id);
   if (!quiet) {
@@ -1149,7 +1149,12 @@ function applyBinders(reorganize = false) {
     record.updated = now();
     saveRecord(record).catch(() => {});
     if (to && was !== to) moved.push({ record, from: was, to });
+    if (binderAuto && !first && !restoring && to && !from && !reorganize && !inSpecialFolder(record) && !freshPlaced.has(record.id)) {
+      freshPlaced.add(record.id);
+      freshChanged = true;
+    }
   }
+  if (freshChanged) { freshChanged = false; setMeta("freshPlaced", [...freshPlaced]).catch(() => {}); }
   const changedBinders = JSON.stringify(plan.binders) !== JSON.stringify(binders);
   if (changedBinders) {
     binders = plan.binders;
@@ -1161,6 +1166,49 @@ function applyBinders(reorganize = false) {
   return moved;
 }
 let bindersNotice = false;
+// Naujai į aplankus sudėti CoC (kol žmogus nepažymi „sudėta“) ir atidėti nesudėtieji.
+let freshPlaced = new Set();
+let freshChanged = false;
+let restoring = false;
+let looseDismissed = new Set();
+
+/** CoC, kurie turimi, bet dar be aplanko – ir kur juos siūloma dėti (pirmas laisvas to modelio aplankas). */
+function loosePlan() {
+  const loose = records.filter((record) => record.status === STATUS.IN && !record.binder && !inSpecialFolder(record));
+  if (!loose.length) return null;
+  const plan = planBinders(records, binders, { codes: folderCodes, auto: true });
+  const moves = loose.map((record) => ({ record, from: "", to: plan.assign[record.id] || "" })).filter((move) => move.to);
+  return { loose, moves, binders: plan.binders, plan };
+}
+
+/** „A-04 X-Trail · 3“ – kiek CoC į kurį aplanką. */
+function placeSummary(moves, binderList) {
+  const groups = new Map();
+  for (const move of moves) groups.set(move.to, (groups.get(move.to) || 0) + 1);
+  const info = new Map(binderList.map((binder) => [binder.code, binder]));
+  const isNew = (code) => !binders.some((binder) => binder.code === code);
+  return [...groups].sort(([a], [b]) => a.localeCompare(b, "lt", { numeric: true })).map(([code, count]) =>
+    `<span class="place"><b>${esc(code)}</b>${esc(displayGroup(info.get(code)?.group || ""))}<em>${count}</em>${isNew(code) ? `<i>naujas</i>` : ""}</span>`).join("");
+}
+const displayGroup = (group) => (MODEL_LABELS[group] || group);
+const MODEL_LABELS = { "X-TRAIL": "X-Trail", QASHQAI: "Qashqai", JUKE: "Juke", MICRA: "Micra", LEAF: "Leaf", ARIYA: "Ariya" };
+
+/** Sudeda nesudėtus CoC į siūlomus aplankus ir atspausdina, kur ką dėti. */
+async function placeLoose() {
+  const plan = loosePlan();
+  if (!plan?.moves.length) return;
+  const before = binders.length;
+  binders = plan.binders;
+  await setMeta("binders", binders).catch(() => {});
+  for (const move of plan.moves) {
+    await update(move.record, { binder: move.to });
+    freshPlaced.add(move.record.id);
+  }
+  await setMeta("freshPlaced", [...freshPlaced]).catch(() => {});
+  render();
+  const added = binders.length - before;
+  toast(`Sudėta ${plan.moves.length} CoC.${added ? ` Sukurta naujų aplankų: ${added} – atsispausdinkite lipdukus.` : ""}`);
+}
 
 /**
  * Vienkartinis tvarkymas (vartotojo prašymu): visi CoC išimami iš modelių
@@ -2048,7 +2096,35 @@ function renderIncomplete() {
         <button type="button" class="btn sm" data-binders="stickers">${icon("doc")}Lipdukai</button>
         <button type="button" class="icon-btn sm" data-action="binders-notice-done" title="Sutvarkyta – paslėpti" aria-label="Sutvarkyta – paslėpti">${icon("x")}</button>
       </div></div>` : "";
-  $("incomplete").innerHTML = notice + incompleteScans().map((scan) => `
+  let place = "";
+  const plan = loosePlan();
+  const pending = plan ? plan.moves.filter((move) => !looseDismissed.has(move.record.id)) : [];
+  if (pending.length) {
+    place = `
+    <div class="answer place-card"><span class="mark">${icon("folder")}</span>
+      <div class="place-main"><b>${plan.moves.length} ${plural(plan.moves.length, "naujas CoC", "nauji CoC", "naujų CoC")} – kur dėti</b>
+        <div class="places">${placeSummary(plan.moves, plan.binders)}</div></div>
+      <div class="actions">
+        <button type="button" class="btn primary sm" data-place="put">${icon("check")}Sudėti taip</button>
+        <button type="button" class="btn sm" data-place="print-loose">${icon("printer")}Sąrašas</button>
+        <button type="button" class="icon-btn sm" data-place="later" title="Sudėsiu pats – paslėpti" aria-label="Paslėpti">${icon("x")}</button>
+      </div></div>`;
+  } else {
+    const fresh = records.filter((record) => freshPlaced.has(record.id) && record.status === STATUS.IN && record.binder);
+    if (fresh.length) {
+      const moves = fresh.map((record) => ({ record, from: "", to: record.binder }));
+      place = `
+    <div class="answer place-card"><span class="mark">${icon("folder")}</span>
+      <div class="place-main"><b>${fresh.length} ${plural(fresh.length, "naują CoC", "naujus CoC", "naujų CoC")} dėkite į aplankus</b>
+        <div class="places">${placeSummary(moves, binders)}</div></div>
+      <div class="actions">
+        <button type="button" class="btn primary sm" data-place="print-fresh">${icon("printer")}Sąrašas</button>
+        <button type="button" class="btn sm" data-place="show-fresh">${icon("eye")}Rodyti</button>
+        <button type="button" class="icon-btn sm" data-place="done" title="Sudėta – paslėpti" aria-label="Sudėta – paslėpti">${icon("check")}</button>
+      </div></div>`;
+    }
+  }
+  $("incomplete").innerHTML = notice + place + incompleteScans().map((scan) => `
     <div class="answer warn"><span class="mark">${icon("file")}</span>
       <div><b>„${esc(scan.name)}“: įkelta tik ${scan.pages.size} iš ${scan.total} lap.</b>
         <span class="where">Įkelkite tą patį PDF dar kartą – bus pridėti tik trūkstami lapai, be dublikatų.</span></div>
@@ -2334,6 +2410,7 @@ async function restore(file) {
     if (!files["sandelis.json"]) throw new Error("tai ne sandėlio kopija");
     const parsed = JSON.parse(strFromU8(files["sandelis.json"]));
     const incoming = parsed.records || [];
+    restoring = true;
     const plan = mergePlan(records, incoming);
     for (const record of plan.add) await addRecord(record, files[`pdf/${record.id}.pdf`] || null);
     for (const record of plan.replace) await saveRecord(record);
@@ -2346,9 +2423,11 @@ async function restore(file) {
     scheduleSync(0);
     animateRows = true;
     render();
+    restoring = false;
     toast(`Kopija įkelta: pridėta ${plan.add.length}, atnaujinta ${plan.replace.length}, jau buvo ${plan.skip}.`);
     runQueue();
   } catch (error) {
+    restoring = false;
     toast(`Nepavyko įkelti kopijos: ${error.message || error}`, "err");
   }
 }
@@ -2901,10 +2980,37 @@ $("stickers-form").addEventListener("submit", (event) => {
   const view = binderContents(records, binders).filter((binder) => codes.includes(binder.code));
   printBinderLabels(view, $("stickers-size").value);
 });
-$("incomplete").addEventListener("click", (event) => {
+$("incomplete").addEventListener("click", async (event) => {
   const action = event.target.closest("[data-binders]")?.dataset.binders;
   if (action === "moves") printMoves();
   if (action === "stickers") openStickers();
+  const place = event.target.closest("[data-place]")?.dataset.place;
+  if (!place) return;
+  if (place === "put") await placeLoose();
+  if (place === "print-loose") {
+    const plan = loosePlan();
+    const after = records.map((record) => (plan?.plan.assign[record.id] && !record.binder ? { ...record, binder: plan.plan.assign[record.id] } : record));
+    if (plan?.moves.length) printMoveSheet(binderContents(after, plan.binders), plan.moves, stampNow());
+  }
+  if (place === "later") {
+    for (const record of records) if (record.status === STATUS.IN && !record.binder) looseDismissed.add(record.id);
+    await setMeta("looseDismissed", [...looseDismissed]).catch(() => {});
+    setFolderFilter(NO_BINDER);
+    toast("Nesudėti CoC rodomi sąraše – pažymėkite ir spauskite „Į aplanką“.");
+  }
+  if (place === "print-fresh") {
+    const fresh = records.filter((record) => freshPlaced.has(record.id) && record.status === STATUS.IN && record.binder);
+    printMoveSheet(binderContents(records, binders), fresh.map((record) => ({ record, from: "", to: record.binder })), stampNow());
+  }
+  if (place === "show-fresh") {
+    $("q").value = records.filter((record) => freshPlaced.has(record.id) && record.status === STATUS.IN).map((record) => record.vin).filter(Boolean).join("\n");
+    $("q").dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  if (place === "done") {
+    freshPlaced.clear();
+    await setMeta("freshPlaced", []).catch(() => {});
+  }
+  renderIncomplete();
 });
 
 // Aplankų eilė: ↑ ↓ perkelia eilutę, „Numeruoti iš eilės“ – A-01, A-02… pagal rodomą tvarką.
@@ -2982,6 +3088,8 @@ async function start() {
   folderCodes = (await getMeta("folderCodes").catch(() => null)) || {};
   binders = (await getMeta("binders").catch(() => null)) || [];
   bindersNotice = Boolean(await getMeta("bindersNotice").catch(() => false));
+  freshPlaced = new Set((await getMeta("freshPlaced").catch(() => null)) || []);
+  looseDismissed = new Set((await getMeta("looseDismissed").catch(() => null)) || []);
   binderAuto = (await getMeta("binderAuto").catch(() => null)) !== false;
   renderTemplateState();
   await loadFolderState();
