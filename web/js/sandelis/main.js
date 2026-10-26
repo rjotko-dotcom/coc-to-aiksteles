@@ -10,6 +10,8 @@ import {
   addRecord, allRecords, askPersistence, deleteRecord, getMeta, getPdf, saveRecord, setMeta, usageMb,
 } from "./db.js";
 import { splitPages, thumbnail } from "./split.js";
+import { buildPrintBundle } from "./bundle.js";
+import { openPdf as openPdfDocument } from "../pdf.js";
 import { buildXlsx } from "./xlsx.js";
 import { printBinderLabels, printFolderSheets, printMoveSheet } from "./print.js";
 import * as disk from "./folder.js";
@@ -2435,6 +2437,238 @@ function pazymaValues(record) {
   }, todayIso());
 }
 
+// ---------------------------------------------------------------------------
+// CoC kopijos → pažymos: atsiųstos kopijos perskaitomos, paruošiamos pažymos ir
+// viskas sudedama spausdinimui paeiliui (CoC, pažyma, CoC, pažyma…).
+// Kopijos laikomos tik atmintyje – į sandėlį neįrašomos.
+// ---------------------------------------------------------------------------
+
+let copies = [];
+let copyLanes = 0;
+let copySeq = 0;
+const COPY_STATE = { laukia: "Laukia", skaitoma: "Skaitoma…" };
+
+function openCopies() {
+  $("sidebar").classList.remove("open");
+  renderCopies();
+  $("copies").showModal();
+}
+
+async function addCopies(fileList) {
+  const files = [...fileList].filter((file) => /pdf$/i.test(file.type) || /\.pdf$/i.test(file.name));
+  if (!files.length) { toast("Įkelkite PDF failą.", "warn"); return; }
+  for (const file of files) {
+    try {
+      const pages = await splitPages(new Uint8Array(await file.arrayBuffer()));
+      pages.forEach((bytes, index) => copies.push({
+        id: `k${(copySeq += 1)}`, name: file.name, page: index + 1, total: pages.length, bytes, thumb: "",
+        ocr: "laukia", vin: "", make: "", model: "", tvv: "", coc: {}, typed: {}, ask: [],
+      }));
+    } catch (error) {
+      toast(`Nepavyko atidaryti „${file.name}“: ${error.message || error}`, "err");
+    }
+  }
+  renderCopies();
+  runCopies();
+  for (const item of copies.filter((copy) => !copy.thumb)) {
+    item.thumb = "…";
+    thumbnail(item.bytes, 140).then((url) => {
+      item.thumb = url;
+      const image = document.querySelector(`[data-copy="${item.id}"] .copy-thumb`);
+      if (image) image.src = url;
+    }).catch(() => {});
+  }
+}
+
+async function runCopies() {
+  const lanes = await parallelism();
+  while (copyLanes < lanes && copies.some((copy) => copy.ocr === "laukia")) {
+    copyLanes += 1;
+    copyLane().finally(() => { copyLanes -= 1; renderCopiesProgress(); });
+  }
+}
+
+async function copyLane() {
+  for (;;) {
+    const item = copies.find((copy) => copy.ocr === "laukia");
+    if (!item) return;
+    item.ocr = "skaitoma";
+    renderCopyRow(item);
+    renderCopiesProgress();
+    try {
+      const file = new File([item.bytes], `${item.name} (${item.page} lapas).pdf`, { type: "application/pdf" });
+      const data = await readPage(file, () => {});
+      if (!copies.includes(item)) continue;
+      item.coc = {
+        approval_number: data.approval_number, approval_date: data.approval_date, commercial_name: data.commercial_name,
+        colour: data.colour, colour_raw: data.colour_raw, category: data.category, manufacture_date: data.manufacture_date,
+        manufacturer: data.manufacturer, ...Object.fromEntries(Object.entries(item.coc).filter(([key]) => item.typed[key])),
+      };
+      const values = { vin: cleanVin(data.vin), ...splitMakeModel(data.make, data.commercial_name), tvv: data.type_variant_version };
+      const fromVin = modelFromVin(values.vin);
+      if (fromVin && !values.model) values.model = fromVin.model;
+      if (fromVin && !values.make) values.make = fromVin.make;
+      for (const [key, value] of Object.entries(values)) if (!item.typed[key]) item[key] = value || "";
+      item.ocr = "baigta";
+    } catch (error) {
+      item.ocr = "klaida";
+      item.error = error.message || String(error);
+    }
+    item.ask = missingKeys(item);
+    renderCopyRow(item);
+    renderCopiesProgress();
+  }
+}
+
+function copyStatus(item) {
+  if (COPY_STATE[item.ocr]) return `<span class="copy-state busy">${item.ocr === "skaitoma" ? `<span class="spinner"></span>` : ""}${COPY_STATE[item.ocr]}</span>`;
+  const missing = pazymaMissing(item);
+  if (!missing.length) return `<span class="copy-state ok">${icon("check")}Paruošta</span>`;
+  return `<span class="copy-state warn">${icon("doc")}Trūksta: ${esc(missing.join(", "))}</span>`;
+}
+
+function copyRowHtml(item, index) {
+  const fields = item.ocr === "baigta" || item.ocr === "klaida" ? item.ask : [];
+  return `<div class="mrow copy-row" data-copy="${item.id}">
+    <div class="mrow-head">
+      <img class="copy-thumb" alt="" src="${item.thumb && item.thumb !== "…" ? item.thumb : "data:image/gif;base64,R0lGODlhAQABAAAAACw="}">
+      <div class="mrow-name"><b>${index + 1}. ${esc(item.model ? displayModel(item) : item.ocr === "baigta" || item.ocr === "klaida" ? "Modelis nerastas" : "—")}</b>
+        <span class="mono-vin">${esc(item.vin || (item.ocr === "baigta" || item.ocr === "klaida" ? "VIN nerastas" : "…"))}</span>
+        <small>${esc(item.name)}${item.total > 1 ? ` · ${item.page} lapas iš ${item.total}` : ""}</small></div>
+      <span class="copy-status">${copyStatus(item)}</span>
+      <button type="button" class="btn sm" data-copy-pdf="${item.id}">${icon("eye")}PDF</button>
+      <button type="button" class="icon-btn sm" data-copy-remove="${item.id}" aria-label="Pašalinti" title="Pašalinti">${icon("x")}</button>
+    </div>
+    ${fields.length ? `<div class="mrow-fields">${fields.map((key) => {
+      const [label, hint] = PAZYMA_LABELS[key];
+      const value = COC_KEYS.has(key) ? (item.coc || {})[key] || "" : item[key] || "";
+      return `<label>${esc(label)}<input type="text" data-copy-key="${key}" value="${esc(value)}" placeholder="${esc(hint)}"
+        ${key === "colour" ? `list="lt-colours"` : ""} ${key === "vin" ? `class="mono" maxlength="17"` : ""} autocomplete="off" spellcheck="false"></label>`;
+    }).join("")}</div>` : ""}
+  </div>`;
+}
+
+function renderCopies() {
+  $("copies-count").textContent = copies.length ? `${copies.length} ${plural(copies.length, "kopija", "kopijos", "kopijų")}` : "Tuščia";
+  $("copies-list").innerHTML = copies.map(copyRowHtml).join("");
+  $("copies-list").hidden = !copies.length;
+  document.querySelector(".copies-drop").classList.toggle("compact", copies.length > 0);
+  renderCopiesProgress();
+}
+
+function renderCopyRow(item) {
+  const row = document.querySelector(`[data-copy="${item.id}"]`);
+  if (!row) return;
+  row.outerHTML = copyRowHtml(item, copies.indexOf(item));
+}
+
+function renderCopiesProgress() {
+  const total = copies.length;
+  const done = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida").length;
+  const busy = total - done;
+  $("copies-progress").hidden = !busy;
+  $("copies-progress-text").textContent = `Skaitoma: ${done} iš ${total}`;
+  $("copies-bar").style.width = total ? `${(done / total) * 100}%` : "0";
+  const ready = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida");
+  $("copies-print").disabled = !ready.length;
+  $("copies-form").querySelector('[data-copies="zip"]').disabled = !ready.length;
+  $("copies-count").textContent = total ? `${total} ${plural(total, "kopija", "kopijos", "kopijų")}` : "Tuščia";
+}
+
+/** CoC lapas paveikslu (JPEG, ~150 dpi) ir jo dydis milimetrais. */
+async function pageJpeg(bytes) {
+  const pdf = await openPdfDocument(bytes.slice());
+  try {
+    const page = await pdf.getPage(1);
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: 150 / 72 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const context = canvas.getContext("2d", { alpha: false });
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: context, viewport }).promise;
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    canvas.width = 0;
+    canvas.height = 0;
+    return { jpeg: new Uint8Array(await blob.arrayBuffer()), mmW: (base.width * 25.4) / 72, mmH: (base.height * 25.4) / 72 };
+  } finally {
+    await pdf.destroy().catch(() => {});
+  }
+}
+
+async function printCopies(onlyPazymos = false) {
+  const busy = copies.filter((copy) => copy.ocr === "laukia" || copy.ocr === "skaitoma").length;
+  const ready = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida");
+  if (!ready.length) return;
+  if (busy && !await ask("Dar skaitoma", `Dar neperskaityta ${busy} kopij. Paruošti tik iš ${ready.length} jau perskaitytų?`, "Paruošti")) return;
+  const incomplete = ready.filter((copy) => pazymaMissing(copy).length).length;
+  if (incomplete && !await ask("Trūksta duomenų",
+    `${incomplete} ${plural(incomplete, "kopijoje", "kopijose", "kopijų")} kai kurie pažymos laukai neperskaityti – jie liks tušti. Įrašykite juos sąraše arba ruoškite taip.`,
+    "Vis tiek paruošti")) return;
+  const template = await templateBytes();
+  if (!template) return;
+  const type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (onlyPazymos) {
+    const documents = ready.map((copy) => { const values = pazymaValues(copy); return [suggestedFilename(values), fillTemplate(template, values).bytes]; });
+    download(zipDocuments(documents), `aiksteles_${todayIso()}.zip`, "application/zip");
+    toast(`Sugeneruota pažymų: ${documents.length}.`);
+    return;
+  }
+  const button = $("copies-print");
+  const label = button.innerHTML;
+  button.disabled = true;
+  try {
+    const items = [];
+    for (const [index, copy] of ready.entries()) {
+      button.innerHTML = `<span class="spinner"></span>Ruošiama ${index + 1} iš ${ready.length}…`;
+      items.push({ ...await pageJpeg(copy.bytes), values: pazymaValues(copy) });
+    }
+    download(buildPrintBundle(template, items), `coc-ir-aiksteles_${todayIso()}.docx`, type);
+    toast(`Paruošta spausdinti: ${items.length} CoC ir ${items.length} pažym. Atidarykite failą ir spausdinkite – lapai eina paeiliui.`);
+  } catch (error) {
+    toast(`Nepavyko paruošti: ${error.message || error}`, "err");
+  } finally {
+    button.innerHTML = label;
+    button.disabled = false;
+  }
+}
+
+$("copies-files").addEventListener("change", (event) => { addCopies(event.target.files); event.target.value = ""; });
+$("copies").addEventListener("click", async (event) => {
+  const action = event.target.closest("[data-copies]")?.dataset.copies;
+  if (action === "close") $("copies").close();
+  if (action === "pick") $("copies-files").click();
+  if (action === "print") printCopies(false);
+  if (action === "zip") printCopies(true);
+  if (action === "clear" && copies.length && await ask("Išvalyti sąrašą?", "Visos įkeltos kopijos bus pašalintos iš šio lango.", "Išvalyti", true)) {
+    copies = [];
+    renderCopies();
+  }
+  const remove = event.target.closest("[data-copy-remove]")?.dataset.copyRemove;
+  if (remove) { copies = copies.filter((copy) => copy.id !== remove); renderCopies(); }
+  const view = event.target.closest("[data-copy-pdf]")?.dataset.copyPdf;
+  if (view) {
+    const item = copies.find((copy) => copy.id === view);
+    if (item) window.open(URL.createObjectURL(new Blob([item.bytes], { type: "application/pdf" })), "_blank");
+  }
+});
+$("copies").addEventListener("input", (event) => {
+  const input = event.target.closest("[data-copy-key]");
+  if (!input) return;
+  const item = copies.find((copy) => copy.id === input.closest("[data-copy]").dataset.copy);
+  if (!item) return;
+  const key = input.dataset.copyKey;
+  let value = input.value.trim();
+  if (key === "vin") value = cleanVin(value);
+  if (key === "colour" || key === "make" || key === "model") value = value.toUpperCase();
+  if (COC_KEYS.has(key)) item.coc = { ...item.coc, [key]: value }; else item[key] = value;
+  item.typed[key] = true;
+  const status = input.closest("[data-copy]").querySelector(".copy-status");
+  if (status) status.innerHTML = copyStatus(item);
+});
+
 async function makePazymos(ids) {
   const list = ids.map(byId).filter(Boolean);
   if (!list.length) return;
@@ -2577,7 +2811,8 @@ window.addEventListener("drop", (event) => {
   event.preventDefault();
   dragDepth = 0;
   $("drop-overlay").classList.remove("on");
-  handleFiles(event.dataTransfer.files);
+  if ($("copies").open) addCopies(event.dataTransfer.files);
+  else handleFiles(event.dataTransfer.files);
 });
 
 // Patikros kortelės
@@ -2990,6 +3225,7 @@ const ACTIONS = {
   },
   "open-staged": () => { if (stageId) openDetail(stageId); else toast("Pasirinkite CoC sąraše.", "warn"); },
   template: async () => { await pickTemplate(); },
+  copies: () => openCopies(),
   codes: openCodes,
   "open-pdf": () => openPdf(detailId),
   "detail-close": () => $("detail").close(),

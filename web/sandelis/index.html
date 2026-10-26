@@ -250,6 +250,8 @@
     <p class="nav-title">Įrankiai</p>
     <button type="button" class="nav" data-action="template" id="template-nav" title="Jūsų aikštelės pažyma (.docx) – joje keičiami tik duomenys">
       <svg><use href="#i-doc"/></svg><span class="nav-two">Pažymos šablonas<small id="template-name"></small></span></button>
+    <button type="button" class="nav" data-action="copies" title="Atsiųstos CoC kopijos – pažymos ir spausdinimas paeiliui">
+      <svg><use href="#i-printer"/></svg><span class="nav-two">CoC kopijos → aikštelės<small>spausdinti CoC, pažyma, CoC, pažyma…</small></span></button>
     <button type="button" class="nav" data-action="stickers"><svg><use href="#i-doc"/></svg>Lipdukai aplankams</button>
     <button type="button" class="nav" data-action="binder-auto" id="auto-nav"><svg><use href="#i-sparkle"/></svg><span class="nav-two">Automatinis skirstymas<small id="auto-state"></small></span></button>
     <button type="button" class="nav" data-action="reorganize"><svg><use href="#i-undo"/></svg>Perrūšiuoti aplankus po 20</button>
@@ -445,6 +447,32 @@
   <option value="BALTA/JUODA"><option value="PILKA/JUODA"><option value="SIDABRINĖ/JUODA"><option value="MĖLYNA/JUODA">
   <option value="RAUDONA/JUODA"><option value="ŽALIA/JUODA">
 </datalist>
+
+<dialog id="copies" class="sheet-dialog missing-dialog copies-dialog">
+  <form method="dialog" id="copies-form">
+    <header class="dialog-head">
+      <div><span class="pill" id="copies-count"></span><h2>CoC kopijos → aikštelės</h2></div>
+      <button type="button" class="icon-btn" data-copies="close" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
+    </header>
+    <p class="muted">Įkelkite atsiųstas CoC kopijas (PDF – gali būti daug lapų viename faile). Programa perskaitys kiekvieną ir paruoš
+      vieną Word failą spausdinimui: <b>CoC, pažyma, CoC, pažyma…</b> Į sandėlį kopijos neįtraukiamos.</p>
+    <button type="button" class="drop-target copies-drop" data-copies="pick">
+      <span class="drop-icon"><svg><use href="#i-upload"/></svg></span>
+      <b>Pasirinkite arba nutempkite PDF</b>
+      <span>galima keli failai iš karto</span>
+    </button>
+    <div class="copies-progress" id="copies-progress" hidden><span class="spinner"></span><span id="copies-progress-text"></span>
+      <div class="bar"><i id="copies-bar"></i></div></div>
+    <div class="missing-list copies-list" id="copies-list"></div>
+    <div class="dialog-actions">
+      <button type="button" class="btn primary" data-copies="print" id="copies-print"><svg><use href="#i-printer"/></svg>Paruošti spausdinimui (.docx)</button>
+      <button type="button" class="btn" data-copies="zip"><svg><use href="#i-download"/></svg>Tik pažymos (.zip)</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" data-copies="clear">Išvalyti</button>
+    </div>
+  </form>
+</dialog>
+<input id="copies-files" type="file" accept="application/pdf" multiple hidden>
 
 <dialog id="placed" class="placed-dialog">
   <form method="dialog">

@@ -1139,6 +1139,26 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 
 /* Trūkstami pažymos duomenys */
 .missing-dialog { width: min(920px, 94vw); }
+/* CoC kopijos → aikštelės */
+.copies-dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 64px); }
+.copies-drop { min-height: 150px; margin: 4px 0 12px; }
+.copies-drop.compact { min-height: 0; flex-direction: row; padding: 12px; gap: 12px; }
+.copies-drop.compact .drop-icon { width: 34px; height: 34px; border-radius: 10px; margin: 0; animation: none; }
+.copies-drop.compact .drop-icon svg { width: 17px; height: 17px; }
+.copies-drop.compact b { font-size: 14px; }
+.copies-list { overflow-y: auto; min-height: 0; }
+.copy-thumb { width: 44px; height: 62px; object-fit: cover; border-radius: 5px; background: #fff; flex: none; border: 1px solid var(--line-2); }
+.copy-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
+.copy-state svg { width: 14px; height: 14px; }
+.copy-state.ok { color: var(--green); }
+.copy-state.warn { color: var(--amber); white-space: normal; max-width: 260px; }
+.copy-state.busy { color: var(--muted); }
+.copy-state .spinner { width: 13px; height: 13px; }
+.copies-progress { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; color: var(--soft); }
+.copies-progress[hidden] { display: none; }
+.copies-progress .spinner { width: 15px; height: 15px; }
+.copies-progress .bar { flex: 1 1 100%; height: 4px; border-radius: 99px; background: rgba(255, 255, 255, .08); overflow: hidden; }
+.copies-progress .bar i { display: block; height: 100%; width: 0; background: var(--accent-hi); transition: width .3s ease; }
 .missing-dialog form { padding: 22px; }
 .missing-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
 .mrow { padding: 12px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
