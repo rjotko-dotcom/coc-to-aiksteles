@@ -2618,15 +2618,18 @@ async function printCopies(onlyPazymos = false) {
   }
   const button = $("copies-print");
   const label = button.innerHTML;
+  const withCoc = $("copies-with-coc").checked;
   button.disabled = true;
   try {
     const items = [];
     for (const [index, copy] of ready.entries()) {
       button.innerHTML = `<span class="spinner"></span>Ruošiama ${index + 1} iš ${ready.length}…`;
-      items.push({ ...await pageJpeg(copy.bytes), values: pazymaValues(copy) });
+      items.push(withCoc ? { ...await pageJpeg(copy.bytes), values: pazymaValues(copy) } : { values: pazymaValues(copy) });
     }
-    download(buildPrintBundle(template, items), `coc-ir-aiksteles_${todayIso()}.docx`, type);
-    toast(`Paruošta spausdinti: ${items.length} CoC ir ${items.length} pažym. Atidarykite failą ir spausdinkite – lapai eina paeiliui.`);
+    download(buildPrintBundle(template, items), withCoc ? `coc-ir-aiksteles_${todayIso()}.docx` : `aiksteles_${todayIso()}.docx`, type);
+    toast(withCoc
+      ? `Paruošta spausdinti: ${items.length} CoC ir ${items.length} pažym. Atidarykite failą ir spausdinkite – lapai eina paeiliui.`
+      : `Paruošta spausdinti: ${items.length} pažym. viename faile.`);
   } catch (error) {
     toast(`Nepavyko paruošti: ${error.message || error}`, "err");
   } finally {
@@ -2636,6 +2639,11 @@ async function printCopies(onlyPazymos = false) {
 }
 
 $("copies-files").addEventListener("change", (event) => { addCopies(event.target.files); event.target.value = ""; });
+// Ar spausdinti ir CoC kopijas – įsimenama šiame kompiuteryje.
+try { $("copies-with-coc").checked = localStorage.getItem("sandelis-copies-coc") !== "0"; } catch { /* nesvarbu */ }
+$("copies-with-coc").addEventListener("change", (event) => {
+  try { localStorage.setItem("sandelis-copies-coc", event.target.checked ? "1" : "0"); } catch { /* nesvarbu */ }
+});
 $("copies").addEventListener("click", async (event) => {
   const action = event.target.closest("[data-copies]")?.dataset.copies;
   if (action === "close") $("copies").close();
