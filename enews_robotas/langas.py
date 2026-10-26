@@ -85,6 +85,7 @@ class Langas(tk.Tk):
         knyga.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self.knyga = knyga
         self._masinu_skirtukas(knyga)
+        self._pdi_skirtukas(knyga)
         self._nustatymu_skirtukas(knyga)
         self._tekstu_skirtukas(knyga)
         self._pagalbos_skirtukas(knyga)
@@ -558,6 +559,7 @@ class Langas(tk.Tk):
                     messagebox.showinfo(PAVADINIMAS, duom)
                 elif rusis == "baigta":
                     self._dirba(False)
+                    self.b_pdi.configure(state="normal")
                     self.perskaityti()
         except queue.Empty:
             pass
@@ -775,6 +777,91 @@ class Langas(tk.Tk):
         self.perskaityti()
 
     # --- eNEWS užrašai --------------------------------------------------------------------
+
+    # --- PDI lapai ------------------------------------------------------------------------
+
+    def _pdi_skirtukas(self, knyga):
+        f = ttk.Frame(knyga, padding=10)
+        knyga.add(f, text="  PDI lapai  ")
+        ttk.Label(f, wraplength=1100, justify="left", text=(
+            "Atsisiunčia tik PDI lapus: kiekvienam VIN – Automobilis → PDI → varnelė prie VEIKIMAS → "
+            "„Išsaugoti ir spausdinti“, PDF išsaugomas aplanke pagal šios dienos datą. "
+            "VIN įklijuokite žemiau (bet kaip – po vieną eilutėje, per kablelį, kartu su kitu tekstu) "
+            "arba paimkite iš Excel failo.")).pack(fill="x")
+        mygt = ttk.Frame(f)
+        mygt.pack(fill="x", pady=6)
+        ttk.Button(mygt, text="Iš Excel failo…", command=self.pdi_is_excel).pack(side="left")
+        ttk.Button(mygt, text="Iš pažymėtų eilučių (Mašinos)", command=self.pdi_is_pazymetu).pack(side="left", padx=6)
+        ttk.Button(mygt, text="Išvalyti", command=lambda: (self.pdi_vinai.delete("1.0", "end"),
+                                                          self.pdi_skaiciuoti())).pack(side="left")
+        self.b_pdi = ttk.Button(mygt, text="▶ Atsisiųsti PDI lapus", style="Didelis.TButton",
+                                command=self.pdi_pradeti)
+        self.b_pdi.pack(side="right")
+        ttk.Button(mygt, text="Atidaryti aplanką", command=self.pdi_atidaryti_aplanka).pack(side="right", padx=6)
+        self.pdi_vinai = tk.Text(f, height=16, font=("Consolas", 10), wrap="word")
+        self.pdi_vinai.pack(fill="both", expand=True)
+        self.pdi_vinai.bind("<<Modified>>", lambda e: (self.pdi_skaiciuoti(), self.pdi_vinai.edit_modified(False)))
+        self.pdi_info = tk.StringVar()
+        ttk.Label(f, textvariable=self.pdi_info).pack(fill="x", pady=(6, 0))
+        self.pdi_skaiciuoti()
+
+    def _pdi_vinai(self) -> list[str]:
+        return robotas.vinai_is_teksto(self.pdi_vinai.get("1.0", "end"))
+
+    def pdi_skaiciuoti(self):
+        vinai = self._pdi_vinai()
+        kur = (netikras_enews.ARCH / "pdi_lapai") if self.bandymas.get() else robotas.pdi_aplankas().parent
+        self.pdi_info.set(f"Rasta VIN: {len(vinai)}   →   {kur}\\{dt.date.today():%Y-%m-%d}"
+                          + ("   (BANDYMAS – netikras eNEWS)" if self.bandymas.get() else ""))
+
+    def pdi_is_excel(self):
+        kelias = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx *.xlsm"), ("Visi", "*.*")])
+        if not kelias:
+            return
+        try:
+            vinai = robotas.vinai_is_excel(kelias)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror(PAVADINIMAS, f"Nepavyko perskaityti Excel (ar jis uždarytas?):\n{e}")
+            return
+        self.pdi_vinai.insert("end", ("\n" if self._pdi_vinai() else "") + "\n".join(vinai))
+        self.log(f"Iš {Path(kelias).name} paimta VIN: {len(vinai)}")
+
+    def pdi_is_pazymetu(self):
+        vinai = [m.vin for m in self.masinos if str(m.eilute) in set(self.medis.selection())]
+        if not vinai:
+            messagebox.showinfo(PAVADINIMAS, "Skirtuke „Mašinos“ pažymėkite eilutes (Ctrl/Shift + pelė).")
+            return
+        self.pdi_vinai.insert("end", ("\n" if self._pdi_vinai() else "") + "\n".join(vinai))
+
+    def pdi_atidaryti_aplanka(self):
+        kur = robotas.pdi_aplankas()
+        kur.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32":
+            os.startfile(kur)  # noqa: S606
+
+    def pdi_pradeti(self):
+        if self.gija and self.gija.is_alive():
+            return
+        vinai = self._pdi_vinai()
+        if not vinai:
+            messagebox.showinfo(PAVADINIMAS, "Įklijuokite VIN arba paimkite juos iš Excel.")
+            return
+        if self.perziura.get():
+            messagebox.showinfo(PAVADINIMAS, "PDI lapams peržiūros režimo nėra – nuimkite „PERŽIŪRA“.")
+            return
+        if not self.bandymas.get() and not messagebox.askyesno(
+                PAVADINIMAS, f"Atsisiųsti {len(vinai)} PDI lap. iš TIKRO eNEWS?\n\n"
+                             "Robotas kiekvienam pažymės VEIKIMAS ir paspaus „Išsaugoti ir spausdinti“."):
+            return
+        self.valdymas.stabdyti.clear()
+        self.valdymas.zingsniais = self.zingsniais.get()
+        self._dirba(True)
+        self.b_pdi.configure(state="disabled")
+        self.knyga.select(0)  # „Mašinos“ – ten „Tęsti“, „Stabdyti“ ir žurnalas
+        self.log(f"▶ PDI lapai: {len(vinai)} VIN.")
+        self.gija = threading.Thread(target=self._vykdyti,
+                                     args=(robotas.vykdyti_pdi_lapus, vinai, self.bandymas.get()), daemon=True)
+        self.gija.start()
 
     def _tekstu_skirtukas(self, knyga):
         f = ttk.Frame(knyga, padding=10)

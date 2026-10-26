@@ -51,8 +51,8 @@ class Tvarkytojas(SimpleHTTPRequestHandler):
         u = urlparse(self.path)
         if u.path == "/dokumentas.pdf":
             q = {k: v[0] for k, v in parse_qs(u.query).items()}
-            pavadinimas = ("WARRANTY CERTIFICATE" if q.get("tipas") == "sert"
-                           else "TECHNINES PRIEZIUROS PLANAS")
+            pavadinimas = {"sert": "WARRANTY CERTIFICATE", "pdi": "NAUJO AUTOMOBILIO APZIURA (PDI)"}.get(
+                q.get("tipas"), "TECHNINES PRIEZIUROS PLANAS")
             turinys = pdf([f"BANDYMAS - {pavadinimas}", "",
                            f"VIN: {q.get('vin', '')}", f"Reg. No: {q.get('reg', '')}",
                            f"Warranty Start Date: {q.get('wsd', '')}",

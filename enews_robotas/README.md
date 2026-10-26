@@ -51,6 +51,21 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 3. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
    **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
 
+## Tik PDI lapai
+
+Skirtukas **„PDI lapai“** – kai reikia tik PDI lapų (be akumuliatoriaus, garantijos ir kt.):
+
+1. VIN **įklijuokite** į langelį (bet kaip: po vieną eilutėje, per kablelį, su kitu tekstu –
+   robotas pats atrenka VIN ir pasikartojančius išmeta) arba spauskite **„Iš Excel failo…“**
+   (bet koks Excel, VIN bet kuriame stulpelyje ar lape) ar **„Iš pažymėtų eilučių“**.
+2. **▶ Atsisiųsti PDI lapus** → prisijunkite prie B2B, atsidarykite ENEWS, **Tęsti**.
+3. Kiekvienam VIN robotas: VIN → rodyklė → X → **Automobilis** → **PDI** → varnelė prie
+   **VEIKIMAS** → **Išsaugoti ir spausdinti**, ir PDF išsaugo:
+   `Darbalaukis\PDI lapai\2026-10-26\PDI_<VIN>.pdf` (aplankas pagal tos dienos datą).
+4. Pabaigoje – ataskaita ir atsidaro aplankas.
+
+Kitą aplanką galima nurodyti Nustatymuose (`PDI_APLANKAS`). Su „BANDYMAS“ veikia netikrame eNEWS.
+
 ## Naršyklė: Chrome, Brave ar Edge
 
 Nustatymai → **Naršyklė**: `auto` (Chrome, jei nėra – Brave, tada Edge), `chrome`, `brave`

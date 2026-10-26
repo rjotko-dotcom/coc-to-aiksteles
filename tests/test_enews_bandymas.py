@@ -114,3 +114,29 @@ def test_atsijungimas_atpazistamas(narsykle, monkeypatch):
             robotas.ieskoti_vin(page, adresas.replace("enews/hp_new.html", "login.html"), "TESTA000000000002")
     finally:
         serveris.shutdown()
+
+
+def test_tik_pdi_lapai(narsykle, tmp_path, monkeypatch):
+    """„PDI lapai“: VIN → Automobilis → PDI → VEIKIMAS → Išsaugoti ir spausdinti → PDF aplanke."""
+    import robotas
+    monkeypatch.setattr(robotas.N, "LAUKTI_SEK", 8)
+    serveris, adresas = netikras_enews.paleisti()
+    try:
+        page = narsykle.new_context().new_page()
+        for vin in ("TESTA000000000007", "TESTA000000000008"):
+            kelias = robotas.pdi_lapas(page, adresas, vin, tmp_path / "2026-10-26")
+            assert kelias.name == f"PDI_{vin}.pdf" and kelias.read_bytes().startswith(b"%PDF")
+    finally:
+        serveris.shutdown()
+
+
+def test_vinai_is_teksto_ir_excel(tmp_path):
+    import openpyxl
+    import robotas
+    tekstas = "TESTA000000000001, testa000000000002\nTESTA000000000001 ir 12345678901234567 bei SJN"
+    assert robotas.vinai_is_teksto(tekstas) == ["TESTA000000000001", "TESTA000000000002"]
+    wb = openpyxl.Workbook()
+    wb.active["C5"] = "TESTA000000000003"
+    wb.create_sheet("kitas")["A1"] = "VIN: TESTA000000000004"
+    wb.save(tmp_path / "v.xlsx")
+    assert robotas.vinai_is_excel(tmp_path / "v.xlsx") == ["TESTA000000000003", "TESTA000000000004"]

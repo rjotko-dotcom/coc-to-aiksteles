@@ -22,6 +22,7 @@ import base64
 import datetime as dt
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -417,15 +418,15 @@ def akumuliatorius(page: Page, m: Masina) -> None:
     raise BlogasAkumas(" ".join(rezultatas.split()) or f"ne „{geras}“")
 
 
-def pdi(page: Page, m: Masina) -> None:
+def atidaryti_pdi_forma(page: Page) -> Page:
+    """Automobilis → PDI. Grąžina puslapį su PDI forma (tas pats skirtukas arba naujas langas)."""
     zingsnis("Automobilis skirtukas")
     spausti(page, "automobilis")
-
     zingsnis("PDI mygtukas")
     langu_pries = len(page.context.pages)
     spausti(page, "pdi")
     forma = page
-    for _ in range(10):
+    for _ in range(20):
         if len(page.context.pages) > langu_pries:
             forma = page.context.pages[-1]
             laukti_ramybes(forma)
@@ -433,15 +434,24 @@ def pdi(page: Page, m: Masina) -> None:
         if any(t in puslapio_tekstas(page) for t in T("veiksmas")):
             break
         snausti(0.5)
+    return forma
+
+
+def pazymeti_veikima(forma: Page) -> None:
+    zingsnis("varnelė prie VEIKIMAS (visi punktai)")
+    rasti(forma, [f"xpath={su_tekstu('veiksmas')}/preceding::input[@type='checkbox'][1]"],
+          "VEIKIMAS varnelė").check()
+
+
+def pdi(page: Page, m: Masina) -> None:
+    forma = atidaryti_pdi_forma(page)
 
     zingsnis(f"PDI data {m.pdi_data:%Y-%m-%d}")
     irasyti(rasti(forma, [po(su_tekstu("pdi_data", tiksliai=True), "input[(@type='text' or not(@type))]")],
                   "PDI datos laukas"),
             m.pdi_data.strftime(N.DATOS_FORMATAS), "PDI data")
 
-    zingsnis("varnelė prie VEIKSMAS (visi punktai)")
-    rasti(forma, [f"xpath={su_tekstu('veiksmas')}/preceding::input[@type='checkbox'][1]"],
-          "VEIKSMAS varnelė").check()
+    pazymeti_veikima(forma)
 
     zingsnis(T1("pdi_saugoti"))
     if not svarbus_mygtukas(forma, "pdi_saugoti"):
@@ -520,7 +530,7 @@ def _pdf_is_lango(langas: Page) -> bytes | None:
     return turinys if turinys[:5].startswith(b"%PDF") else None
 
 
-def gauti_faila(page: Page, kelias: Path) -> Path:
+def gauti_faila(page: Page, kelias: Path, mygtukas: str = "drukat") -> Path:
     """Paspaudžia „Drukāt“ ir išsaugo atsiradusį PDF: atsisiuntimą, naujame lange
     ar tame pačiame skirtuke atidarytą PDF. Laukia iki 60 s – kol tikrai bus PDF."""
     atsiuntimai: list = []
@@ -565,7 +575,7 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
     turinys: bytes | None = None
     patikrinta: set[str] = set()
     try:
-        spausti(page, "drukat")
+        spausti(page, mygtukas)
         while time.time() < pradzia + 60:
             if pagauta and pagauta[0][:5].startswith(b"%PDF"):
                 turinys = pagauta[0]
@@ -604,7 +614,7 @@ def gauti_faila(page: Page, kelias: Path) -> Path:
         atsidare = ", ".join(p.url[:90] for p in langai if not p.is_closed()) or "nieko"
         if page.url != url_pries:
             atsidare += f"; eNEWS puslapis pasikeitė į {page.url[:90]}"
-        raise Klaida(f"paspaudus Drukāt per 60 s PDF neatsirado. Atsidarė: {atsidare}")
+        raise Klaida(f"paspaudus „{T1(mygtukas)}“ per 60 s PDF neatsirado. Atsidarė: {atsidare}")
 
     # PDF langus uždarome, eNEWS skirtukas lieka.
     for p in langai:
@@ -924,6 +934,124 @@ def suvestine(rezultatai) -> str:
             zenklas = {"akumas": "🟧", "klaida": "🟥", "sustabdyta": "⏸"}.get(rusis, "•")
             eil.append(f"{zenklas} {m.eilute} eil. {m.numeris}: {tekstas}")
     return "\n".join(eil)
+
+
+# --- Tik PDI lapai ---------------------------------------------------------------
+
+VIN_PAIESKA = re.compile(r"(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}(?![A-Z0-9])")
+
+
+def vinai_is_teksto(tekstas: str) -> list[str]:
+    """Visi VIN iš įklijuoto teksto (bet koks skirtukas: eilutės, kableliai, tarpai),
+    be pasikartojimų, ta pačia tvarka."""
+    rasti_ = VIN_PAIESKA.findall(tekstas.upper())
+    return list(dict.fromkeys(v for v in rasti_ if any(c.isdigit() for c in v) and any(c.isalpha() for c in v)))
+
+
+def vinai_is_excel(kelias: str | Path) -> list[str]:
+    """Visi VIN iš bet kurio Excel failo – bet kuriame lape ir stulpelyje."""
+    from openpyxl import load_workbook
+    wb = load_workbook(kelias, read_only=True, data_only=True)
+    dalys = []
+    for ws in wb.worksheets:
+        for eil in ws.iter_rows(values_only=True):
+            dalys += [str(v) for v in eil if v is not None]
+    wb.close()
+    return vinai_is_teksto("\n".join(dalys))
+
+
+def darbalaukis() -> Path:
+    """Tikras darbalaukio aplankas (ir kai jis perkeltas į OneDrive)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+            buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 0x0010, None, 0, buf) == 0 and buf.value:
+                return Path(buf.value)
+        except Exception:
+            pass
+    return Path.home() / "Desktop"
+
+
+def pdi_aplankas(diena: dt.date | None = None) -> Path:
+    """Darbalaukis\\PDI lapai\\2026-10-26 (arba nustatymuose nurodytas aplankas)."""
+    baze = Path(N.PDI_APLANKAS) if N.PDI_APLANKAS else darbalaukis() / "PDI lapai"
+    return baze / f"{diena or dt.date.today():%Y-%m-%d}"
+
+
+def pdi_lapas(page: Page, pradzia: str, vin: str, aplankas: Path) -> Path:
+    """Vienos mašinos PDI lapas: VIN → X → Automobilis → PDI → VEIKIMAS → Išsaugoti ir spausdinti."""
+    ieskoti_vin(page, pradzia, vin)
+    forma = atidaryti_pdi_forma(page)
+    pazymeti_veikima(forma)
+    zingsnis(T1("pdi_spausdinti"))
+    aplankas.mkdir(parents=True, exist_ok=True)
+    kelias = gauti_faila(forma, aplankas / f"PDI_{vin}.pdf", mygtukas="pdi_spausdinti")
+    if forma is not page and not forma.is_closed():
+        forma.close()
+    return kelias
+
+
+def vykdyti_pdi_lapus(vinai: list[str], bandymas: bool = False) -> Path:
+    """Atsisiunčia PDI lapus visiems VIN. Grąžina aplanką, kuriame jie išsaugoti."""
+    global BANDYMAS, PERZIURA, EIGA
+    BANDYMAS, PERZIURA, EIGA = bandymas, False, None
+    aplankas = (netikro_aplankas() / "pdi_lapai" / f"{dt.date.today():%Y-%m-%d}") if bandymas else pdi_aplankas()
+    serveris = adresas = None
+    if bandymas:
+        import netikras_enews
+        serveris, adresas = netikras_enews.paleisti()
+    log.info("PDI lapai: %d VIN → %s", len(vinai), aplankas)
+    gerai, blogai = [], []
+    pradzia_laikas = time.time()
+    with sync_playwright() as pw:
+        ctx = atidaryti_narsykle(pw)
+        try:
+            page, pradzia = atidaryti_enews(ctx, adresas)
+            for nr, vin in enumerate(vinai, start=1):
+                if V.stabdyti.is_set():
+                    log.info("Sustabdyta.")
+                    break
+                log.info("=== PDI %d/%d: %s ===", nr, len(vinai), vin)
+                for bandymas_nr in (1, 2):
+                    try:
+                        kelias = pdi_lapas(page, pradzia, vin, aplankas)
+                        gerai.append(vin)
+                        log.info("  ✔ %s", kelias.name)
+                    except Sustabdyta:
+                        log.info("Sustabdyta.")
+                    except Exception as e:  # noqa: BLE001
+                        atsijungta = isinstance(e, Atsijungta) or page.is_closed() or not _gyvas(ctx)
+                        if atsijungta and bandymas_nr == 1 and not V.stabdyti.is_set():
+                            if not _gyvas(ctx):
+                                uzdaryti_narsykle(ctx)
+                                ctx = atidaryti_narsykle(pw)
+                            V.klausti("B2B atsijungė. Prisijunkite iš naujo, atsidarykite ENEWS ir spauskite "
+                                      "„Tęsti“ – robotas tęs nuo to paties VIN")
+                            page, pradzia = atidaryti_enews(ctx, adresas, klausti=False)
+                            continue
+                        tekstas = str(e).splitlines()[0][:200]
+                        blogai.append((vin, tekstas))
+                        if not page.is_closed():
+                            nuotrauka(page, vin)
+                        log.error("  ✖ %s: %s", vin, tekstas)
+                    break
+            eil = [f"PDI lapai: atsisiųsta {len(gerai)} iš {len(vinai)} (per {_trukme(time.time() - pradzia_laikas)}).",
+                   f"Aplankas: {aplankas}"]
+            eil += [f"🟥 {vin}: {t}" for vin, t in blogai]
+            V.ataskaita("\n".join(eil))
+            if sys.platform == "win32" and gerai:
+                try:
+                    os.startfile(aplankas)  # noqa: S606
+                except OSError:
+                    pass
+            V.klausti("Baigta – naršyklė bus uždaryta")
+        finally:
+            uzdaryti_narsykle(ctx)
+            if serveris:
+                serveris.shutdown()
+    return aplankas
 
 
 def netikro_aplankas() -> Path:

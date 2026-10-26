@@ -17,9 +17,14 @@
 <tr><td>8 <input type=checkbox class=p></td><td>Akumuliatoriaus būklės patikra</td></tr>
 <tr><td>40 <input type=checkbox class=p></td><td>Place EU battery regulations leaflet in the glove box</td></tr>
 </table><br>
-<input type=button value="Išsaugoti ir uždaryti" onclick="saugoti()"> <input type=button value="Išsaugoti ir spausdinti">
+<input type=button value="Išsaugoti ir uždaryti" onclick="saugoti()"> <input type=button value="Išsaugoti ir spausdinti" onclick="spausdinti()">
 <div id=klaida class=pastaba></div>
 <script>
+function spausdinti(){  // kaip tikras eNEWS: išsaugo pažymėjimus ir atidaro PDI lapą (PDF)
+  if ([...document.querySelectorAll('.p')].some(c => !c.checked)) { document.getElementById('klaida').textContent = 'Pažymėkite visus punktus'; return; }
+  const vin = new URLSearchParams(location.search).get('vin');
+  window.open('/dokumentas.pdf?tipas=pdi&vin=' + vin + '&wsd=' + encodeURIComponent(document.getElementById('data').value));
+}
 function saugoti(){
   const d = document.getElementById('data').value.trim();
   if (!/^\d{2}\/\d{2}\/\d{4}$/.test(d)) { document.getElementById('klaida').textContent = 'Įveskite datą'; return; }

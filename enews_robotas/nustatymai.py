@@ -30,7 +30,8 @@ NUMATYTIEJI = {
     "RIDA": "5",
     "DATOS_FORMATAS": "%d/%m/%Y",   # 22/09/2026
     "LAUKTI_SEK": 20,
-    "SAUGOTI_DIENU": 30,            # po tiek dienų trinami seni PDF ir klaidų nuotraukos (0 – netrinti)
+    "SAUGOTI_DIENU": 30,
+    "PDI_APLANKAS": "",             # PDI lapams; tuščias – Darbalaukis\PDI lapai            # po tiek dienų trinami seni PDF ir klaidų nuotraukos (0 – netrinti)
 
     # --- Spausdinimas ---
     "SUMATRA": r"C:\Program Files\SumatraPDF\SumatraPDF.exe",
@@ -62,6 +63,7 @@ NUMATYTIEJI = {
         "pdi_data": "Data:",
         "veiksmas": "VEIKIMAS | VEIKSMAS",
         "pdi_saugoti": "Išsaugoti ir uždaryti",
+        "pdi_spausdinti": "Išsaugoti ir spausdinti",
         "update": "Update",
         "warranty": "Warranty Start Date:",
         "registracija": "Vehicle Registration:",
@@ -91,6 +93,7 @@ TEKSTU_PAVADINIMAI = {
     "pdi_data": "PDI formos datos užrašas",
     "veiksmas": "Stulpelis su „visi“ varnele",
     "pdi_saugoti": "PDI išsaugojimo mygtukas",
+    "pdi_spausdinti": "PDI „išsaugoti ir spausdinti“ (PDI lapams)",
     "update": "Redagavimo mygtukas",
     "warranty": "Garantijos pradžios užrašas",
     "registracija": "Valst. numerio užrašas",
