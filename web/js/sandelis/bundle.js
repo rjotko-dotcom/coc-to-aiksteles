@@ -105,7 +105,7 @@ const EMPTY_PART = (tag) => strToU8(`<?xml version="1.0" encoding="UTF-8" standa
 
 /**
  * items: [{ jpeg: Uint8Array, mmW, mmH, values }] – CoC paveikslas (JPEG), jo dydis mm
- * ir pažymos reikšmės. Grąžina .docx baitus.
+ * ir pažymos reikšmės. Be `jpeg` – tik pažyma. Grąžina .docx baitus.
  */
 export function buildPrintBundle(templateBytes, items) {
   const files = unzipSync(new Uint8Array(templateBytes));
@@ -149,11 +149,14 @@ export function buildPrintBundle(templateBytes, items) {
   const sect = cocSect("rIdCocHeader", "rIdCocFooter");
 
   items.forEach((item, index) => {
-    const relId = `rIdCoc${index + 1}`;
-    files[`word/media/coc${index + 1}.jpeg`] = item.jpeg;
-    addRel(relId, REL_IMAGE, `media/coc${index + 1}.jpeg`);
-    const fragment = new DOMParser().parseFromString(imageParagraph(index, relId, item, sect), "application/xml");
-    body.appendChild(doc.importNode(fragment.documentElement, true));
+    // Be paveikslo – tik pažyma (kai CoC kopijų spausdinti nereikia).
+    if (item.jpeg) {
+      const relId = `rIdCoc${index + 1}`;
+      files[`word/media/coc${index + 1}.jpeg`] = item.jpeg;
+      addRel(relId, REL_IMAGE, `media/coc${index + 1}.jpeg`);
+      const fragment = new DOMParser().parseFromString(imageParagraph(index, relId, item, sect), "application/xml");
+      body.appendChild(doc.importNode(fragment.documentElement, true));
+    }
 
     const filled = parse(unzipSync(fillTemplate(templateBytes, item.values).bytes)["word/document.xml"]);
     const { nodes, close } = pazymaContent(filled);
