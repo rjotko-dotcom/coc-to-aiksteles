@@ -1,7 +1,7 @@
 // CoC kopijos ir jų pažymos viename Word faile spausdinimui: CoC, pažyma, CoC, pažyma…
 //
-// Kiekviena CoC kopija įdedama kaip paveikslas atskirame A4 skirsnyje (mažos
-// paraštės, be poraščių), po jo – iš šablono užpildyta pažyma su šablono
+// Kiekviena CoC kopija įdedama kaip paveikslas atskirame A4 skirsnyje (per visą
+// lapą, be paraščių ir poraščių), po jo – iš šablono užpildyta pažyma su šablono
 // lapo nustatymais. Šablono gale esantis tuščias skirsnis (tuščias lapas)
 // praleidžiamas, kad tarp lapų nebūtų tuščių puslapių.
 
@@ -16,9 +16,12 @@ const REL_IMAGE = `${R}/image`;
 const REL_HEADER = `${R}/header`;
 const REL_FOOTER = `${R}/footer`;
 
-/** CoC lapas: A4, 5 mm paraštės; paveikslas šiek tiek mažesnis už likusį plotą. */
-const COC_PAGE = { w: 11906, h: 16838, margin: 284 };
-const COC_MAX_MM = { w: 198, h: 282 };
+/**
+ * CoC lapas: A4 be paraščių – paveikslas per visą lapą. Aukštis 1 mm mažesnis,
+ * kad tuščia antraštė (1 pt) nenustumtų paveikslo į kitą lapą.
+ */
+const COC_PAGE = { w: 11906, h: 16838, margin: 0 };
+const COC_MAX_MM = { w: 210, h: 296 };
 const EMU_PER_MM = 36000;
 
 const parse = (bytes) => new DOMParser().parseFromString(strFromU8(bytes), "application/xml");
