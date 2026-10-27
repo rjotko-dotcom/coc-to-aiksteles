@@ -505,25 +505,35 @@ const found = (data) => NEEDED.filter((key) => data[key]).length;
  * Perskaito vieną lapą: pirmiausia tik viršutinę dalį, o jei VIN ar modelio
  * ten nėra – visą lapą (prireikus ir didesne raiška).
  */
-async function readPage(file, onStatus, job = {}) {
+/** Papildo perskaitytus duomenis tuo, ko trūko (ir nepilną tipą/variantą/versiją – pilnu). */
+function fillMissing(base, extra) {
+  const out = { ...base };
+  for (const key of ["make", "commercial_name", "approval_number", "approval_date", "colour", "colour_raw", "manufacture_date"]) {
+    if (!out[key] && extra[key]) out[key] = extra[key];
+  }
+  if (!tvvComplete(out.type_variant_version) && tvvComplete(extra.type_variant_version)) {
+    Object.assign(out, { type: extra.type, variant: extra.variant, version: extra.version, type_variant_version: extra.type_variant_version });
+  }
+  return out;
+}
+
+async function readPage(file, onStatus, job = {}, firstRead = null) {
   const stop = () => { if (job.cancelled) throw new Error("atšaukta"); };
   // Pirmiausia – tik dvi siauros juostos, kuriose Nissan CoC visada yra markė,
   // modelis ir VIN. Tai ~4 kartus greičiau nei skaityti didelę lapo dalį.
-  const banded = await readCertificate(file, onStatus, { required: NEEDED, bands: VIN_BANDS, retry: false });
-  if (!banded.ocr_used || (banded.vin && tvvComplete(banded.type_variant_version))) return banded;
+  const banded = firstRead || await readCertificate(file, onStatus, { required: NEEDED, bands: VIN_BANDS, retry: false });
+  // Pažymai būtina: pilnas tipas/variantas/versija ir tipo patvirtinimo Nr.
+  const complete = (data) => tvvComplete(data.type_variant_version) && Boolean(data.approval_number);
+  if (!banded.ocr_used || (banded.vin && complete(banded))) return banded;
   stop();
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
-  // VIN rastas, bet 0.2 (tipas/variantas/versija) – ne visas: imama tai, kas pilna.
+  // VIN rastas, bet ne viskas pažymai – trūkstami laukai paimami iš didesnės lapo dalies.
   if (banded.vin) {
-    if (tvvComplete(quick.type_variant_version)) {
-      return { ...banded, type: quick.type, variant: quick.variant, version: quick.version, type_variant_version: quick.type_variant_version };
-    }
+    const merged = fillMissing(banded, quick);
+    if (complete(merged) || tvvComplete(merged.type_variant_version)) return merged;
     stop();
     const sharp = await readCertificate(file, onStatus, { required: NEEDED, top: 0.2, retry: false, dpi: 300 }).catch(() => ({}));
-    if (tvvComplete(sharp.type_variant_version)) {
-      return { ...banded, type: sharp.type, variant: sharp.variant, version: sharp.version, type_variant_version: sharp.type_variant_version };
-    }
-    return banded;
+    return fillMissing(merged, sharp);
   }
   // VIN – svarbiausia. Jį radus lapas laikomas perskaitytu: modelis, jei jo nėra,
   // įrašomas ranka (iš failo pavadinimo neimamas – partijoje gali būti įvairių). Visas lapas (ir didesne
@@ -2477,7 +2487,9 @@ async function addCopies(fileList) {
   for (const file of files) {
     try {
       const pages = await splitPages(new Uint8Array(await file.arrayBuffer()));
+      const batch = (copySeq += 1);
       pages.forEach((bytes, index) => copies.push({
+        batch,
         id: `k${(copySeq += 1)}`, name: file.name, page: index + 1, total: pages.length, bytes, thumb: "",
         ocr: "laukia", vin: "", make: "", model: "", tvv: "", coc: {}, typed: {}, ask: [],
       }));
@@ -2510,11 +2522,34 @@ async function copyLane() {
     const item = copies.find((copy) => copy.ocr === "laukia");
     if (!item) return;
     item.ocr = "skaitoma";
+    let classified;
+    item.classified = new Promise((resolve) => { classified = resolve; });
     renderCopyRow(item);
     renderCopiesProgress();
     try {
       const file = new File([item.bytes], `${item.name} (${item.page} lapas).pdf`, { type: "application/pdf" });
-      const data = await readPage(file, () => {});
+      // Pirma – tik greitos juostos. Lapas be VIN, modelio ir tipo – galinė CoC pusė:
+      // jos neskaitome (visa pažymai reikalinga informacija – priekyje), tik spausdiname.
+      const banded = await readCertificate(file, () => {}, { required: NEEDED, bands: VIN_BANDS, retry: false });
+      if (!copies.includes(item)) { classified(""); continue; }
+      // Galinėje pusėje dažnai atspausdintas tas pats VIN – tai tas pats CoC, ne naujas.
+      const previous = item.page > 1 ? copies.find((copy) => copy.name === item.name && copy.batch === item.batch && copy.page === item.page - 1) : null;
+      const previousVin = previous ? await previous.classified : "";
+      const vin = cleanVin(banded.vin);
+      const front = !previous || !banded.ocr_used
+        ? true
+        : vin ? vin !== previousVin : Boolean(banded.commercial_name || (banded.make && banded.type));
+      // Priekio VIN juostose nerastas – kitas lapas palauks, kol jį perskaitys visą.
+      if (!front || vin) classified(front ? vin : previousVin);
+      if (!front) {
+        item.role = "back";
+        item.ocr = "baigta";
+        renderCopies();
+        continue;
+      }
+      item.role = "front";
+      const data = await readPage(file, () => {}, {}, banded);
+      classified(cleanVin(data.vin));
       if (!copies.includes(item)) continue;
       item.coc = {
         approval_number: data.approval_number, approval_date: data.approval_date, commercial_name: data.commercial_name,
@@ -2530,11 +2565,24 @@ async function copyLane() {
     } catch (error) {
       item.ocr = "klaida";
       item.error = error.message || String(error);
+      item.role = item.role || "front";
+      classified("");
     }
     item.ask = missingKeys(item);
     renderCopyRow(item);
     renderCopiesProgress();
   }
+}
+
+/** CoC: priekinis lapas ir po jo einantys galiniai (to paties failo). */
+function copyGroups() {
+  const groups = [];
+  for (const item of copies) {
+    const last = groups[groups.length - 1];
+    if (item.role === "back" && last && last.front.batch === item.batch) last.backs.push(item);
+    else groups.push({ front: item, backs: [] });
+  }
+  return groups;
 }
 
 function copyStatus(item) {
@@ -2544,14 +2592,14 @@ function copyStatus(item) {
   return `<span class="copy-state warn">${icon("doc")}Trūksta: ${esc(missing.join(", "))}</span>`;
 }
 
-function copyRowHtml(item, index) {
+function copyRowHtml(item, index, backs = []) {
   const fields = item.ocr === "baigta" || item.ocr === "klaida" ? item.ask : [];
   return `<div class="mrow copy-row" data-copy="${item.id}">
     <div class="mrow-head">
       <img class="copy-thumb" alt="" src="${item.thumb && item.thumb !== "…" ? item.thumb : "data:image/gif;base64,R0lGODlhAQABAAAAACw="}">
       <div class="mrow-name"><b>${index + 1}. ${esc(item.model ? displayModel(item) : item.ocr === "baigta" || item.ocr === "klaida" ? "Modelis nerastas" : "—")}</b>
         <span class="mono-vin">${esc(item.vin || (item.ocr === "baigta" || item.ocr === "klaida" ? "VIN nerastas" : "…"))}</span>
-        <small>${esc(item.name)}${item.total > 1 ? ` · ${item.page} lapas iš ${item.total}` : ""}</small></div>
+        <small>${esc(item.name)}${item.total > 1 ? ` · ${item.page} lapas iš ${item.total}` : ""}${backs.length ? ` · + ${backs.length} ${plural(backs.length, "galinis lapas", "galiniai lapai", "galinių lapų")}` : ""}</small></div>
       <span class="copy-status">${copyStatus(item)}</span>
       <button type="button" class="btn sm" data-copy-pdf="${item.id}">${icon("eye")}PDF</button>
       <button type="button" class="icon-btn sm" data-copy-remove="${item.id}" aria-label="Pašalinti" title="Pašalinti">${icon("x")}</button>
@@ -2567,7 +2615,7 @@ function copyRowHtml(item, index) {
 
 function renderCopies() {
   $("copies-count").textContent = copies.length ? `${copies.length} ${plural(copies.length, "kopija", "kopijos", "kopijų")}` : "Tuščia";
-  $("copies-list").innerHTML = copies.map(copyRowHtml).join("");
+  $("copies-list").innerHTML = copyGroups().map((group, index) => copyRowHtml(group.front, index, group.backs)).join("");
   $("copies-list").hidden = !copies.length;
   document.querySelector(".copies-drop").classList.toggle("compact", copies.length > 0);
   renderCopiesProgress();
@@ -2576,7 +2624,10 @@ function renderCopies() {
 function renderCopyRow(item) {
   const row = document.querySelector(`[data-copy="${item.id}"]`);
   if (!row) return;
-  row.outerHTML = copyRowHtml(item, copies.indexOf(item));
+  const groups = copyGroups();
+  const index = groups.findIndex((group) => group.front === item);
+  if (index < 0) { renderCopies(); return; }
+  row.outerHTML = copyRowHtml(item, index, groups[index].backs);
 }
 
 function renderCopiesProgress() {
@@ -2584,12 +2635,13 @@ function renderCopiesProgress() {
   const done = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida").length;
   const busy = total - done;
   $("copies-progress").hidden = !busy;
-  $("copies-progress-text").textContent = `Skaitoma: ${done} iš ${total}`;
+  $("copies-progress-text").textContent = `Skaitoma lapų: ${done} iš ${total}`;
   $("copies-bar").style.width = total ? `${(done / total) * 100}%` : "0";
   const ready = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida");
   $("copies-print").disabled = !ready.length;
   $("copies-form").querySelector('[data-copies="zip"]').disabled = !ready.length;
-  $("copies-count").textContent = total ? `${total} ${plural(total, "kopija", "kopijos", "kopijų")}` : "Tuščia";
+  const cocs = copyGroups().length;
+  $("copies-count").textContent = cocs ? `${cocs} CoC` : "Tuščia";
 }
 
 /** CoC lapas paveikslu (JPEG, ~150 dpi) ir jo dydis milimetrais. */
@@ -2617,7 +2669,8 @@ async function pageJpeg(bytes) {
 
 async function printCopies(onlyPazymos = false) {
   const busy = copies.filter((copy) => copy.ocr === "laukia" || copy.ocr === "skaitoma").length;
-  const ready = copies.filter((copy) => copy.ocr === "baigta" || copy.ocr === "klaida");
+  const groups = copyGroups().filter((group) => group.front.ocr === "baigta" || group.front.ocr === "klaida");
+  const ready = groups.map((group) => group.front);
   if (!ready.length) return;
   if (busy && !await ask("Dar skaitoma", `Dar neperskaityta ${busy} kopij. Paruošti tik iš ${ready.length} jau perskaitytų?`, "Paruošti")) return;
   const incomplete = ready.filter((copy) => pazymaMissing(copy).length).length;
@@ -2639,9 +2692,11 @@ async function printCopies(onlyPazymos = false) {
   button.disabled = true;
   try {
     const items = [];
-    for (const [index, copy] of ready.entries()) {
-      button.innerHTML = `<span class="spinner"></span>Ruošiama ${index + 1} iš ${ready.length}…`;
-      items.push(withCoc ? { ...await pageJpeg(copy.bytes), values: pazymaValues(copy) } : { values: pazymaValues(copy) });
+    for (const [index, group] of groups.entries()) {
+      button.innerHTML = `<span class="spinner"></span>Ruošiama ${index + 1} iš ${groups.length}…`;
+      const images = [];
+      if (withCoc) for (const page of [group.front, ...group.backs]) images.push(await pageJpeg(page.bytes));
+      items.push({ images, values: pazymaValues(group.front) });
     }
     download(buildPrintBundle(template, items), withCoc ? `coc-ir-aiksteles_${todayIso()}.docx` : `aiksteles_${todayIso()}.docx`, type);
     toast(withCoc
@@ -2672,7 +2727,12 @@ $("copies").addEventListener("click", async (event) => {
     renderCopies();
   }
   const remove = event.target.closest("[data-copy-remove]")?.dataset.copyRemove;
-  if (remove) { copies = copies.filter((copy) => copy.id !== remove); renderCopies(); }
+  if (remove) {
+    const group = copyGroups().find((item) => item.front.id === remove);
+    const gone = new Set(group ? [group.front, ...group.backs].map((copy) => copy.id) : [remove]);
+    copies = copies.filter((copy) => !gone.has(copy.id));
+    renderCopies();
+  }
   const view = event.target.closest("[data-copy-pdf]")?.dataset.copyPdf;
   if (view) {
     const item = copies.find((copy) => copy.id === view);

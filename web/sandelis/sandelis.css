@@ -1151,6 +1151,9 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .copies-with input { width: 18px; height: 18px; margin: 0; }
 .copies-with span { display: flex; flex-direction: column; line-height: 1.25; }
 .copies-with small { color: var(--muted); font-size: 11.5px; }
+.copy-row .mrow-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; }
+.copy-row .mrow-name > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.copy-status { min-width: 0; }
 .copy-thumb { width: 44px; height: 62px; object-fit: cover; border-radius: 5px; background: #fff; flex: none; border: 1px solid var(--line-2); }
 .copy-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; white-space: nowrap; }
 .copy-state svg { width: 14px; height: 14px; }
