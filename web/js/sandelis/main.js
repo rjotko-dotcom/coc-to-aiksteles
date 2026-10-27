@@ -1,6 +1,7 @@
 // Sandėlio sąsaja: skenų priėmimas, patikra, paieška, atidavimas, kopijos.
 
 import { readCertificate } from "../read.js";
+import { tvvComplete } from "../coc.js";
 import { inBackground, parallelism as ocrParallelism, warmUp } from "../ocr.js";
 import { analyseTemplate, buildValues, fillTemplate, suggestedFilename, zipDocuments } from "../docx.js";
 import { getTemplate, saveTemplate } from "../store.js";
@@ -509,9 +510,21 @@ async function readPage(file, onStatus, job = {}) {
   // Pirmiausia – tik dvi siauros juostos, kuriose Nissan CoC visada yra markė,
   // modelis ir VIN. Tai ~4 kartus greičiau nei skaityti didelę lapo dalį.
   const banded = await readCertificate(file, onStatus, { required: NEEDED, bands: VIN_BANDS, retry: false });
-  if (banded.vin || !banded.ocr_used) return banded;
+  if (!banded.ocr_used || (banded.vin && tvvComplete(banded.type_variant_version))) return banded;
   stop();
   const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
+  // VIN rastas, bet 0.2 (tipas/variantas/versija) – ne visas: imama tai, kas pilna.
+  if (banded.vin) {
+    if (tvvComplete(quick.type_variant_version)) {
+      return { ...banded, type: quick.type, variant: quick.variant, version: quick.version, type_variant_version: quick.type_variant_version };
+    }
+    stop();
+    const sharp = await readCertificate(file, onStatus, { required: NEEDED, top: 0.2, retry: false, dpi: 300 }).catch(() => ({}));
+    if (tvvComplete(sharp.type_variant_version)) {
+      return { ...banded, type: sharp.type, variant: sharp.variant, version: sharp.version, type_variant_version: sharp.type_variant_version };
+    }
+    return banded;
+  }
   // VIN – svarbiausia. Jį radus lapas laikomas perskaitytu: modelis, jei jo nėra,
   // įrašomas ranka (iš failo pavadinimo neimamas – partijoje gali būti įvairių). Visas lapas (ir didesne
   // raiška) skaitomas tik tada, kai nerastas pats VIN – tai keli kartai ilgiau.
@@ -621,6 +634,8 @@ async function readLane() {
         for (const [key, value] of Object.entries(changes.coc)) if (!String(coc[key] || "").trim() && value) coc[key] = value;
         const filled = { coc, ocr: "baigta", refresh: false };
         for (const [key, value] of Object.entries(readValues)) if (!String(record[key] || "").trim() && value) filled[key] = value;
+        // Nepilnas tipas/variantas/versija pakeičiamas pilnu (jei jo neįrašė žmogus).
+        if (!tvvComplete(record.tvv) && tvvComplete(readValues.tvv) && !typedByHand(record, "tvv")) filled.tvv = readValues.tvv;
         await update(record, filled);
         session.refreshed = (session.refreshed || 0) + 1;
       } else {
@@ -1549,7 +1564,8 @@ function animateRowMoves(before) {
 // ---------------------------------------------------------------------------
 
 const PAZYMA_NEEDS = [
-  ["make", "markės", (r) => r.make], ["tvv", "tipo", (r) => r.tvv], ["model", "modelio", (r) => r.model],
+  // Tipas/Variantas/Versija laikomas esančiu tik pilnas – su visomis trimis dalimis.
+  ["make", "markės", (r) => r.make], ["tvv", "tipo/varianto/versijos", (r) => (tvvComplete(r.tvv) ? r.tvv : "")], ["model", "modelio", (r) => r.model],
   ["vin", "VIN", (r) => r.vin], ["approval_number", "patvirtinimo Nr.", (r) => (r.coc || {}).approval_number],
   ["approval_date", "patvirtinimo datos", (r) => (r.coc || {}).approval_date], ["colour", "spalvos", (r) => (r.coc || {}).colour],
 ];
@@ -1582,6 +1598,7 @@ function openMissing() {
       <div class="mrow-fields">${keys.map((key) => `
         <label>${esc(PAZYMA_LABELS[key][0])}
           <input type="text" class="${key === "colour" ? "" : "mono"}" data-mkey="${key}" placeholder="${esc(PAZYMA_LABELS[key][1])}"
+            value="${key === "tvv" ? esc(record.tvv || "") : ""}"
             ${key === "colour" ? 'list="lt-colours"' : ""} autocomplete="off" spellcheck="false"></label>`).join("")}</div>
     </div>`;
   }).join("");

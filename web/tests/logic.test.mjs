@@ -252,3 +252,17 @@ test("tipo patvirtinimas randamas ir suliejus žodžius (tikras X-Trail OCR)", (
   assert.equal(data.approval_number, "e13*2018/858*00293*07");
   assert.equal(data.approval_date, "26.05.2025");
 });
+
+test("0.2 tipas/variantas/versija – ir kai OCR iškraipo pavadinimus", async () => {
+  const { parseCocText, tvvComplete } = await import("../js/coc.js");
+  const tvv = (text) => parseCocText(`0.1. Make :NISSAN\n${text}\n0.2.1. Commercial name :NISSAN X-TRAIL`).type_variant_version;
+  assert.equal(tvv("0.2. Type ：T33\nVariant ：B\nVersion ：B20"), "T33/B/B20");
+  assert.equal(tvv("0.2. Type ：K15\nVariant ：NBE\nVension A3CEA8J50000"), "K15/NBE/A3CEA8J50000");
+  assert.equal(tvv("0.2. Type ：ZE2\nVarlant A\nVersicn : A02"), "ZE2/A/A02");
+  assert.equal(tvv("0.2. Type: J12 Variant: A Version: D1"), "J12/A/D1");
+  assert.equal(tvv("0.2. Type ：T33\nVariant ：B"), "T33/B");
+  assert.equal(tvvComplete("T33/B/B20"), true);
+  assert.equal(tvvComplete("T33/B"), false);
+  assert.equal(tvvComplete("T33/B/"), false);
+  assert.equal(tvvComplete(""), false);
+});
