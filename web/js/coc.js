@@ -327,6 +327,38 @@ export function typeVariantVersion(data) {
   return [data.type, data.variant, data.version].filter(Boolean).join("/");
 }
 
+/** Ar „Tipas/Variantas/Versija“ pilnas – visos trys dalys (pvz. T33/B/B20). */
+export function tvvComplete(text) {
+  return String(text || "").split("/").map((part) => part.trim()).filter(Boolean).length >= 3;
+}
+
+/**
+ * 0.2 skirsnis: variantas ir versija – atskirose eilutėse po „Type“. Kai OCR
+ * iškraipo pavadinimą („Vension“, „Varlant“) ar praleidžia dvitaškį, jų
+ * įprastas atpažinimas nepagauna – tada ieškoma kelių eilučių po tipo.
+ */
+function variantVersionNear(lines, typeIndex, data) {
+  // Viskas vienoje eilutėje: „Type: T33 Variant: B Version: B20“.
+  const combo = /^(\S+)\s+va\w*\s*(?:\(s\))?\s*[:;]?\s*(\S+)(?:\s+ve\w*\s*(?:\(s\))?\s*[:;]?\s*(\S+))?/i.exec(data.type);
+  if (combo) {
+    data.type = combo[1];
+    data.variant = data.variant || combo[2];
+    if (combo[3]) data.version = data.version || combo[3];
+  }
+  if (typeIndex === undefined) return;
+  for (let index = typeIndex + 1; index < Math.min(lines.length, typeIndex + 5); index += 1) {
+    const line = lines[index].text.trim();
+    if (/^0\s*\.\s*2\s*\.\s*1|^\d+\s*\.\s*\d/.test(line)) break; // jau kitas skirsnis
+    const match = /^(v[a-z0-9]{2,9})\s*(?:\(s\))?\s*[:;.]?\s*(.+)$/i.exec(line);
+    if (!match) continue;
+    const label = fold(match[1]);
+    const value = clean(match[2].replace(/^[:;.\s]+/, "")).split(" ")[0];
+    if (!value) continue;
+    if (!data.variant && /^va/.test(label)) data.variant = value;
+    else if (!data.version && /^ve/.test(label)) data.version = value;
+  }
+}
+
 /**
  * Iš liudijimo teksto sudaro duomenų objektą.
  *
@@ -491,6 +523,10 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
     data.warnings.push("Nerasta: spalva (40) – gali būti kitoje liudijimo pusėje.");
   }
 
+  if (data.type && (!data.variant || !data.version || /\bva\w*\s*[:;]/i.test(data.type))) variantVersionNear(lines, data.sources.type, data);
   data.type_variant_version = typeVariantVersion(data);
+  if (data.type && !tvvComplete(data.type_variant_version)) {
+    data.warnings.push(`Tipas/Variantas/Versija perskaitytas ne visas („${data.type_variant_version}“) – įrašykite iš 0.2 skirsnio.`);
+  }
   return data;
 }
