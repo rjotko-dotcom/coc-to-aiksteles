@@ -1149,6 +1149,8 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .copies-list { overflow-y: auto; min-height: 0; }
 .copies-with { display: inline-flex; align-items: center; gap: 10px; margin: 0 6px 0 0; cursor: pointer; color: var(--text); font-size: 14px; }
 .copies-with input { width: 18px; height: 18px; margin: 0; }
+.copies-with[hidden] { display: none; }
+.copies-options { display: flex; flex-wrap: wrap; gap: 10px 28px; padding: 12px 2px 2px; border-top: 1px solid var(--line); margin-top: 4px; }
 .copies-with span { display: flex; flex-direction: column; line-height: 1.25; }
 .copies-with small { color: var(--muted); font-size: 11.5px; }
 .copy-row .mrow-head { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; }

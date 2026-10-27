@@ -57,6 +57,17 @@ function pazymaContent(doc) {
   return { nodes, close };
 }
 
+/** Kiek lapų užima pažyma: 1 + aiškūs lapų/skirsnių lūžiai šablone. */
+function pageCount(nodes) {
+  let breaks = 0;
+  nodes.forEach((node, index) => {
+    breaks += [...node.getElementsByTagNameNS(W, "br")].filter((br) => br.getAttributeNS(W, "type") === "page").length;
+    breaks += node.getElementsByTagNameNS(W, "pageBreakBefore").length;
+    if (isW(node, "p") && paragraphSect(node) && index < nodes.length - 1) breaks += 1;
+  });
+  return 1 + breaks;
+}
+
 function paragraphSect(paragraph) {
   const pPr = kids(paragraph, "pPr")[0];
   return pPr ? kids(pPr, "sectPr")[0] || null : null;
@@ -73,12 +84,13 @@ function putSect(doc, paragraph, sect) {
   pPr.insertBefore(sect, change || null);
 }
 
-function cocSect(headerId, footerId) {
+/** `oddPage` – skirsnis prasideda nelyginiame puslapyje (dvipusiam spausdinimui: naujas lapas). */
+function cocSect(headerId, footerId, oddPage = false) {
   const refs = ["default", "first", "even"].map((type) =>
     `<w:headerReference w:type="${type}" r:id="${headerId}"/>`).join("")
     + ["default", "first", "even"].map((type) => `<w:footerReference w:type="${type}" r:id="${footerId}"/>`).join("");
   const m = COC_PAGE.margin;
-  return `<w:sectPr>${refs}<w:pgSz w:w="${COC_PAGE.w}" w:h="${COC_PAGE.h}"/>`
+  return `<w:sectPr>${refs}${oddPage ? `<w:type w:val="oddPage"/>` : ""}<w:pgSz w:w="${COC_PAGE.w}" w:h="${COC_PAGE.h}"/>`
     + `<w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>`;
 }
 
@@ -107,7 +119,7 @@ const EMPTY_PART = (tag) => strToU8(`<?xml version="1.0" encoding="UTF-8" standa
  * items: [{ images: [{ jpeg: Uint8Array, mmW, mmH }], values }] – CoC lapai (JPEG, dydis mm;
  * priekis, galas…) ir pažymos reikšmės. Be lapų – tik pažyma. Grąžina .docx baitus.
  */
-export function buildPrintBundle(templateBytes, items) {
+export function buildPrintBundle(templateBytes, items, { duplex = false } = {}) {
   const files = unzipSync(new Uint8Array(templateBytes));
   const doc = parse(files["word/document.xml"]);
   const body = doc.getElementsByTagNameNS(W, "body")[0];
@@ -147,17 +159,19 @@ export function buildPrintBundle(templateBytes, items) {
   addOverride("/word/coc-footer.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml");
   addDefault("jpeg", "image/jpeg");
   const sect = cocSect("rIdCocHeader", "rIdCocFooter");
+  // Dvipusiai: kiekvieno CoC priekis – naujo lapo priekyje (Word prireikus įdeda tuščią puslapį po pažymos).
+  const firstSect = cocSect("rIdCocHeader", "rIdCocFooter", duplex);
 
   let imageCount = 0;
   items.forEach((item, index) => {
     // CoC lapai (priekis, galas…) – kiekvienas savame lape; be jų – tik pažyma.
     const images = item.images || (item.jpeg ? [item] : []);
-    for (const image of images) {
+    for (const [order, image] of images.entries()) {
       imageCount += 1;
       const relId = `rIdCoc${imageCount}`;
       files[`word/media/coc${imageCount}.jpeg`] = image.jpeg;
       addRel(relId, REL_IMAGE, `media/coc${imageCount}.jpeg`);
-      const fragment = new DOMParser().parseFromString(imageParagraph(imageCount - 1, relId, image, sect), "application/xml");
+      const fragment = new DOMParser().parseFromString(imageParagraph(imageCount - 1, relId, image, order === 0 ? firstSect : sect), "application/xml");
       body.appendChild(doc.importNode(fragment.documentElement, true));
     }
 
@@ -166,6 +180,7 @@ export function buildPrintBundle(templateBytes, items) {
     const imported = nodes.map((node) => doc.importNode(node, true));
     imported.forEach((node) => body.appendChild(node));
     const last = index === items.length - 1;
+    const pazymaPages = pageCount(nodes);
     const tail = imported[imported.length - 1];
     if (close) {
       const sectNode = doc.importNode(close, true);
@@ -180,6 +195,12 @@ export function buildPrintBundle(templateBytes, items) {
       // Paskutinio skirsnio nustatymai turi būti dokumento gale, ne pastraipoje.
       const own = paragraphSect(tail);
       if (own) { own.parentNode.removeChild(own); body.appendChild(own); }
+    }
+    // Dvipusiai: jei CoC lapų ir pažymos suma nelyginė – tuščias lapas, kad kitas CoC
+    // prasidėtų naujo lapo priekyje.
+    if (duplex && !last && images.length && (images.length + pazymaPages) % 2 === 1) {
+      const blank = new DOMParser().parseFromString(`<w:p xmlns:w="${W}" xmlns:r="${R}"><w:pPr>${sect}</w:pPr></w:p>`, "application/xml");
+      body.appendChild(doc.importNode(blank.documentElement, true));
     }
   });
 

@@ -2698,8 +2698,10 @@ async function printCopies(onlyPazymos = false) {
       if (withCoc) for (const page of [group.front, ...group.backs]) images.push(await pageJpeg(page.bytes));
       items.push({ images, values: pazymaValues(group.front) });
     }
-    download(buildPrintBundle(template, items), withCoc ? `coc-ir-aiksteles_${todayIso()}.docx` : `aiksteles_${todayIso()}.docx`, type);
-    toast(withCoc
+    download(buildPrintBundle(template, items, { duplex: withCoc && $("copies-duplex").checked }), withCoc ? `coc-ir-aiksteles_${todayIso()}.docx` : `aiksteles_${todayIso()}.docx`, type);
+    toast(withCoc && $("copies-duplex").checked
+      ? `Paruošta: ${items.length} CoC su pažymomis. Spausdinkite dvipusiai (abiejose pusėse, apversti per ilgąjį kraštą) – kiekvienas CoC prasidės nuo naujo lapo.`
+      : withCoc
       ? `Paruošta spausdinti: ${items.length} CoC ir ${items.length} pažym. Atidarykite failą ir spausdinkite – lapai eina paeiliui.`
       : `Paruošta spausdinti: ${items.length} pažym. viename faile.`);
   } catch (error) {
@@ -2712,9 +2714,18 @@ async function printCopies(onlyPazymos = false) {
 
 $("copies-files").addEventListener("change", (event) => { addCopies(event.target.files); event.target.value = ""; });
 // Ar spausdinti ir CoC kopijas – įsimenama šiame kompiuteryje.
-try { $("copies-with-coc").checked = localStorage.getItem("sandelis-copies-coc") !== "0"; } catch { /* nesvarbu */ }
+try {
+  $("copies-with-coc").checked = localStorage.getItem("sandelis-copies-coc") !== "0";
+  $("copies-duplex").checked = localStorage.getItem("sandelis-copies-duplex") === "1";
+} catch { /* nesvarbu */ }
+const syncDuplex = () => { $("copies-duplex-box").hidden = !$("copies-with-coc").checked; };
+syncDuplex();
 $("copies-with-coc").addEventListener("change", (event) => {
   try { localStorage.setItem("sandelis-copies-coc", event.target.checked ? "1" : "0"); } catch { /* nesvarbu */ }
+  syncDuplex();
+});
+$("copies-duplex").addEventListener("change", (event) => {
+  try { localStorage.setItem("sandelis-copies-duplex", event.target.checked ? "1" : "0"); } catch { /* nesvarbu */ }
 });
 $("copies").addEventListener("click", async (event) => {
   const action = event.target.closest("[data-copies]")?.dataset.copies;

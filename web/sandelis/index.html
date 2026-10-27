@@ -464,8 +464,11 @@
     <div class="copies-progress" id="copies-progress" hidden><span class="spinner"></span><span id="copies-progress-text"></span>
       <div class="bar"><i id="copies-bar"></i></div></div>
     <div class="missing-list copies-list" id="copies-list"></div>
-    <div class="dialog-actions">
+    <div class="copies-options">
       <label class="copies-with"><input type="checkbox" id="copies-with-coc" checked><span>Spausdinti ir CoC kopijas<small>CoC, pažyma, CoC, pažyma…</small></span></label>
+      <label class="copies-with" id="copies-duplex-box"><input type="checkbox" id="copies-duplex"><span>Spausdinsiu dvipusiai<small>po pažymos – tuščias lapas, kad kitas CoC prasidėtų naujame lape</small></span></label>
+    </div>
+    <div class="dialog-actions">
       <button type="button" class="btn primary" data-copies="print" id="copies-print"><svg><use href="#i-printer"/></svg>Paruošti spausdinimui (.docx)</button>
       <button type="button" class="btn" data-copies="zip" title="Kiekviena pažyma – atskiras Word failas"><svg><use href="#i-download"/></svg>Atskirai (.zip)</button>
       <span class="spacer"></span>
