@@ -494,6 +494,36 @@ const typedByHand = (record, key) => Boolean(record.touched || (record.typed || 
  */
 const VIN_BANDS = [[0.035, 0.135], [0.315, 0.405], [0.905, 0.97]];
 
+/**
+ * Citroën / Peugeot / Opel (Stellantis) CoC: viskas pirmame lape, dviem stulpeliais –
+ * 0.1–0.2.1 kairėje (~0,14–0,19), 0.10 VIN, 0.11 ir tipo patvirtinimas (~0,36–0,42),
+ * 40 spalva apačioje dešinėje (~0,83).
+ */
+const STELLANTIS_BANDS = [[0.12, 0.21], [0.34, 0.435], [0.81, 0.855]];
+const BAND_PROFILES = { nissan: VIN_BANDS, stellantis: STELLANTIS_BANDS };
+/** Gamintojo kodas VIN pradžioje (WMI) → kurio lapo išdėstymą naudoti. */
+const STELLANTIS_WMI = /^(VF3|VF7|VR3|VR7|VR1|VXK|VXE|VYF|W0V|W0L|ZFA|ZAR)/;
+const profileOfVin = (vin) => (STELLANTIS_WMI.test(cleanVin(vin)) ? "stellantis" : "nissan");
+/** Paskutinio perskaityto lapo gamintojas – partija paprastai vieno gamintojo, tad jis bandomas pirmas. */
+let bandProfile = "nissan";
+
+/**
+ * Greitas skaitymas tik juostose, kur to gamintojo CoC yra pažymos duomenys.
+ * Gamintojas atpažįstamas iš VIN; jei juostos ne to gamintojo – perskaitoma tinkamomis.
+ */
+async function readBanded(file, onStatus) {
+  const read = (profile) => readCertificate(file, onStatus, { required: NEEDED, bands: BAND_PROFILES[profile], retry: false });
+  const first = await read(bandProfile);
+  if (!first.ocr_used) return first;
+  const other = bandProfile === "nissan" ? "stellantis" : "nissan";
+  const wanted = first.vin ? profileOfVin(first.vin) : other;
+  if (wanted === bandProfile && first.vin) return first;
+  const second = await read(wanted);
+  if (!second.vin && !first.vin) return found(second) > found(first) ? second : first;
+  bandProfile = profileOfVin(second.vin || first.vin);
+  return second.vin ? fillMissing(second, first) : fillMissing(first, second);
+}
+
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
 const PAGE_TIMEOUT = 20 * 60_000;
 const PAGE_TIMEOUT_TEXT = "lapas skaitomas per ilgai";
@@ -521,7 +551,7 @@ async function readPage(file, onStatus, job = {}, firstRead = null) {
   const stop = () => { if (job.cancelled) throw new Error("atšaukta"); };
   // Pirmiausia – tik dvi siauros juostos, kuriose Nissan CoC visada yra markė,
   // modelis ir VIN. Tai ~4 kartus greičiau nei skaityti didelę lapo dalį.
-  const banded = firstRead || await readCertificate(file, onStatus, { required: NEEDED, bands: VIN_BANDS, retry: false });
+  const banded = firstRead || await readBanded(file, onStatus);
   // Pažymai būtina: pilnas tipas/variantas/versija ir tipo patvirtinimo Nr.
   const complete = (data) => tvvComplete(data.type_variant_version) && Boolean(data.approval_number);
   if (!banded.ocr_used || (banded.vin && complete(banded))) return banded;
@@ -1750,7 +1780,11 @@ function renderStage(animate = false) {
   // jos niekada nesipina. Greitai perjunginėjant tarpinės praleidžiamos.
   const leave = swap ? leaveCar(image) : Promise.resolve();
   carImage(key, paint, 960, (record.coc || {}).colour, (record.coc || {}).colour_raw).then(async (url) => {
-    if (!url) return;
+    if (!url) {
+      await leave;
+      if (token === swapToken) { image.hidden = true; image.classList.remove("leaving"); }
+      return;
+    }
     const next = new Image();
     next.src = url;
     await Promise.all([next.decode().catch(() => {}), leave]);
@@ -2537,7 +2571,7 @@ async function copyLane() {
       const file = new File([item.bytes], `${item.name} (${item.page} lapas).pdf`, { type: "application/pdf" });
       // Pirma – tik greitos juostos. Lapas be VIN, modelio ir tipo – galinė CoC pusė:
       // jos neskaitome (visa pažymai reikalinga informacija – priekyje), tik spausdiname.
-      const banded = await readCertificate(file, () => {}, { required: NEEDED, bands: VIN_BANDS, retry: false });
+      const banded = await readBanded(file, () => {});
       if (!copies.includes(item)) { classified(""); continue; }
       // Galinėje pusėje dažnai atspausdintas tas pats VIN – tai tas pats CoC, ne naujas.
       const previous = item.page > 1 ? copies.find((copy) => copy.name === item.name && copy.batch === item.batch && copy.page === item.page - 1) : null;

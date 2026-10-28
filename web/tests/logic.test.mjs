@@ -266,3 +266,22 @@ test("0.2 tipas/variantas/versija – ir kai OCR iškraipo pavadinimus", async (
   assert.equal(tvvComplete("T33/B/"), false);
   assert.equal(tvvComplete(""), false);
 });
+
+test("Citroën (Stellantis) CoC: be tarpo po numerio, iškraipyti žodžiai", async () => {
+  const { parseCocText } = await import("../js/coc.js");
+  const data = parseCocText([
+    "0.1. Make (Trade name of the manufacturer) :CITROEN",
+    "0.2. Type :E", "Variant D", "Version ：YHZ3-12E4CE",
+    "0.2.1.Commercial name(s) Berlingo",
+    "0.10.Vehicleidentification number ：VR7EDYHZ0TJ880530",
+    "conformsinallrespectsto the type describedin approvale2*2007/46*0625*39issucdon19/06/2026andcanbe",
+    "40. Colorof thevehicle ：grecn",
+  ].join("\n"), { ocrUsed: true });
+  assert.equal(data.make, "CITROEN");
+  assert.equal(data.type_variant_version, "E/D/YHZ3-12E4CE");
+  assert.equal(data.commercial_name, "Berlingo");
+  assert.equal(data.vin, "VR7EDYHZ0TJ880530");
+  assert.equal(data.approval_number, "e2*2007/46*0625*39");
+  assert.equal(data.approval_date, "19.06.2026");
+  assert.equal(data.colour, "ŽALIA");
+});

@@ -200,6 +200,8 @@ function shrunk(href, w, h) {
  * rezultatas įsimenamas, todėl tas pats modelis ir spalva dažomi tik kartą.
  */
 export function carImage(key, paint, width = 960, colour = paint?.name, raw = "") {
+  // Ne Nissan (pvz. Citroën) – paveikslo nėra: geriau jokio, nei svetimas modelis.
+  if (!CARS[key]) return Promise.resolve("");
   const shot = shotFor(key, colour, raw);
   const name = CARS[key]?.image || PLACEHOLDER;
   const car = IMAGES[name];
