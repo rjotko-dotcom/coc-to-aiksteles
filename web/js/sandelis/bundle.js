@@ -17,11 +17,12 @@ const REL_HEADER = `${R}/header`;
 const REL_FOOTER = `${R}/footer`;
 
 /**
- * CoC lapas: A4 be paraščių – paveikslas per visą lapą. Aukštis 1 mm mažesnis,
- * kad tuščia antraštė (1 pt) nenustumtų paveikslo į kitą lapą.
+ * CoC lapas: A4 su įprastomis mažomis paraštėmis (6,35 mm – Word dėl jų neperspėja),
+ * o pats CoC paveikslas – per visą lapą: jis „plaukioja“ lapo atžvilgiu už teksto,
+ * todėl paraštės jo nesumažina ir nenustumia į kitą lapą.
  */
-const COC_PAGE = { w: 11906, h: 16838, margin: 0 };
-const COC_MAX_MM = { w: 210, h: 296 };
+const COC_PAGE = { w: 11906, h: 16838, margin: 360 };
+const COC_MAX_MM = { w: 210, h: 297 };
 const EMU_PER_MM = 36000;
 
 const parse = (bytes) => new DOMParser().parseFromString(strFromU8(bytes), "application/xml");
@@ -91,7 +92,7 @@ function cocSect(headerId, footerId, oddPage = false) {
     + ["default", "first", "even"].map((type) => `<w:footerReference w:type="${type}" r:id="${footerId}"/>`).join("");
   const m = COC_PAGE.margin;
   return `<w:sectPr>${refs}${oddPage ? `<w:type w:val="oddPage"/>` : ""}<w:pgSz w:w="${COC_PAGE.w}" w:h="${COC_PAGE.h}"/>`
-    + `<w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="0" w:footer="0" w:gutter="0"/></w:sectPr>`;
+    + `<w:pgMar w:top="${m}" w:right="${m}" w:bottom="${m}" w:left="${m}" w:header="${m}" w:footer="${m}" w:gutter="0"/></w:sectPr>`;
 }
 
 function imageParagraph(index, relId, size, sect) {
@@ -99,17 +100,23 @@ function imageParagraph(index, relId, size, sect) {
   const cx = Math.round(size.mmW * ratio * EMU_PER_MM);
   const cy = Math.round(size.mmH * ratio * EMU_PER_MM);
   const id = 50000 + index;
+  // Lapo centre (A4 = 210 × 297 mm).
+  const offX = Math.max(0, Math.round((210 * EMU_PER_MM - cx) / 2));
+  const offY = Math.max(0, Math.round((297 * EMU_PER_MM - cy) / 2));
   return `<w:p xmlns:w="${W}" xmlns:r="${R}"
       xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
       xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">`
     + `<w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:ind w:left="0" w:right="0" w:firstLine="0"/><w:jc w:val="center"/>${sect}</w:pPr>`
-    + `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>`
-    + `<wp:docPr id="${id}" name="CoC ${index + 1}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">`
+    + `<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="${id}" behindDoc="1" locked="1" layoutInCell="1" allowOverlap="1">`
+    + `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="page"><wp:posOffset>${offX}</wp:posOffset></wp:positionH>`
+    + `<wp:positionV relativeFrom="page"><wp:posOffset>${offY}</wp:posOffset></wp:positionV>`
+    + `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/>`
+    + `<wp:docPr id="${id}" name="CoC ${index + 1}"/><wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">`
     + `<pic:pic><pic:nvPicPr><pic:cNvPr id="${id}" name="coc${index + 1}.jpeg"/><pic:cNvPicPr/></pic:nvPicPr>`
     + `<pic:blipFill><a:blip r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
     + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>`
-    + `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+    + `</pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`;
 }
 
 const EMPTY_PART = (tag) => strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`
