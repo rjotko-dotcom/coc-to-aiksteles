@@ -21,7 +21,8 @@ const APPROVAL_LOOSE_RE = new RegExp(
 
 const DATE_RE = /(?<!\d)(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?!\d)/;
 const ISO_DATE_RE = /\b(\d{4})[./-](\d{1,2})[./-](\d{1,2})\b/;
-const ITEM_CODE_RE = /^(\d+(?:\.\d+)*)\.?(?=\s|$)/;
+// Po numerio gali nebūti tarpo („0.2.1.Commercial name“ – Citroën / Stellantis CoC).
+const ITEM_CODE_RE = /^(\d+(?:\.\d+)*)\.?(?=\s|$|[A-Za-z(])/;
 
 /** Skirsnių numeriai vienodi visose kalbose – jais pasitikime pirmiausia. */
 const CODE_KEYS = {
@@ -308,7 +309,7 @@ function splitWithoutColon(line) {
   const skipped = [];
   while (rest) {
     const words = rest.split(/\s+/);
-    const first = fold(words[0]).replace(/^[().,;:]+|[().,;:]+$/g, "");
+    const first = fold(words[0]).replace(/\(s\)/g, "").replace(/^[().,;:]+|[().,;:]+$/g, "");
     if (!first || !LABEL_WORDS.has(first)) break;
     skipped.push(words.shift());
     rest = words.join(" ").replace(/^\([^)]*\)\s*/, "");
@@ -441,7 +442,9 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
   // Tada numeris neturi ribų iš šonų – jas atkuriame prieš ieškodami.
   const spaced = flat
     .replace(/(approval|réception|genehmigung|omologazione|homologación)(?=[eE]\s*\d)/gi, "$1 ")
-    .replace(/(\*\s*\d{1,3})(?=(granted|issued|délivrée|delivree|erteilt|rilasciata|concedida))/gi, "$1 ");
+    .replace(/(\*\s*\d{1,3})(?=(granted|issued|délivrée|delivree|erteilt|rilasciata|concedida))/gi, "$1 ")
+    // ir kai OCR iškraipo patį žodį („issucdon“, „grantcd“): po paskutinio numerio – raidė.
+    .replace(/(\*\s*\d{2,6}\s*\*\s*\d{1,3})(?=[A-Za-z])/g, "$1 ");
   const approval = APPROVAL_RE.exec(spaced);
   const loose = approval ? null : APPROVAL_LOOSE_RE.exec(spaced);
   if (approval || loose) {

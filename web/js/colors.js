@@ -67,6 +67,24 @@ const PATTERN = new RegExp(
   "g",
 );
 
+/** Ar žodžiai skiriasi ne daugiau kaip vienu ženklu (pakeistu, praleistu ar pridėtu). */
+function oneEditAway(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i += 1; j += 1; continue; }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else { i += 1; j += 1; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
 /**
  * Lietuviškas spalvos pavadinimas arba "" jei atpažinti nepavyko.
  * Dvispalvės transporto priemonės grąžinamos abiem spalvomis: `PILKA/JUODA`.
@@ -81,6 +99,14 @@ export function toLithuanian(raw) {
   for (const match of text.matchAll(PATTERN)) {
     const lithuanian = LOOKUP.get(match[1]);
     if (!found.includes(lithuanian)) found.push(lithuanian);
+  }
+  // Atpažinimo klaida vienoje raidėje („GRECN“ → GREEN, „BLACX“ → BLACK).
+  if (!found.length) {
+    for (const word of text.split(" ").filter((part) => part.length >= 4)) {
+      const near = [...LOOKUP.keys()].filter((key) => key.length >= 4 && !key.includes(" ") && oneEditAway(word, key));
+      const names = [...new Set(near.map((key) => LOOKUP.get(key)))];
+      if (names.length === 1 && !found.includes(names[0])) found.push(names[0]);
+    }
   }
   return found.join("/");
 }
