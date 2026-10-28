@@ -1645,7 +1645,14 @@ async function saveMissing() {
 }
 
 /** Ko trūksta pažymai (tušti laukai). */
-const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim()).map(([, name]) => name);
+const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim())
+  .map(([key, name]) => (key === "tvv" ? tvvMissingName(record.tvv) : name));
+
+/** Ko tiksliai trūksta 0.2 skiltyje: „T33/B“ → „versijos (0.2)“. */
+function tvvMissingName(tvv) {
+  const parts = String(tvv || "").split("/").map((part) => part.trim()).filter(Boolean).length;
+  return parts === 2 ? "versijos (0.2)" : parts === 1 ? "varianto ir versijos (0.2)" : "tipo/varianto/versijos (0.2)";
+}
 
 /** Ar skydelis matomas šalia sąrašo (plačiame ekrane). */
 const stageBeside = () => window.matchMedia("(min-width: 1100px)").matches;
@@ -2673,10 +2680,22 @@ async function printCopies(onlyPazymos = false) {
   const ready = groups.map((group) => group.front);
   if (!ready.length) return;
   if (busy && !await ask("Dar skaitoma", `Dar neperskaityta ${busy} kopij. Paruošti tik iš ${ready.length} jau perskaitytų?`, "Paruošti")) return;
-  const incomplete = ready.filter((copy) => pazymaMissing(copy).length).length;
-  if (incomplete && !await ask("Trūksta duomenų",
-    `${incomplete} ${plural(incomplete, "kopijoje", "kopijose", "kopijų")} kai kurie pažymos laukai neperskaityti – jie liks tušti. Įrašykite juos sąraše arba ruoškite taip.`,
-    "Vis tiek paruošti")) return;
+  // Prieš spausdinant – aiškiai: kuriam CoC ko trūksta (versijos, patvirtinimo Nr. …).
+  const incomplete = groups.map((group, index) => ({ index, copy: group.front, missing: pazymaMissing(group.front) }))
+    .filter((row) => row.missing.length);
+  if (incomplete.length) {
+    const lines = incomplete.slice(0, 12).map(({ index, copy, missing }) =>
+      `${index + 1}. ${copy.model ? displayModel(copy) : "CoC"} ${copy.vin ? `…${copy.vin.slice(-6)}` : "(VIN nerastas)"} – trūksta: ${missing.join(", ")}`);
+    if (incomplete.length > 12) lines.push(`… ir dar ${incomplete.length - 12}`);
+    const go = await ask(`Trūksta duomenų: ${incomplete.length} ${plural(incomplete.length, "CoC", "CoC", "CoC")}`,
+      `${lines.join("\n")}\n\nŠie laukai pažymose liks tušti. Geriau įrašykite juos sąraše (atsidaro po kiekvienu CoC).`,
+      "Vis tiek paruošti");
+    if (!go) {
+      document.querySelector(`[data-copy="${incomplete[0].copy.id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      document.querySelector(`[data-copy="${incomplete[0].copy.id}"] input[data-copy-key]`)?.focus({ preventScroll: true });
+      return;
+    }
+  }
   const template = await templateBytes();
   if (!template) return;
   const type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -2695,7 +2714,8 @@ async function printCopies(onlyPazymos = false) {
     for (const [index, group] of groups.entries()) {
       button.innerHTML = `<span class="spinner"></span>Ruošiama ${index + 1} iš ${groups.length}…`;
       const images = [];
-      if (withCoc) for (const page of [group.front, ...group.backs]) images.push(await pageJpeg(page.bytes));
+      // Spausdinimo tvarka: CoC galas, CoC priekis, po jų – aikštelė.
+      if (withCoc) for (const page of [...group.backs, group.front]) images.push(await pageJpeg(page.bytes));
       items.push({ images, values: pazymaValues(group.front) });
     }
     download(buildPrintBundle(template, items, { duplex: withCoc && $("copies-duplex").checked }), withCoc ? `coc-ir-aiksteles_${todayIso()}.docx` : `aiksteles_${todayIso()}.docx`, type);
