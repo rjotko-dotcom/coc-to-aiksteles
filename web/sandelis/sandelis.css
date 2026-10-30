@@ -439,7 +439,7 @@ dialog::backdrop { background: rgba(0, 0, 0, .72); animation: fade .2s ease; }
 .placed-dialog { width: min(720px, calc(100vw - 32px)); max-width: none; }
 .placed-dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 64px); }
 .placed-list { overflow-y: auto; margin: 4px -6px 0; padding: 0 6px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.pgroup { border: 1px solid rgba(255, 255, 255, .09); border-radius: 12px; background: rgba(255, 255, 255, .025); overflow: hidden; }
+.pgroup { flex: none; border: 1px solid rgba(255, 255, 255, .09); border-radius: 12px; background: rgba(255, 255, 255, .025); overflow: hidden; }
 .pgroup header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(255, 255, 255, .04); border-bottom: 1px solid rgba(255, 255, 255, .07); }
 .pgroup header .code { font-size: 16px; letter-spacing: .03em; padding: 3px 9px; border-radius: 7px; background: #fff; color: #111; }
 .pgroup header span { font-weight: 600; }
@@ -1170,6 +1170,8 @@ textarea:focus { outline: none; border-color: #5a5a62; }
 .copies-progress .bar i { display: block; height: 100%; width: 0; background: var(--accent-hi); transition: width .3s ease; }
 .missing-dialog form { padding: 22px; }
 .missing-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+/* Slenkamame sąraše eilutės nesuspaudžiamos – kitaip daug jų turint dingsta turinys. */
+.missing-list > * { flex: none; }
 .mrow { padding: 12px; border-radius: 12px; background: var(--card-2); border: 1px solid var(--line); }
 .mrow-head { display: flex; align-items: center; gap: 12px; }
 .mrow-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
