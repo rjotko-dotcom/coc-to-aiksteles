@@ -300,6 +300,21 @@ function keyFor(code, label) {
  * numeriu ir nubraukiame pavadinimo žodžius: „40. Colour of vehicle Black“ ->
  * („40 Colour of vehicle“, „Black“).
  */
+/** Pavadinimo žodis – ir kai OCR sulipdė kelis („commercialname“, „vehicleidentification“). */
+function isLabelWord(word) {
+  if (LABEL_WORDS.has(word)) return true;
+  if (word.length < 6) return false;
+  const ok = [true];
+  for (let end = 1; end <= word.length; end += 1) {
+    ok[end] = false;
+    for (let start = Math.max(0, end - 16); start < end; start += 1) {
+      const part = word.slice(start, end);
+      if (ok[start] && part.length >= 2 && LABEL_WORDS.has(part)) { ok[end] = true; break; }
+    }
+  }
+  return ok[word.length];
+}
+
 function splitWithoutColon(line) {
   const stripped = line.trim();
   const codeMatch = ITEM_CODE_RE.exec(stripped);
@@ -310,7 +325,7 @@ function splitWithoutColon(line) {
   while (rest) {
     const words = rest.split(/\s+/);
     const first = fold(words[0]).replace(/\(s\)/g, "").replace(/^[().,;:]+|[().,;:]+$/g, "");
-    if (!first || !LABEL_WORDS.has(first)) break;
+    if (!first || !isLabelWord(first)) break;
     skipped.push(words.shift());
     rest = words.join(" ").replace(/^\([^)]*\)\s*/, "");
   }
@@ -498,6 +513,8 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
     if (!data[field]) data.warnings.push(`Nerasta: ${human}`);
   }
   data.category = tidyCategory(data.category);
+  // „KONA,KAUAI“ → „KONA, KAUAI“ (OCR praleidžia tarpą po kablelio).
+  data.commercial_name = data.commercial_name.replace(/\s*,\s*/g, ", ").trim();
   const fixedName = tidyModelNames(data.commercial_name);
   if (fixedName !== data.commercial_name) {
     data.warnings.push(`Komercinis pavadinimas pataisytas iš „${data.commercial_name}“ į „${fixedName}“.`);

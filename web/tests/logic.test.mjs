@@ -285,3 +285,18 @@ test("Citroën (Stellantis) CoC: be tarpo po numerio, iškraipyti žodžiai", as
   assert.equal(data.approval_date, "19.06.2026");
   assert.equal(data.colour, "ŽALIA");
 });
+
+test("Hyundai CoC: „- Variant“, sulipę pavadinimo žodžiai be dvitaškio", async () => {
+  const { parseCocText } = await import("../js/coc.js");
+  const data = parseCocText([
+    "0.1.Make（Tradenameofmanufacturer): HYUNDAI", "0.2.Type: SX2E", "-Variant : F5E22", "-Version: E11BZ1",
+    "0.2.1.Commercialname（s) KONA,KAUAI", "approval e4*2018/858*00168*04", "granted on 31.03.2026and",
+    "0.10.Vehicleidentificationnumber: TMAH881A9VJ099845",
+  ].join("\n"), { ocrUsed: true });
+  assert.equal(data.make, "HYUNDAI");
+  assert.equal(data.type_variant_version, "SX2E/F5E22/E11BZ1");
+  assert.equal(data.commercial_name, "KONA, KAUAI");
+  assert.equal(data.vin, "TMAH881A9VJ099845");
+  assert.equal(data.approval_number, "e4*2018/858*00168*04");
+  assert.equal(data.approval_date, "31.03.2026");
+});
