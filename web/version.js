@@ -1,2 +1,2 @@
 // Sugeneruota `tools/build_sw.py` – ranka nekeisti.
-export const VERSION = "aikstele-305ef732985d";
+export const VERSION = "aikstele-147d90d4be61";

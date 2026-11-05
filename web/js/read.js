@@ -182,21 +182,25 @@ async function ocrPage(page, dpi = OCR_DPI, area = 1, rotation = 0) {
   if (!bands) return { lines: linesFromBoxes(await recognise(canvas)), canvas };
 
   const boxes = [];
-  for (const [start, end] of bands) {
+  // Juosta gali būti ir tik dalies pločio ([nuo, iki, kairė, dešinė]) – lapui keliais
+  // stulpeliais, kad gretimų stulpelių tekstas nesusilietų į vieną eilutę.
+  for (const [start, end, left = 0, right = 1] of bands) {
     const y0 = Math.max(0, Math.round(viewport.height * start));
     const y1 = Math.min(canvas.height, Math.round(viewport.height * end));
-    if (y1 - y0 < 8) continue;
+    const x0 = Math.max(0, Math.round(canvas.width * left));
+    const x1 = Math.min(canvas.width, Math.round(canvas.width * right));
+    if (y1 - y0 < 8 || x1 - x0 < 8) continue;
     // Variklis vaizdą perskaičiuoja į 32 taškų kartotinius; siauros juostos
     // aukštis tada iškreipiamas ir koordinatės pasislenka. Todėl juosta
     // papildoma baltu fonu iki tikslaus kartotinio – mastelis lieka 1:1.
     const piece = document.createElement("canvas");
-    piece.width = Math.ceil(canvas.width / 32) * 32;
+    piece.width = Math.ceil((x1 - x0) / 32) * 32;
     piece.height = Math.ceil((y1 - y0) / 32) * 32;
     const pieceContext = piece.getContext("2d", { alpha: false });
     pieceContext.fillStyle = "#fff";
     pieceContext.fillRect(0, 0, piece.width, piece.height);
-    pieceContext.drawImage(canvas, 0, y0, canvas.width, y1 - y0, 0, 0, canvas.width, y1 - y0);
-    for (const box of await recognise(piece)) boxes.push({ ...box, y: box.y + y0 });
+    pieceContext.drawImage(canvas, x0, y0, x1 - x0, y1 - y0, 0, 0, x1 - x0, y1 - y0);
+    for (const box of await recognise(piece)) boxes.push({ ...box, y: box.y + y0, x0: box.x0 + x0, x1: box.x1 + x0 });
     piece.width = 0;
     piece.height = 0;
   }

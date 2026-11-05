@@ -500,28 +500,55 @@ const VIN_BANDS = [[0.035, 0.135], [0.315, 0.405], [0.905, 0.97]];
  * 40 spalva apačioje dešinėje (~0,83).
  */
 const STELLANTIS_BANDS = [[0.12, 0.21], [0.34, 0.435], [0.81, 0.855]];
-const BAND_PROFILES = { nissan: VIN_BANDS, stellantis: STELLANTIS_BANDS };
+/**
+ * Hyundai CoC: gulsčias lapas, nuskenuotas stačiai (reikia pasukti 270°), trys stulpeliai.
+ * Kairiame – 0.1–0.2.1 (~0,37–0,45) ir 0.10 VIN apačioje (~0,93–0,95), viduriniame –
+ * tipo patvirtinimas (~0,31–0,35). Skaitoma tik to stulpelio dalis – kitaip gretimų
+ * stulpelių tekstas susilieja. Spalvos priekyje nėra (ji kitoje lapo pusėje).
+ */
+const HYUNDAI_BANDS = [[0.365, 0.46, 0, 0.335], [0.27, 0.365, 0.335, 0.62], [0.91, 0.97, 0, 0.335]];
+const BAND_PROFILES = {
+  nissan: { bands: VIN_BANDS, rotation: 0 },
+  stellantis: { bands: STELLANTIS_BANDS, rotation: 0 },
+  hyundai: { bands: HYUNDAI_BANDS, rotation: 270 },
+  hyundai90: { bands: HYUNDAI_BANDS, rotation: 90 },
+};
 /** Gamintojo kodas VIN pradžioje (WMI) → kurio lapo išdėstymą naudoti. */
 const STELLANTIS_WMI = /^(VF3|VF7|VR3|VR7|VR1|VXK|VXE|VYF|W0V|W0L|ZFA|ZAR)/;
-const profileOfVin = (vin) => (STELLANTIS_WMI.test(cleanVin(vin)) ? "stellantis" : "nissan");
+const HYUNDAI_WMI = /^(TMA|NLH|KMH|KMF|KMJ|MAL|5NP|5NM|KNA|KNC|KND|KNE|U5Y)/;
+const profileOfVin = (vin) => {
+  const clean = cleanVin(vin);
+  return STELLANTIS_WMI.test(clean) ? "stellantis" : HYUNDAI_WMI.test(clean) ? "hyundai" : "nissan";
+};
 /** Paskutinio perskaityto lapo gamintojas – partija paprastai vieno gamintojo, tad jis bandomas pirmas. */
 let bandProfile = "nissan";
+const bandRotation = () => BAND_PROFILES[bandProfile].rotation;
 
 /**
  * Greitas skaitymas tik juostose, kur to gamintojo CoC yra pažymos duomenys.
  * Gamintojas atpažįstamas iš VIN; jei juostos ne to gamintojo – perskaitoma tinkamomis.
  */
 async function readBanded(file, onStatus) {
-  const read = (profile) => readCertificate(file, onStatus, { required: NEEDED, bands: BAND_PROFILES[profile], retry: false });
+  const read = (profile) => readCertificate(file, onStatus, {
+    required: NEEDED, bands: BAND_PROFILES[profile].bands, rotation: BAND_PROFILES[profile].rotation, retry: false,
+  });
   const first = await read(bandProfile);
   if (!first.ocr_used) return first;
-  const other = bandProfile === "nissan" ? "stellantis" : "nissan";
-  const wanted = first.vin ? profileOfVin(first.vin) : other;
-  if (wanted === bandProfile && first.vin) return first;
-  const second = await read(wanted);
-  if (!second.vin && !first.vin) return found(second) > found(first) ? second : first;
-  bandProfile = profileOfVin(second.vin || first.vin);
-  return second.vin ? fillMissing(second, first) : fillMissing(first, second);
+  if (first.vin && profileOfVin(first.vin) === bandProfile.replace(/90$/, "")) return first;
+  // VIN rastas, bet kito gamintojo – jo juostos; nerastas – bandomi kiti išdėstymai.
+  const order = first.vin
+    ? [profileOfVin(first.vin)]
+    : Object.keys(BAND_PROFILES).filter((profile) => profile !== bandProfile);
+  let best = first;
+  for (const profile of order) {
+    const data = await read(profile);
+    if (data.vin) {
+      bandProfile = profile === "hyundai" || profile === "hyundai90" || profile === profileOfVin(data.vin) ? profile : profileOfVin(data.vin);
+      return fillMissing(data, first);
+    }
+    if (found(data) > found(best)) best = data;
+  }
+  return best;
 }
 
 /** Ilgiausias vieno lapo skaitymas (su visais bandymais). */
@@ -556,13 +583,18 @@ async function readPage(file, onStatus, job = {}, firstRead = null) {
   const complete = (data) => tvvComplete(data.type_variant_version) && Boolean(data.approval_number);
   if (!banded.ocr_used || (banded.vin && complete(banded))) return banded;
   stop();
-  const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false });
+  const quick = await readCertificate(file, onStatus, { required: NEEDED, top: QUICK_TOP, retry: false, rotation: bandRotation() });
   // VIN rastas, bet ne viskas pažymai – trūkstami laukai paimami iš didesnės lapo dalies.
   if (banded.vin) {
-    const merged = fillMissing(banded, quick);
+    // Pasuktame (Hyundai) lape plačiau skaitant stulpeliai susilieja – iš ten imamas tik
+    // tipo patvirtinimas (jį randa pagal formatą), kiti laukai – tik iš stulpelių juostų.
+    const merged = fillMissing(banded, bandRotation()
+      ? { approval_number: quick.approval_number, approval_date: quick.approval_date }
+      : quick);
     if (complete(merged) || tvvComplete(merged.type_variant_version)) return merged;
     stop();
-    const sharp = await readCertificate(file, onStatus, { required: NEEDED, top: 0.2, retry: false, dpi: 300 }).catch(() => ({}));
+    // Pasuktam (Hyundai) lapui viršaus skaityti neverta – jo stulpeliai susilieja.
+    const sharp = bandRotation() ? {} : await readCertificate(file, onStatus, { required: NEEDED, top: 0.2, retry: false, dpi: 300 }).catch(() => ({}));
     return fillMissing(merged, sharp);
   }
   // VIN – svarbiausia. Jį radus lapas laikomas perskaitytu: modelis, jei jo nėra,
@@ -1676,7 +1708,10 @@ async function saveMissing() {
 
 /** Ko trūksta pažymai (tušti laukai). */
 const pazymaMissing = (record) => PAZYMA_NEEDS.filter(([, , get]) => !String(get(record) || "").trim())
-  .map(([key, name]) => (key === "tvv" ? tvvMissingName(record.tvv) : name));
+  .map(([key, name]) => (key === "tvv" ? tvvMissingName(record.tvv)
+    // Hyundai CoC spalva – kitoje lapo pusėje: iš priekio jos perskaityti neįmanoma.
+    : key === "colour" && /HYUNDAI/i.test(record.make || "") ? "spalvos (Hyundai – ji kitoje lapo pusėje, įrašykite)"
+    : name));
 
 /** Ko tiksliai trūksta 0.2 skiltyje: „T33/B“ → „versijos (0.2)“. */
 function tvvMissingName(tvv) {
