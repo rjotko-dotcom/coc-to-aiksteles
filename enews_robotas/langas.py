@@ -161,6 +161,7 @@ class Langas(tk.Tk):
         for b in (self.b_tikrinti, self.b_pradeti, self.b_testi, self.b_stabdyti):
             b.pack(side="left", padx=(0, 6))
         ttk.Button(mygt, text="Diagnostika", command=self.diagnostika).pack(side="right")
+        ttk.Button(mygt, text="↻ Pakartoti raudonas", command=self.pakartoti_raudonas).pack(side="right", padx=6)
         ttk.Button(mygt, text="⟳ Atnaujinti robotą", command=self.atnaujinti).pack(side="right", padx=6)
         varneles = ttk.Frame(f)
         varneles.pack(fill="x", pady=(0, 4))
@@ -210,7 +211,8 @@ class Langas(tk.Tk):
         self.medis.bind("<Double-1>", lambda e: self.taisyti())
         meniu = tk.Menu(self, tearoff=0)
         meniu.add_command(label="Taisyti…", command=self.taisyti)
-        meniu.add_command(label="Daryti iš naujo (nuimti spalvą)", command=self.is_naujo)
+        meniu.add_command(label="Tęsti nuo ten, kur sustojo (nuimti spalvą)", command=self.testi_eilutes)
+        meniu.add_command(label="Daryti iš naujo – visus žingsnius (nuimti spalvą)", command=self.is_naujo)
         meniu.add_command(label="Atspausdinti dar kartą (failai jau aplanke)", command=self.spausdinti_is_naujo)
         self.medis.bind("<Button-3>", lambda e: (self.medis.selection_set(self.medis.identify_row(e.y)),
                                                  meniu.tk_popup(e.x_root, e.y_root)))
@@ -370,6 +372,29 @@ class Langas(tk.Tk):
         if m is None or not self._galima_rasyti():
             return
         TaisymoLangas(self, m)
+
+    def testi_eilutes(self, eilutes: list[str] | None = None):
+        """Nuima spalvą, bet palieka įsimintus žingsnius – robotas darys tik tai, ko trūksta."""
+        sel = eilutes if eilutes is not None else list(self.medis.selection())
+        if not sel or not self._galima_rasyti():
+            return
+        s = Sarasas(self.aktyvus_excel(), N)
+        for iid in sel:
+            s.nuimti_spalva(int(iid))
+        s.issaugoti()
+        self.log(f"{len(sel)} eil. bus tęsiamos nuo ten, kur sustojo.")
+        self.perskaityti()
+
+    def pakartoti_raudonas(self):
+        raudonos = [str(m.eilute) for m in self.masinos
+                    if m.nuspalvinta and m.busena.lower().startswith("klaida")]
+        if not raudonos:
+            messagebox.showinfo(PAVADINIMAS, "Raudonų (klaida) eilučių nėra.")
+            return
+        if messagebox.askyesno(PAVADINIMAS, f"Raudonų eilučių: {len(raudonos)}. Nuimti spalvą, kad robotas jas "
+                                            "tęstų nuo ten, kur sustojo?\n\n(Oranžinės – blogas akumuliatorius – "
+                                            "lieka; joms reikia naujo testo.)"):
+            self.testi_eilutes(raudonos)
 
     def is_naujo(self):
         sel = self.medis.selection()

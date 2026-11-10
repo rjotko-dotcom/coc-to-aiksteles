@@ -82,7 +82,10 @@ class Valdymas:
     def busena(self, m: Masina, tekstas: str) -> None:
         """Pranešimas, kad eilutės būsena pasikeitė (langas atnaujina lentelę)."""
 
+    paskutinis = ""  # paskutinis žingsnis – kad klaidoje matytųsi, kur sustota
+
     def zingsnis(self, tekstas: str) -> None:
+        self.paskutinis = tekstas
         log.info("  → %s", tekstas)
         if self.stabdyti.is_set():
             raise Sustabdyta()
@@ -220,15 +223,38 @@ def laukti_ramybes(page: Page) -> None:
             raise
 
 
-def spausti(page: Page, raktas: str, laukti: float | None = None) -> None:
-    mygtukas = rasti(page, mygtuko_selektoriai(T(raktas)), " / ".join(T(raktas)), laukti)
+BLOKUOTA = ("nepavyko paspausti „{kas}“ – eNEWS jį uždengė pranešimu ar langu "
+            "(pvz. neatlikta atšaukimo kampanija). Sutvarkykite eNEWS ir spauskite „↻ Pakartoti raudonas“")
+
+
+def paspausti(page: Page, mygtukas, kas: str) -> None:
+    """Paspaudžia. Jei eNEWS mygtuką uždengia (pvz. neatlikta kampanija), NIEKADA nespaudžiama
+    priverstinai – tai būtų eNEWS apribojimo apėjimas; mašina pažymima klaida su paaiškinimu."""
     try:
-        mygtukas.click()
-    except Exception:
+        mygtukas.click(timeout=N.LAUKTI_SEK * 1000)
+    except Exception as e:
         if page.is_closed():  # mygtukas uždarė savo langą (pvz. PDI „Išsaugoti ir uždaryti“)
             return
+        if "Timeout" in str(e):
+            raise Klaida(BLOKUOTA.format(kas=kas)) from e
         raise
-    laukti_ramybes(page)
+
+
+def uzdeti_varnele(page: Page, laukelis: Locator, kas: str) -> None:
+    """Pažymi varnelę / pasirinkimą (priverstinai – niekada, žr. paspausti)."""
+    try:
+        laukelis.check(timeout=N.LAUKTI_SEK * 1000)
+    except Exception as e:
+        if "Timeout" in str(e):
+            raise Klaida(BLOKUOTA.format(kas=kas)) from e
+        raise
+
+
+def spausti(page: Page, raktas: str, laukti: float | None = None) -> None:
+    mygtukas = rasti(page, mygtuko_selektoriai(T(raktas)), " / ".join(T(raktas)), laukti)
+    paspausti(page, mygtukas, T1(raktas))
+    if not page.is_closed():
+        laukti_ramybes(page)
 
 
 # Ir išjungti laukai: po „Update“ jie įsijungia ne iš karto – irasyti() palaukia.
@@ -343,7 +369,7 @@ def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
     reg = rasti(page, [lauka_po("reg_numeris", "1")], "REG. NUMERIS laukas")
     rodykle = reg.evaluate_handle(RODYKLE_DESINIAU_JS).as_element()
     if rodykle is not None:
-        rodykle.click()
+        paspausti(page, rodykle, "paieškos rodyklė")
     else:
         log.info("     (rodyklės nerasta – spaudžiamas Enter)")
         laukas.press("Enter")
@@ -351,12 +377,13 @@ def ieskoti_vin(page: Page, pradzia: str, vin: str) -> None:
 
     zingsnis(f"uždaryti „{T1('atidavimas')}“ langelį")
     try:
-        rasti(page, [
+        x = rasti(page, [
             ".ui-dialog-titlebar-close",
             f"xpath={su_tekstu('atidavimas')}/ancestor::*[3]"
             "//*[contains(@class,'close') or contains(@id,'close') or contains(@id,'Close')]",
             "[title='Close']", "[title='close']", "[title='Uždaryti']", "text='×'",
-        ], "X mygtukas", laukti=8).click()
+        ], "X mygtukas", laukti=8)
+        paspausti(page, x, "X")
         laukti_ramybes(page)
     except Klaida:
         log.info("     (langelio nebuvo)")
@@ -374,17 +401,18 @@ def akumuliatorius(page: Page, m: Masina) -> None:
         return
 
     zingsnis("Perdavimas klientui")
-    rasti(page, [po(su_tekstu("perdavimas", "last()"), "input[@type='radio']")],
-          "Perdavimas klientui pasirinkimas").check()
+    uzdeti_varnele(page, rasti(page, [po(su_tekstu("perdavimas", "last()"), "input[@type='radio']")],
+                                "Perdavimas klientui pasirinkimas"), "Perdavimas klientui")
     laukti_ramybes(page)
 
     zingsnis("Midtronics")
     mid = T1("midtronics")
-    rasti(page, [
+    varnele = rasti(page, [
         f"xpath=//label[normalize-space()='{mid}']//input[@type='checkbox']",
         f"xpath=(//label[normalize-space()='{mid}'])[1]/preceding::input[@type='checkbox'][1]",
         f"xpath={su_tekstu('midtronics', tiksliai=True)}/preceding::input[@type='checkbox'][1]",
-    ], "Midtronics varnelė").check()
+    ], "Midtronics varnelė")
+    uzdeti_varnele(page, varnele, "Midtronics")
     laukti_ramybes(page)
 
     zingsnis(f"kodas {m.kodas_tekstu} → Validate")
@@ -439,8 +467,8 @@ def atidaryti_pdi_forma(page: Page) -> Page:
 
 def pazymeti_veikima(forma: Page) -> None:
     zingsnis("varnelė prie VEIKIMAS (visi punktai)")
-    rasti(forma, [f"xpath={su_tekstu('veiksmas')}/preceding::input[@type='checkbox'][1]"],
-          "VEIKIMAS varnelė").check()
+    uzdeti_varnele(forma, rasti(forma, [f"xpath={su_tekstu('veiksmas')}/preceding::input[@type='checkbox'][1]"],
+                                "VEIKIMAS varnelė"), "VEIKIMAS")
 
 
 def pdi(page: Page, m: Masina) -> None:
@@ -900,7 +928,7 @@ def vykdyti(sarasas: Sarasas, masinos: list[Masina], vienas: bool = False,
                             continue
                         rusis = "klaida"
                         kelias = nuotrauka(page, m.vin) if not page.is_closed() else None
-                        tekstas = f"Klaida: {e}".splitlines()[0][:250]
+                        tekstas = f"Klaida ({V.paskutinis}): {e}".splitlines()[0][:250]
                         sarasas.pazymeti(m.eilute, N.SPALVA_KLAIDA, tekstas)
                         log.error("  ✖ %s%s", tekstas, f" (nuotrauka klaidos/{kelias.name})" if kelias else "")
                     break

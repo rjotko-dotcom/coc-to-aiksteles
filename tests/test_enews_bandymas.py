@@ -140,3 +140,15 @@ def test_vinai_is_teksto_ir_excel(tmp_path):
     wb.create_sheet("kitas")["A1"] = "VIN: TESTA000000000004"
     wb.save(tmp_path / "v.xlsx")
     assert robotas.vinai_is_excel(tmp_path / "v.xlsx") == ["TESTA000000000003", "TESTA000000000004"]
+
+
+def test_uzdengto_mygtuko_robotas_nespaudzia_priverstinai(narsykle, monkeypatch):
+    """eNEWS uždengia mygtuką (pvz. neatlikta kampanija) – robotas NEapeina, o pažymi klaidą."""
+    import robotas
+    monkeypatch.setattr(robotas.N, "LAUKTI_SEK", 2)
+    page = narsykle.new_page()
+    page.set_content("""<button id=b onclick="this.textContent='PASPAUSTA'">Spausk</button>
+      <div style="position:fixed;inset:0;background:#0003">Neatlikta kampanija</div>""")
+    with pytest.raises(robotas.Klaida, match="kampanija"):
+        robotas.paspausti(page, page.locator("#b"), "Spausk")
+    assert page.locator("#b").inner_text() == "Spausk"
