@@ -16,7 +16,8 @@ from excel_eiles import Masina, uzrakintas
 KLAIDA = "klaida"          # robotas šios eilutės nedarys, kol nepataisyta
 PERSPEJIMAS = "perspėjimas"  # robotas darys, bet verta pažiūrėti
 
-NUMERIS_RE = re.compile(r"^[A-Z]{3}\d{3}$")
+# Lietuviški numeriai: įprasti ABC123 ir elektromobilių EA1234 (E + raidė + 4 skaitmenys).
+NUMERIS_RE = re.compile(r"^(?:[A-Z]{3}\d{3}|E[A-Z]\d{4})$")
 KODO_DALIS_RE = re.compile(r"^[A-Z0-9]{3,7}$")
 
 
@@ -40,7 +41,7 @@ def duomenys(masinos: list[Masina], siandien: dt.date | None = None) -> list[Pas
             if dalis and not KODO_DALIS_RE.match(dalis):
                 pastabos.append(Pastaba(KLAIDA, f"keista kodo dalis „{dalis}“", m.eilute))
         if m.numeris and not NUMERIS_RE.match(m.numeris):
-            pastabos.append(Pastaba(PERSPEJIMAS, f"numeris „{m.numeris}“ ne ABC123 formos", m.eilute))
+            pastabos.append(Pastaba(PERSPEJIMAS, f"numeris „{m.numeris}“ ne ABC123 ir ne elektromobilio EA1234 formos", m.eilute))
         for pav, data in (("PDI", m.pdi_data), ("tech. pradžios", m.garantija)):
             if data and (siandien - data).days > 90:
                 pastabos.append(Pastaba(PERSPEJIMAS, f"{pav} data senesnė nei 90 d.", m.eilute))

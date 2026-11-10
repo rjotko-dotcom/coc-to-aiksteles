@@ -968,7 +968,7 @@ PAGALBA = """KAIP NAUDOTIS
 1. Excel failą pildykite kaip įprasta, IŠSAUGOKITE ir UŽDARYKITE.
 2. Čia spauskite „Perskaityti“ – lentelėje matysite mašinas, kurias robotas darys.
      • raudonos (✖) – su klaida, robotas jų NEDARYS, kol nepataisysite;
-     • geltonos (!) – robotas darys, bet verta pažiūrėti (pvz. numeris ne ABC123 formos);
+     • geltonos (!) – robotas darys, bet verta pažiūrėti (pvz. numeris ne ABC123 / EA1234 formos);
      • baltos – paruoštos.
    Dukart spustelėjus eilutę galima pataisyti kodą, datas ar numerį – pakeitimas įrašomas į Excel.
 3. „✔ Tikrinti“ – patikrina ir kompiuterį: ar uždarytas Excel, ar yra Chrome ir

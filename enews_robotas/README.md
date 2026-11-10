@@ -104,7 +104,7 @@ Dukart spustelėjus **`paleisti.bat`** atsidaro valdymo langas (juodo lango nėr
 **Mašinos** – lentelė iš Excel:
 
 * **balta** – paruošta, robotas darys;
-* **geltona (!)** – darys, bet verta pažiūrėti (pvz. numeris ne ABC123 formos,
+* **geltona (!)** – darys, bet verta pažiūrėti (pvz. numeris ne ABC123 / EA1234 formos,
   data senesnė nei 90 d.);
 * **raudona (✖)** – robotas jos **nedarys**, kol nepataisysite: trūksta kodo dalies,
   neaiški data, VIN su klaida, tas pats Midtronics kodas / VIN / numeris dviejose

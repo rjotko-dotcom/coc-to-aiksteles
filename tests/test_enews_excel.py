@@ -173,3 +173,11 @@ def test_narsykles_pasirinkimas(tmp_path, monkeypatch):
     assert tikrinimas.rasti_narsykle("auto") == ("brave", brave)    # Chrome nėra – imamas Brave
     assert tikrinimas.rasti_narsykle("brave") == ("brave", brave)
     assert tikrinimas.rasti_narsykle("edge") is None
+
+
+def test_numerio_formos():
+    import tikrinimas
+    for gerai in ("AAA123", "EG3655", "EA0001"):
+        assert tikrinimas.NUMERIS_RE.match(gerai), gerai
+    for blogai in ("AA1234", "EG365", "AAA12", "E13655", "AAA 123"):
+        assert not tikrinimas.NUMERIS_RE.match(blogai), blogai
