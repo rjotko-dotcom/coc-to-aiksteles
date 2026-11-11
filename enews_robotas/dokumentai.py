@@ -74,8 +74,22 @@ class Eilute:
 
 @lru_cache(maxsize=1)
 def _variklis():
-    from rapidocr_onnxruntime import RapidOCR
+    """RapidOCR – naujas paketas „rapidocr“ (veikia ir su Python 3.13+), senesnis – „rapidocr_onnxruntime“."""
+    try:
+        from rapidocr import RapidOCR
+    except ImportError:
+        from rapidocr_onnxruntime import RapidOCR
     return RapidOCR()
+
+
+def _ocr_rezultatai(png: bytes):
+    """[(4 kampai, tekstas), …] nepriklausomai nuo RapidOCR versijos."""
+    rez = _variklis()(png)
+    if isinstance(rez, tuple):                      # rapidocr_onnxruntime: ([[box, txt, score], …], laikai)
+        return [(b, t) for b, t, _ in (rez[0] or [])]
+    if getattr(rez, "boxes", None) is None:         # rapidocr ≥ 2: objektas su .boxes ir .txts
+        return []
+    return [([tuple(q) for q in b], t) for b, t in zip(rez.boxes, rez.txts)]
 
 
 def _puslapiai(kelias: Path):
@@ -92,9 +106,8 @@ Remas = tuple[float, float, float, float, str]   # x0, y0, x1, y1, tekstas
 
 
 def ocr_remai(png: bytes) -> list[Remas]:
-    rez, _ = _variklis()(png)
     out = []
-    for b, t, _ in rez or []:
+    for b, t in _ocr_rezultatai(png):
         if t.strip():
             xs, ys = [q[0] for q in b], [q[1] for q in b]
             out.append((min(xs), min(ys), max(xs), max(ys), t.strip()))
@@ -135,6 +148,11 @@ def iskarpa(png: bytes, x0: float, y0: float, x1: float, y1: float) -> bytes:
     buf = io.BytesIO()
     img.crop((max(0, int(x0)), max(0, int(y0)), min(img.width, int(x1)), min(img.height, int(y1)))).save(buf, "PNG")
     return buf.getvalue()
+
+
+def kodo_tekstas(t: str) -> str:
+    """OCR brūkšnelį kartais mato kaip „=“, „–“, „_“ ar „~“."""
+    return re.sub(r"[=–—_~]", "-", t.replace(" ", "").upper())
 
 
 # --- Tekstų tvarkymas -------------------------------------------------------------------
@@ -220,7 +238,7 @@ def nagrineti_qa(elementai: list[Elementas], failas: str, siandien: dt.date, plo
     for x, y, t in elementai:
         if not qa.vin and "VIN" in t.upper():
             qa.vin = vin_is(t.split(":", 1)[-1] if ":" in t else t)
-        m = KODAS_RE.search(t.replace(" ", "").upper())
+        m = KODAS_RE.search(kodo_tekstas(t))
         if m and not all(qa.kodas):
             qa.kodas = (m.group(1), m.group(2), m.group(3))
         m = DATA_TESTO_RE.search(t)
@@ -279,7 +297,7 @@ def skaityti_qa(kelias: Path, siandien: dt.date | None = None, png: bytes | None
     qa = nagrineti_qa(elementai, Path(kelias).name, siandien, plotis)
     # Testo juostelės iškarpa: kodas + testo data + rezultatas (dešinė puslapio dalis)
     desine = [r for r in remai if r[0] > plotis * 0.7]
-    kodas = [r for r in desine if KODAS_RE.search(r[4].replace(" ", "").upper()) or "KODAS" in r[4].upper()]
+    kodas = [r for r in desine if KODAS_RE.search(kodo_tekstas(r[4])) or "KODAS" in r[4].upper()]
     data_rez = [r for r in desine if DATA_TESTO_RE.search(r[4]) or (r[4] == qa.rezultatas and qa.rezultatas)]
     qa.kodo_iskarpa = sudeti(remu_iskarpa(png, kodas, 12), remu_iskarpa(png, data_rez, 12))
     vieta = pdi_datos_vieta(elementai, plotis)

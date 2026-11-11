@@ -916,7 +916,7 @@ class Langas(_Baze):
         try:
             import dokumentai  # noqa: F401
             import fitz  # noqa: F401
-            import rapidocr_onnxruntime  # noqa: F401
+            dokumentai._variklis()
         except Exception as e:  # noqa: BLE001 – ir DLL klaidos (ImportError / OSError)
             if not Path(__file__).with_name("dokumentai.py").exists():
                 messagebox.showerror(PAVADINIMAS, "Trūksta failo dokumentai.py – skirtuke „Mašinos“ spauskite "
@@ -1232,7 +1232,7 @@ class DokumentoLangas(tk.Toplevel):
                                  parent=self)
             return
         tech = dokumentai.ivesta_data(self.lauk["tech"].get()) if self.lauk["tech"].get().strip() else None
-        kodas = dokumentai.KODAS_RE.search(self.lauk["kodas"].get().replace(" ", "").upper())
+        kodas = dokumentai.KODAS_RE.search(dokumentai.kodo_tekstas(self.lauk["kodas"].get()))
         if self.lauk["kodas"].get().strip() and not kodas:
             messagebox.showerror(PAVADINIMAS, "Kodas turi būti trijų dalių, pvz. AB12C-1D23E4-F5G67.", parent=self)
             return
