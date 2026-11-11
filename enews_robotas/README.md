@@ -51,6 +51,23 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 3. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
    **Nustatymai** pasirinkite spausdintuvus ir spauskite **Patikrinti**.
 
+## Dokumentai → Excel (be perrašinėjimo)
+
+Skirtukas **Dokumentai → Excel**: sumeskite iš el. laiško išsaugotus PDF – QA lapus (PDI +
+akumuliatoriaus testo juostelė) ir technikos pasų PDF (gali būti daug puslapių viename faile).
+Tvarka nesvarbi – kiekvienas puslapis atpažįstamas pats.
+
+1. **① Skaityti dokumentus** – tekstas atpažįstamas šiame kompiuteryje (RapidOCR, be interneto,
+   be DI paslaugų, be žetonų): VIN, testo kodas, testo data ir rezultatas, numeris (A),
+   tech. pradžia (B). ~2–3 s vienam puslapiui.
+2. Ranka rašyta PDI data atpažįstama ne visada – dukart spustelėkite eilutę, pažiūrėkite iškarpą ir
+   įrašykite (pvz. `261103`). Raudonos eilutės – trūksta duomenų, geltonos – verta patikrinti
+   (pvz. failo pavadinimas nesutampa su VIN lape).
+3. **② Sukurti Excel ir naudoti robotui** – nauja partijos Excel `Darbalaukis\eNEWS partijos\`.
+   Robotui reikalingi stulpeliai – tose pačiose vietose, o dešiniau – pastabos ir **iškarpos iš
+   dokumentų** (PDI data, testo juostelė, tech. paso A/B/E), kad akimis palygintumėte.
+   Geltoni langeliai – trūksta arba spėta. Lape „Pasai be QA“ – mašinos, kurių QA lapo negauta.
+
 ## Tik PDI lapai
 
 Skirtukas **„PDI lapai“** – kai reikia tik PDI lapų (be akumuliatoriaus, garantijos ir kt.):

@@ -20,6 +20,13 @@ from excel_eiles import Masina, Sarasas, menuo_diena, sukurti_sablona, uzrakinta
 
 PAVADINIMAS = "eNEWS robotas"
 
+try:  # failų tempimas pele į langą (nebūtina – be jo veikia mygtukai)
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    _Baze = TkinterDnD.Tk
+except Exception:  # noqa: BLE001
+    DND_FILES = None
+    _Baze = tk.Tk
+
 
 class LangoValdymas(robotas.Valdymas):
     """Robotas (atskiroje gijoje) kalbasi su langu per eilę."""
@@ -56,7 +63,7 @@ class EilesZurnalas(logging.Handler):
         self.eile.put(("log", self.format(record)))
 
 
-class Langas(tk.Tk):
+class Langas(_Baze):
     STULPELIAI = [("eil", "Eil.", 45), ("vin", "VIN", 160), ("kodas", "Midtronics kodas", 200),
                   ("pdi", "PDI", 85), ("tech", "Tech. pradžia", 95), ("numeris", "Numeris", 80),
                   ("busena", "Būsena / pastabos", 420)]
@@ -85,6 +92,7 @@ class Langas(tk.Tk):
         knyga.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self.knyga = knyga
         self._masinu_skirtukas(knyga)
+        self._dokumentu_skirtukas(knyga)
         self._pdi_skirtukas(knyga)
         self._nustatymu_skirtukas(knyga)
         self._tekstu_skirtukas(knyga)
@@ -582,6 +590,10 @@ class Langas(tk.Tk):
                     self.bell()
                     self.lift()
                     messagebox.showinfo(PAVADINIMAS, duom)
+                elif rusis == "dok_progresas":
+                    self.dok_info.set(duom)
+                elif rusis == "dok_baigta":
+                    self._dok_baigta(*duom)
                 elif rusis == "baigta":
                     self._dirba(False)
                     self.b_pdi.configure(state="normal")
@@ -803,6 +815,174 @@ class Langas(tk.Tk):
 
     # --- eNEWS užrašai --------------------------------------------------------------------
 
+    # --- Dokumentai → Excel -------------------------------------------------------------------
+
+    DOK_STULPELIAI = [("failas", "Failas", 150), ("vin", "VIN", 150), ("numeris", "Numeris", 70),
+                      ("kodas", "Testo kodas", 170), ("pdi", "PDI data", 85), ("tech", "Tech. (B)", 85),
+                      ("pastabos", "Pastabos", 420)]
+
+    def _dokumentu_skirtukas(self, knyga):
+        f = ttk.Frame(knyga, padding=10)
+        knyga.add(f, text="  Dokumentai → Excel  ")
+        self.dok_failai: list[Path] = []
+        self.dok_eilutes: list = []
+        self.dok_be_qa: list = []
+        ttk.Label(f, wraplength=1150, justify="left", text=(
+            "Sumeskite iš el. laiško gautus PDF: QA lapus (PDI + akumuliatoriaus testas) ir technikos pasų "
+            "PDF – nesvarbu kokia tvarka, robotas pats atpažins, kuris yra kuris. Tekstas skaitomas šiame "
+            "kompiuteryje (be interneto, be DI). Ranka rašytą PDI datą patikrinkite / įveskite: dukart "
+            "spustelėkite eilutę. Sukurtame Excel šalia kiekvienos mašinos įdėtos iškarpos iš dokumentų – "
+            "galėsite akimis palyginti.")).pack(fill="x")
+        mygt = ttk.Frame(f)
+        mygt.pack(fill="x", pady=6)
+        ttk.Button(mygt, text="Pridėti PDF…", command=self.dok_prideti).pack(side="left")
+        ttk.Button(mygt, text="Visi PDF iš aplanko…", command=self.dok_is_aplanko).pack(side="left", padx=6)
+        ttk.Button(mygt, text="Išvalyti", command=self.dok_isvalyti).pack(side="left")
+        self.b_dok_skaityti = ttk.Button(mygt, text="① Skaityti dokumentus", command=self.dok_skaityti)
+        self.b_dok_skaityti.pack(side="left", padx=12)
+        self.b_dok_excel = ttk.Button(mygt, text="② Sukurti Excel ir naudoti robotui", style="Didelis.TButton",
+                                      command=self.dok_sukurti_excel, state="disabled")
+        self.b_dok_excel.pack(side="right")
+
+        self.dok_sarasas = tk.Listbox(f, height=5)
+        self.dok_sarasas.pack(fill="x")
+        if DND_FILES:
+            self.dok_sarasas.drop_target_register(DND_FILES)
+            self.dok_sarasas.dnd_bind("<<Drop>>", lambda e: self.dok_prideti_kelius(self.tk.splitlist(e.data)))
+            self.dok_sarasas.insert("end", "  ⇩ Nutempkite PDF failus čia (arba „Pridėti PDF…“)")
+        self.dok_info = tk.StringVar(value="Failų: 0")
+        ttk.Label(f, textvariable=self.dok_info).pack(fill="x", pady=4)
+
+        lent = ttk.Frame(f)
+        lent.pack(fill="both", expand=True)
+        self.dok_medis = ttk.Treeview(lent, columns=[c for c, _, _ in self.DOK_STULPELIAI], show="headings")
+        for c, pav, w in self.DOK_STULPELIAI:
+            self.dok_medis.heading(c, text=pav)
+            self.dok_medis.column(c, width=w, stretch=(c == "pastabos"))
+        self.dok_medis.tag_configure("klaida", background="#f8d0d0")
+        self.dok_medis.tag_configure("ispejimas", background="#fff3c4")
+        sb = ttk.Scrollbar(lent, command=self.dok_medis.yview)
+        self.dok_medis.configure(yscrollcommand=sb.set)
+        self.dok_medis.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self.dok_medis.bind("<Double-1>", lambda e: self.dok_taisyti())
+
+    def dok_prideti_kelius(self, keliai):
+        if not self.dok_failai:
+            self.dok_sarasas.delete(0, "end")
+        for k in keliai:
+            k = Path(k)
+            kandidatai = sorted(k.glob("*.pdf")) + sorted(k.glob("*.PDF")) if k.is_dir() else [k]
+            for kk in kandidatai:
+                if kk.suffix.lower() == ".pdf" and kk not in self.dok_failai:
+                    self.dok_failai.append(kk)
+                    self.dok_sarasas.insert("end", str(kk))
+        self.dok_info.set(f"Failų: {len(self.dok_failai)}")
+
+    def dok_prideti(self):
+        keliai = filedialog.askopenfilenames(filetypes=[("PDF", "*.pdf"), ("Visi", "*.*")])
+        if keliai:
+            self.dok_prideti_kelius(keliai)
+
+    def dok_is_aplanko(self):
+        kelias = filedialog.askdirectory()
+        if kelias:
+            self.dok_prideti_kelius([kelias])
+
+    def dok_isvalyti(self):
+        self.dok_failai.clear()
+        self.dok_eilutes = []
+        self.dok_sarasas.delete(0, "end")
+        self.dok_medis.delete(*self.dok_medis.get_children())
+        self.b_dok_excel.configure(state="disabled")
+        self.dok_info.set("Failų: 0")
+
+    def dok_skaityti(self):
+        if not self.dok_failai:
+            messagebox.showinfo(PAVADINIMAS, "Pirma pridėkite PDF failus.")
+            return
+        try:
+            import dokumentai  # noqa: F401
+            import rapidocr_onnxruntime  # noqa: F401
+        except ImportError:
+            messagebox.showerror(PAVADINIMAS, "Trūksta teksto atpažinimo dalies. Skirtuke „Mašinos“ spauskite "
+                                              "„⟳ Atnaujinti robotą“ (jei reikia – du kartus), tada uždarykite "
+                                              "ir vėl paleiskite robotą.")
+            return
+        self.b_dok_skaityti.configure(state="disabled")
+        self.b_dok_excel.configure(state="disabled")
+        failai = list(self.dok_failai)
+
+        def darbas():
+            import dokumentai
+            try:
+                qa, pasai = dokumentai.skaityti_failus(failai, lambda t: self.eile.put(("dok_progresas", t)))
+                self.eile.put(("dok_baigta", (qa, pasai, None)))
+            except Exception as e:  # noqa: BLE001
+                logging.getLogger("robotas").exception("Dokumentų skaitymas: %s", e)
+                self.eile.put(("dok_baigta", ([], [], str(e))))
+
+        self.dok_info.set("Skaitoma… (vienas puslapis ~2–3 s)")
+        threading.Thread(target=darbas, daemon=True).start()
+
+    def _dok_baigta(self, qa, pasai, klaida):
+        import dokumentai
+        self.b_dok_skaityti.configure(state="normal")
+        if klaida:
+            self.dok_info.set(f"✖ Klaida: {klaida}")
+            return
+        self.dok_eilutes = dokumentai.sujungti(qa, pasai)
+        self.dok_be_qa = dokumentai.be_qa(qa, pasai)
+        self._dok_rodyti()
+        self.b_dok_excel.configure(state="normal" if self.dok_eilutes else "disabled")
+
+    def _dok_rodyti(self):
+        self.dok_medis.delete(*self.dok_medis.get_children())
+        for i, e in enumerate(self.dok_eilutes):
+            p = e.pasas
+            pastabos = e.qa.pastabos + e.pastabos
+            zyma = "klaida" if e.blokuota else ("ispejimas" if pastabos else "")
+            self.dok_medis.insert("", "end", iid=str(i), tags=(zyma,), values=(
+                e.qa.failas, e.qa.vin, p.numeris if p else "", "-".join(e.qa.kodas).strip("-"),
+                e.qa.pdi_data.isoformat() if e.qa.pdi_data else "?",
+                p.b_data.isoformat() if p and p.b_data else "?", "; ".join(pastabos)))
+        truksta = sum(1 for e in self.dok_eilutes if e.blokuota)
+        self.dok_info.set(f"QA lapų: {len(self.dok_eilutes)}, iš jų trūksta duomenų: {truksta}.  "
+                          f"Technikos pasų be QA lapo: {len(self.dok_be_qa)}"
+                          + ("  – dukart spustelėkite raudoną / geltoną eilutę" if truksta else ""))
+
+    def dok_taisyti(self):
+        sel = self.dok_medis.selection()
+        if sel:
+            DokumentoLangas(self, self.dok_eilutes[int(sel[0])])
+
+    def dok_sukurti_excel(self):
+        import dokumentai
+        aplankas = robotas.darbalaukis() / "eNEWS partijos"
+        aplankas.mkdir(parents=True, exist_ok=True)
+        kelias = aplankas / f"partija_{dt.datetime.now():%Y-%m-%d_%H%M}.xlsx"
+        try:
+            dokumentai.sukurti_excel(self.dok_eilutes, kelias, N, self.dok_be_qa)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror(PAVADINIMAS, f"Nepavyko sukurti Excel:\n{e}")
+            return
+        self.log(f"Sukurtas partijos Excel: {kelias}")
+        truksta = sum(1 for e in self.dok_eilutes if e.blokuota)
+        if messagebox.askyesno(PAVADINIMAS, f"Sukurta:\n{kelias}\n\n"
+                               + (f"Dar trūksta duomenų {truksta} mašinoms (geltoni langeliai) – robotas jų "
+                                  "nedarys, kol neįrašysite.\n\n" if truksta else "")
+                               + "Naudoti šį Excel robotui dabar?"):
+            self.excel_kelias.set(str(kelias))
+            nauji = N.dabartines()
+            nauji["EXCEL_FAILAS"] = str(kelias)
+            N.issaugoti(nauji)
+            self.perskaityti()
+            self.knyga.select(0)
+        if messagebox.askyesno(PAVADINIMAS, "Atidaryti Excel ir peržiūrėti iškarpas?\n\n"
+                                            "(Pataisę – išsaugokite, UŽDARYKITE ir spauskite „Perskaityti“.)"):
+            if sys.platform == "win32":
+                os.startfile(kelias)  # noqa: S606
+
     # --- PDI lapai ------------------------------------------------------------------------
 
     def _pdi_skirtukas(self, knyga):
@@ -924,6 +1104,92 @@ class Langas(tk.Tk):
         t.configure(state="disabled")
 
 
+def _paveikslelis(png: bytes, max_plotis: int = 560):
+    """PNG baitai → Tk paveikslėlis (sumažintas, jei per platus)."""
+    import io
+    from PIL import Image, ImageTk
+    img = Image.open(io.BytesIO(png))
+    if img.width > max_plotis:
+        img = img.resize((max_plotis, int(img.height * max_plotis / img.width)))
+    return ImageTk.PhotoImage(img)
+
+
+class DokumentoLangas(tk.Toplevel):
+    """Iškarpos + PDI datos (ir kitų laukų) įvedimas vienai mašinai."""
+
+    def __init__(self, tevas: Langas, e):
+        super().__init__(tevas)
+        self.tevas, self.e = tevas, e
+        self.title(f"{e.qa.failas} – patikrinimas")
+        self.transient(tevas)
+        self.vaizdai = []
+        f = ttk.Frame(self, padding=12)
+        f.pack(fill="both", expand=True)
+        for r, (pav, png) in enumerate((("PDI data (ranka):", e.qa.pdi_iskarpa),
+                                        ("Akumuliatoriaus testas:", e.qa.kodo_iskarpa),
+                                        ("Technikos pasas:", e.pasas.iskarpa if e.pasas else b""))):
+            ttk.Label(f, text=pav).grid(row=r, column=0, sticky="nw", padx=(0, 8), pady=4)
+            if png:
+                v = _paveikslelis(png)
+                self.vaizdai.append(v)
+                tk.Label(f, image=v, relief="solid", borderwidth=1).grid(row=r, column=1, sticky="w", pady=4)
+            else:
+                ttk.Label(f, text="(nerasta)").grid(row=r, column=1, sticky="w")
+        p = e.pasas
+        self.lauk = {}
+        for r, (k, pav, v) in enumerate((
+                ("pdi", "PDI data (pvz. 261103 arba 2026-11-03):", e.qa.pdi_data.isoformat() if e.qa.pdi_data else ""),
+                ("kodas", "Testo kodas:", "-".join(e.qa.kodas).strip("-")),
+                ("vin", "VIN:", e.qa.vin),
+                ("numeris", "Numeris:", p.numeris if p else ""),
+                ("tech", "Tech. pradžia (B):", p.b_data.isoformat() if p and p.b_data else "")), start=3):
+            ttk.Label(f, text=pav).grid(row=r, column=0, sticky="w", pady=2)
+            sv = tk.StringVar(value=v)
+            ent = ttk.Entry(f, textvariable=sv, width=30, font=("Consolas", 11))
+            ent.grid(row=r, column=1, sticky="w", pady=2)
+            self.lauk[k] = sv
+            if k == "pdi":
+                ent.focus_set()
+                ent.select_range(0, "end")
+        if p is None:
+            ttk.Label(f, foreground="#b00", text="Technikos pasas nerastas – numerį ir B datą įrašykite patys.").grid(
+                row=8, column=0, columnspan=2, sticky="w")
+        m = ttk.Frame(f)
+        m.grid(row=9, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(m, text="Gerai", style="Didelis.TButton", command=self.issaugoti).pack(side="left")
+        ttk.Button(m, text="Atšaukti", command=self.destroy).pack(side="left", padx=6)
+        self.bind("<Return>", lambda ev: self.issaugoti())
+        self.bind("<Escape>", lambda ev: self.destroy())
+
+    def issaugoti(self):
+        import dokumentai
+        e = self.e
+        pdi = dokumentai.ivesta_data(self.lauk["pdi"].get()) if self.lauk["pdi"].get().strip() else None
+        if self.lauk["pdi"].get().strip() and pdi is None:
+            messagebox.showerror(PAVADINIMAS, "Neatpažinta PDI data. Rašykite pvz. 261103 arba 2026-11-03.",
+                                 parent=self)
+            return
+        tech = dokumentai.ivesta_data(self.lauk["tech"].get()) if self.lauk["tech"].get().strip() else None
+        kodas = dokumentai.KODAS_RE.search(self.lauk["kodas"].get().replace(" ", "").upper())
+        if self.lauk["kodas"].get().strip() and not kodas:
+            messagebox.showerror(PAVADINIMAS, "Kodas turi būti trijų dalių, pvz. AB12C-1D23E4-F5G67.", parent=self)
+            return
+        if pdi:
+            dokumentai.ivesti_pdi(e.qa, pdi)
+        if kodas:
+            e.qa.kodas = (kodas.group(1), kodas.group(2), kodas.group(3))
+        e.qa.vin = self.lauk["vin"].get().strip().upper()
+        numeris = self.lauk["numeris"].get().strip().upper().replace(" ", "")
+        if e.pasas is None and (numeris or tech):
+            e.pasas = dokumentai.Pasas(failas="(įvesta ranka)", puslapis=0, vin=e.qa.vin)
+            e.pastabos = [x for x in e.pastabos if "nerastas" not in x]
+        if e.pasas:
+            e.pasas.numeris = numeris
+            e.pasas.b_data = tech
+        self.tevas._dok_rodyti()
+        self.destroy()
+
+
 class TaisymoLangas(tk.Toplevel):
     def __init__(self, tevas: Langas, m: Masina):
         super().__init__(tevas)
@@ -989,6 +1255,14 @@ class TaisymoLangas(tk.Toplevel):
 
 
 PAGALBA = """KAIP NAUDOTIS
+
+DOKUMENTAI → EXCEL (kad nereiktų perrašinėti ranka)
+   Skirtuke „Dokumentai → Excel“ sumeskite iš el. laiško išsaugotus PDF: QA lapus ir technikos
+   pasų PDF. „① Skaityti dokumentus“ – robotas pats atpažins VIN, testo kodą, testo rezultatą,
+   numerį (A) ir tech. pradžią (B). Ranka rašytą PDI datą patikrinkite / įveskite (dukart
+   spustelėkite eilutę – matysite iškarpą). „② Sukurti Excel ir naudoti robotui“ – nauja partijos
+   Excel darbalaukyje, aplanke „eNEWS partijos“; dešinėje – iškarpos iš dokumentų patikrai,
+   geltoni langeliai – trūksta arba spėta, patikrinkite.
 
 1. Excel failą pildykite kaip įprasta, IŠSAUGOKITE ir UŽDARYKITE.
 2. Čia spauskite „Perskaityti“ – lentelėje matysite mašinas, kurias robotas darys.
