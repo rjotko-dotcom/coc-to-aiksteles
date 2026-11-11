@@ -64,10 +64,21 @@ class Eilute:
     qa: QA
     pasas: Pasas | None
     pastabos: list[str] = field(default_factory=list)
+    dublikatas: str = ""                  # tikslus ankstesnės eilutės pakartojimas (tas pats VIN ir kodas) – praleidžiama
+    kartojasi: list[str] = field(default_factory=list)   # VIN / kodas / numeris jau yra kitur – reikia patikrinti
+    leisti_kartojima: bool = False        # žmogus patikrino: ne dublikatas, įtraukti
+
+    @property
+    def truksta(self) -> bool:
+        return self.pasas is None or not self.qa.vin or not all(self.qa.kodas) or self.qa.pdi_data is None
+
+    @property
+    def sustabdyta_kartojimo(self) -> bool:
+        return bool(self.kartojasi) and not self.leisti_kartojima
 
     @property
     def blokuota(self) -> bool:
-        return self.pasas is None or not self.qa.vin or not all(self.qa.kodas) or self.qa.pdi_data is None
+        return self.truksta or bool(self.dublikatas) or self.sustabdyta_kartojimo
 
 
 # --- OCR -----------------------------------------------------------------------
@@ -420,10 +431,86 @@ def ivesti_pdi(qa: QA, data: dt.date) -> None:
     qa.pastabos = [p for p in qa.pastabos if not p.startswith("PDI data")]
 
 
+def ankstesni_irasai(keliai, nust) -> tuple[dict[str, str], dict[str, str]]:
+    """VIN ir testo kodai iš ankstesnių Excel (robotui naudojamo ir senų partijų): {reikšmė: kur}."""
+    from openpyxl import load_workbook
+    from openpyxl.utils import column_index_from_string as ci
+    vinai: dict[str, str] = {}
+    kodai: dict[str, str] = {}
+    k1, k2, k3 = nust.STULP_KODAS
+    for kelias in keliai:
+        kelias = Path(kelias)
+        if not kelias.is_file() or kelias.name.startswith("~$"):
+            continue
+        try:
+            wb = load_workbook(kelias, read_only=True, data_only=True)
+        except Exception:  # noqa: BLE001 – užrakintas / sugadintas – praleidžiame
+            continue
+        try:
+            ws = wb.worksheets[0]
+            for eil in ws.iter_rows(min_row=2, values_only=True):
+                def v(st):
+                    i = ci(st) - 1
+                    return str(eil[i]).strip().upper() if i < len(eil) and eil[i] is not None else ""
+                vin = v(nust.STULP_VIN)
+                if VIN_RE.fullmatch(vin):
+                    vinai.setdefault(vin, kelias.name)
+                    kodas = "-".join((v(k1), v(k2), v(k3)))
+                    if all((v(k1), v(k2), v(k3))):
+                        kodai.setdefault(kodas, kelias.name)
+        finally:
+            wb.close()
+    return vinai, kodai
+
+
+def pazymeti_kartojimus(eilutes: list[Eilute], anksciau_vin: dict[str, str] | None = None,
+                        anksciau_kodas: dict[str, str] | None = None) -> None:
+    """Pasikartojimai: tas pats QA lapas du kartus (praleidžiamas), tas pats VIN su kitu kodu, tas pats kodas
+    kitai mašinai, tas pats numeris kitam VIN, mašina jau buvo ankstesnėje partijoje / roboto Excel."""
+    anksciau_vin = anksciau_vin or {}
+    anksciau_kodas = anksciau_kodas or {}
+    matyti: dict[tuple[str, str], int] = {}
+    pagal_vin: dict[str, list[int]] = {}
+    pagal_koda: dict[str, list[int]] = {}
+    pagal_nr: dict[str, list[int]] = {}
+    for i, e in enumerate(eilutes):
+        e.dublikatas, e.kartojasi = "", []
+        kodas = "-".join(e.qa.kodas) if all(e.qa.kodas) else ""
+        raktas = (e.qa.vin, kodas)
+        if e.qa.vin and raktas in matyti:
+            e.dublikatas = f"tas pats kaip {eilutes[matyti[raktas]].qa.failas} – praleidžiama"
+            continue
+        if e.qa.vin:
+            matyti[raktas] = i
+            pagal_vin.setdefault(e.qa.vin, []).append(i)
+        if kodas:
+            pagal_koda.setdefault(kodas, []).append(i)
+        if e.pasas and e.pasas.numeris:
+            pagal_nr.setdefault(e.pasas.numeris, []).append(i)
+    for rusis, grupes in (("VIN", pagal_vin), ("testo kodas", pagal_koda), ("numeris", pagal_nr)):
+        for reiksme, idx in grupes.items():
+            if len(idx) > 1:
+                for i in idx:
+                    kiti = ", ".join(eilutes[j].qa.failas for j in idx if j != i)
+                    eilutes[i].kartojasi.append(f"KARTOJASI {rusis} {reiksme} su {kiti}")
+    for e in eilutes:
+        if e.dublikatas:
+            continue
+        if e.qa.vin in anksciau_vin:
+            e.kartojasi.append(f"KARTOJASI: VIN jau yra {anksciau_vin[e.qa.vin]}")
+        kodas = "-".join(e.qa.kodas)
+        if all(e.qa.kodas) and kodas in anksciau_kodas:
+            e.kartojasi.append(f"KARTOJASI: testo kodas jau panaudotas {anksciau_kodas[kodas]}")
+
+
 def be_qa(qa_sarasas: list[QA], pasai: list[Pasas]) -> list[Pasas]:
     """Technikos pasai, kuriems neatsiųstas QA lapas."""
     vin = {q.vin for q in qa_sarasas}
-    return [p for p in pasai if p.vin and p.vin not in vin]
+    rez: dict[str, Pasas] = {}
+    for p in pasai:                       # tas pats pasas atsiųstas du kartus – rodomas vieną
+        if p.vin and p.vin not in vin:
+            rez.setdefault(p.vin, p)
+    return list(rez.values())
 
 
 def _excel_paveikslelis(png: bytes, max_plotis: int = 340, max_aukstis: int = 170):
@@ -463,7 +550,10 @@ def sukurti_excel(eilutes: list[Eilute], kelias: Path, nust, be_qa_pasai: list[P
         ws.column_dimensions[st].width = plotis
     geltona = PatternFill(fill_type="solid", fgColor="FFFFFF00")
     nr = 2
+    praleistos = [e for e in eilutes if e.dublikatas or e.sustabdyta_kartojimo]
     for e in eilutes:
+        if e in praleistos:
+            continue
         p = e.pasas
         qa = e.qa
         pdi = qa.pdi_data.strftime("%m.%d") if qa.pdi_data else ""
@@ -476,7 +566,7 @@ def sukurti_excel(eilutes: list[Eilute], kelias: Path, nust, be_qa_pasai: list[P
                 ws[f"{st}{nr}"].fill = geltona          # trūksta – įrašykite (VIN langelio nespalviname)
         if qa.pdi_data and qa.pdi_tekstas and not qa.pdi_ivesta:
             ws[f"{nust.STULP_PDI_DATA}{nr}"].fill = geltona    # atspėta iš ranka rašyto – patikrinkite
-        pastabos = [qa.failas] + qa.pastabos + e.pastabos
+        pastabos = [qa.failas] + e.kartojasi + qa.pastabos + e.pastabos
         ws[f"{st_past}{nr}"] = "\n".join(pastabos)
         ws[f"{st_past}{nr}"].alignment = Alignment(wrap_text=True, vertical="top")
         aukstis = 20
@@ -489,6 +579,14 @@ def sukurti_excel(eilutes: list[Eilute], kelias: Path, nust, be_qa_pasai: list[P
         for st in (nust.STULP_VIN, k1, k2, k3, nust.STULP_PDI_DATA, nust.STULP_GARANTIJA, nust.STULP_NUMERIS):
             ws[f"{st}{nr}"].alignment = Alignment(vertical="center")
         nr += 1
+    if praleistos:
+        lapas = wb.create_sheet("Kartojasi (neįtraukta)")
+        lapas.append(["Failas", "VIN", "Testo kodas", "Numeris", "Kodėl neįtraukta"])
+        for e in praleistos:
+            lapas.append([e.qa.failas, e.qa.vin, "-".join(e.qa.kodas), e.pasas.numeris if e.pasas else "",
+                          e.dublikatas or "; ".join(e.kartojasi)])
+        for st, w in (("A", 28), ("B", 22), ("C", 22), ("D", 10), ("E", 80)):
+            lapas.column_dimensions[st].width = w
     if be_qa_pasai:
         lapas = wb.create_sheet("Pasai be QA")
         lapas.append(["Numeris", "VIN", "B data", "Failas", "Puslapis"])

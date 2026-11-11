@@ -151,3 +151,32 @@ def test_pdi_datos_vieta():
     assert d.pdi_datos_vieta(pagrindas + [(1062, 1143, "Data:")], 2067) == (1062, 1143)
     # OCR sugadino viršutinį užrašą – lieka „GALUTINE PATIKRA“
     assert d.pdi_datos_vieta([(1059, 1268, "GALUTINEPATIKRA"), (1058, 1574, "Data:")], 2067)[1] == 1268 - 220 + 75
+
+
+def _eil(failas, vin, kodas, numeris):
+    qa = d.QA(failas, vin=vin, kodas=tuple(kodas.split("-")), pdi_data=dt.date(2026, 11, 3))
+    return d.Eilute(qa, d.Pasas("pasai.pdf", 1, vin=vin, numeris=numeris, b_data=dt.date(2026, 10, 30)))
+
+
+def test_kartojimai_ir_dublikatai(tmp_path):
+    e = [_eil("a_QA.pdf", VIN1, "TST01-1T1T01-T0001", "AAA001"),
+         _eil("a (kopija)_QA.pdf", VIN1, "TST01-1T1T01-T0001", "AAA001"),   # tas pats lapas du kartus
+         _eil("b_QA.pdf", VIN2, "TST01-1T1T01-T0001", "AAA002"),            # tas pats kodas kitai mašinai
+         _eil("c_QA.pdf", "TESTA000000000003", "TST03-1T3T03-T0003", "AAA003"),
+         _eil("d_QA.pdf", "TESTA000000000004", "TST04-1T4T04-T0004", "AAA004")]
+    d.pazymeti_kartojimus(e, {"TESTA000000000003": "partija_senas.xlsx"}, {})
+    assert e[1].dublikatas and not e[0].dublikatas
+    assert any("testo kodas" in k for k in e[0].kartojasi) and any("testo kodas" in k for k in e[2].kartojasi)
+    assert "partija_senas.xlsx" in e[3].kartojasi[0]
+    assert not e[4].kartojasi and not e[4].blokuota
+    e[3].leisti_kartojima = True
+    assert not e[3].blokuota
+    kelias = d.sukurti_excel(e, tmp_path / "p.xlsx", nustatymai)
+    wb = openpyxl.load_workbook(kelias)
+    assert [r[1] for r in wb.worksheets[0].iter_rows(min_row=2, values_only=True) if r[1]] == [
+        "TESTA000000000003", "TESTA000000000004"]
+    assert len(list(wb["Kartojasi (neįtraukta)"].iter_rows(min_row=2))) == 3
+    # ankstesnių partijų skaitymas
+    vinai, kodai = d.ankstesni_irasai([kelias, tmp_path / "nera.xlsx"], nustatymai)
+    assert vinai == {"TESTA000000000003": "p.xlsx", "TESTA000000000004": "p.xlsx"}
+    assert kodai["TST04-1T4T04-T0004"] == "p.xlsx"

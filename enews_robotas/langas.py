@@ -866,6 +866,7 @@ class Langas(_Baze):
             self.dok_medis.column(c, width=w, stretch=(c == "pastabos"))
         self.dok_medis.tag_configure("klaida", background="#f8d0d0")
         self.dok_medis.tag_configure("ispejimas", background="#fff3c4")
+        self.dok_medis.tag_configure("dublikatas", background="#e0e0e0", foreground="#777")
         sb = ttk.Scrollbar(lent, command=self.dok_medis.yview)
         self.dok_medis.configure(yscrollcommand=sb.set)
         self.dok_medis.pack(side="left", fill="both", expand=True)
@@ -930,11 +931,14 @@ class Langas(_Baze):
         self.b_dok_skaityti.configure(state="disabled")
         self.b_dok_excel.configure(state="disabled")
         failai = list(self.dok_failai)
+        ankstesni = self._ankstesni_excel()
 
         def darbas():
             import dokumentai
             try:
                 qa, pasai = dokumentai.skaityti_failus(failai, lambda t: self.eile.put(("dok_progresas", t)))
+                self.eile.put(("dok_progresas", "Tikrinama, ar mašinos nesikartoja su ankstesnėmis partijomis…"))
+                self.dok_anksciau = dokumentai.ankstesni_irasai(ankstesni, N)
                 self.eile.put(("dok_baigta", (qa, pasai, None)))
             except Exception as e:  # noqa: BLE001
                 logging.getLogger("robotas").exception("Dokumentų skaitymas: %s", e)
@@ -987,6 +991,16 @@ class Langas(_Baze):
             subprocess.Popen([sys.executable, str(Path(__file__).resolve())], cwd=str(Path(__file__).parent))
             self.destroy()
 
+    def _partiju_aplankas(self) -> Path:
+        return robotas.darbalaukis() / "eNEWS partijos"
+
+    def _ankstesni_excel(self) -> list[Path]:
+        keliai = sorted(self._partiju_aplankas().glob("*.xlsx"))
+        dabartinis = Path(self.aktyvus_excel())
+        if dabartinis.suffix.lower() in (".xlsx", ".xlsm") and dabartinis not in keliai:
+            keliai.append(dabartinis)
+        return keliai
+
     def _dok_baigta(self, qa, pasai, klaida):
         import dokumentai
         self.b_dok_skaityti.configure(state="normal")
@@ -999,19 +1013,29 @@ class Langas(_Baze):
         self.b_dok_excel.configure(state="normal" if self.dok_eilutes else "disabled")
 
     def _dok_rodyti(self):
+        import dokumentai
+        dokumentai.pazymeti_kartojimus(self.dok_eilutes, *getattr(self, "dok_anksciau", ({}, {})))
         self.dok_medis.delete(*self.dok_medis.get_children())
         for i, e in enumerate(self.dok_eilutes):
             p = e.pasas
-            pastabos = e.qa.pastabos + e.pastabos
-            zyma = "klaida" if e.blokuota else ("ispejimas" if pastabos else "")
+            if e.dublikatas:
+                pastabos = ["DUBLIKATAS: " + e.dublikatas]
+            else:
+                pastabos = (e.kartojasi + (["(patikrinta – įtraukiama)"] if e.kartojasi and e.leisti_kartojima else [])
+                            + e.qa.pastabos + e.pastabos)
+            zyma = ("dublikatas" if e.dublikatas else "klaida" if e.blokuota
+                    else "ispejimas" if pastabos else "")
             self.dok_medis.insert("", "end", iid=str(i), tags=(zyma,), values=(
                 e.qa.failas, e.qa.vin, p.numeris if p else "", "-".join(e.qa.kodas).strip("-"),
                 e.qa.pdi_data.isoformat() if e.qa.pdi_data else "?",
                 p.b_data.isoformat() if p and p.b_data else "?", "; ".join(pastabos)))
-        truksta = sum(1 for e in self.dok_eilutes if e.blokuota)
-        self.dok_info.set(f"QA lapų: {len(self.dok_eilutes)}, iš jų trūksta duomenų: {truksta}.  "
-                          f"Technikos pasų be QA lapo: {len(self.dok_be_qa)}"
-                          + ("  – dukart spustelėkite raudoną / geltoną eilutę" if truksta else ""))
+        truksta = sum(1 for e in self.dok_eilutes if e.truksta and not e.dublikatas)
+        dubl = sum(1 for e in self.dok_eilutes if e.dublikatas)
+        kart = sum(1 for e in self.dok_eilutes if e.sustabdyta_kartojimo and not e.dublikatas)
+        self.dok_info.set(f"QA lapų: {len(self.dok_eilutes)}; trūksta duomenų: {truksta}; "
+                          f"kartojasi: {kart}; dublikatų (praleidžiama): {dubl}; "
+                          f"tech. pasų be QA lapo: {len(self.dok_be_qa)}"
+                          + ("  – dukart spustelėkite raudoną eilutę" if truksta or kart else ""))
 
     def dok_taisyti(self):
         sel = self.dok_medis.selection()
@@ -1020,7 +1044,7 @@ class Langas(_Baze):
 
     def dok_sukurti_excel(self):
         import dokumentai
-        aplankas = robotas.darbalaukis() / "eNEWS partijos"
+        aplankas = self._partiju_aplankas()
         aplankas.mkdir(parents=True, exist_ok=True)
         kelias = aplankas / f"partija_{dt.datetime.now():%Y-%m-%d_%H%M}.xlsx"
         try:
@@ -1029,10 +1053,13 @@ class Langas(_Baze):
             messagebox.showerror(PAVADINIMAS, f"Nepavyko sukurti Excel:\n{e}")
             return
         self.log(f"Sukurtas partijos Excel: {kelias}")
-        truksta = sum(1 for e in self.dok_eilutes if e.blokuota)
+        truksta = sum(1 for e in self.dok_eilutes if e.truksta and not e.dublikatas and not e.sustabdyta_kartojimo)
+        neitraukta = sum(1 for e in self.dok_eilutes if e.dublikatas or e.sustabdyta_kartojimo)
         if messagebox.askyesno(PAVADINIMAS, f"Sukurta:\n{kelias}\n\n"
                                + (f"Dar trūksta duomenų {truksta} mašinoms (geltoni langeliai) – robotas jų "
                                   "nedarys, kol neįrašysite.\n\n" if truksta else "")
+                               + (f"Neįtraukta (kartojasi / dublikatai): {neitraukta} – žr. lapą "
+                                  "„Kartojasi (neįtraukta)“.\n\n" if neitraukta else "")
                                + "Naudoti šį Excel robotui dabar?"):
             self.excel_kelias.set(str(kelias))
             nauji = N.dabartines()
@@ -1166,18 +1193,20 @@ class Langas(_Baze):
         t.configure(state="disabled")
 
 
-def _paveikslelis(png: bytes, max_plotis: int = 560):
-    """PNG baitai → Tk paveikslėlis (sumažintas, jei per platus)."""
+def _paveikslelis(png: bytes, max_plotis: int = 560, max_aukstis: int = 10_000):
+    """PNG baitai → Tk paveikslėlis (sumažintas, kad tilptų)."""
     import io
     from PIL import Image, ImageTk
     img = Image.open(io.BytesIO(png))
-    if img.width > max_plotis:
-        img = img.resize((max_plotis, int(img.height * max_plotis / img.width)))
+    mastas = min(1.0, max_plotis / img.width, max_aukstis / img.height)
+    if mastas < 1:
+        img = img.resize((max(1, int(img.width * mastas)), max(1, int(img.height * mastas))))
     return ImageTk.PhotoImage(img)
 
 
 class DokumentoLangas(tk.Toplevel):
-    """Iškarpos + PDI datos (ir kitų laukų) įvedimas vienai mašinai."""
+    """Iškarpos + PDI datos (ir kitų laukų) įvedimas vienai mašinai.
+    PDI laukas ir „Gerai“ – iškart po PDI iškarpa, kad tilptų ir mažame ekrane (Enter – taip pat „Gerai“)."""
 
     def __init__(self, tevas: Langas, e):
         super().__init__(tevas)
@@ -1185,43 +1214,70 @@ class DokumentoLangas(tk.Toplevel):
         self.title(f"{e.qa.failas} – patikrinimas")
         self.transient(tevas)
         self.vaizdai = []
-        f = ttk.Frame(self, padding=12)
+        aukstis = self.winfo_screenheight()
+        f = ttk.Frame(self, padding=10)
         f.pack(fill="both", expand=True)
-        for r, (pav, png) in enumerate((("PDI data (ranka):", e.qa.pdi_iskarpa),
-                                        ("Akumuliatoriaus testas:", e.qa.kodo_iskarpa),
-                                        ("Technikos pasas:", e.pasas.iskarpa if e.pasas else b""))):
-            ttk.Label(f, text=pav).grid(row=r, column=0, sticky="nw", padx=(0, 8), pady=4)
-            if png:
-                v = _paveikslelis(png)
-                self.vaizdai.append(v)
-                tk.Label(f, image=v, relief="solid", borderwidth=1).grid(row=r, column=1, sticky="w", pady=4)
-            else:
-                ttk.Label(f, text="(nerasta)").grid(row=r, column=1, sticky="w")
         p = e.pasas
-        self.lauk = {}
-        for r, (k, pav, v) in enumerate((
-                ("pdi", "PDI data (pvz. 261103 arba 2026-11-03):", e.qa.pdi_data.isoformat() if e.qa.pdi_data else ""),
+
+        def vaizdas(tevas_w, png, plotis, auk):
+            if not png:
+                return ttk.Label(tevas_w, text="(nerasta)")
+            v = _paveikslelis(png, plotis, auk)
+            self.vaizdai.append(v)
+            return tk.Label(tevas_w, image=v, relief="solid", borderwidth=1)
+
+        # 1) PDI iškarpa + laukas + Gerai
+        ttk.Label(f, text="PDI data (ranka):", font=("Segoe UI", 10, "bold")).grid(row=0, column=0, sticky="w")
+        vaizdas(f, e.qa.pdi_iskarpa, 520, int(aukstis * 0.16)).grid(row=1, column=0, columnspan=2, sticky="w")
+        virsus = ttk.Frame(f)
+        virsus.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 8))
+        ttk.Label(virsus, text="PDI data (pvz. 261103):").pack(side="left")
+        self.lauk = {"pdi": tk.StringVar(value=e.qa.pdi_data.isoformat() if e.qa.pdi_data else "")}
+        ent = ttk.Entry(virsus, textvariable=self.lauk["pdi"], width=14, font=("Consolas", 12))
+        ent.pack(side="left", padx=6)
+        ent.focus_set()
+        ent.select_range(0, "end")
+        ttk.Button(virsus, text="Gerai", style="Didelis.TButton", command=self.issaugoti).pack(side="left", padx=6)
+        ttk.Button(virsus, text="Atšaukti", command=self.destroy).pack(side="left")
+
+        # 2) Testo juostelė ir technikos pasas – greta, sumažinti
+        greta = ttk.Frame(f)
+        greta.grid(row=3, column=0, columnspan=2, sticky="w")
+        auk = int(aukstis * 0.24)
+        ttk.Label(greta, text="Akumuliatoriaus testas:").grid(row=0, column=0, sticky="w")
+        ttk.Label(greta, text="Technikos pasas:").grid(row=0, column=1, sticky="w", padx=(10, 0))
+        vaizdas(greta, e.qa.kodo_iskarpa, 300, auk).grid(row=1, column=0, sticky="nw")
+        vaizdas(greta, p.iskarpa if p else b"", 400, auk).grid(row=1, column=1, sticky="nw", padx=(10, 0))
+
+        # 3) Kiti laukai – dviem stulpeliais
+        laukai = ttk.Frame(f)
+        laukai.grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        for i, (k, pav, v) in enumerate((
                 ("kodas", "Testo kodas:", "-".join(e.qa.kodas).strip("-")),
                 ("vin", "VIN:", e.qa.vin),
                 ("numeris", "Numeris:", p.numeris if p else ""),
-                ("tech", "Tech. pradžia (B):", p.b_data.isoformat() if p and p.b_data else "")), start=3):
-            ttk.Label(f, text=pav).grid(row=r, column=0, sticky="w", pady=2)
+                ("tech", "Tech. pradžia (B):", p.b_data.isoformat() if p and p.b_data else ""))):
+            ttk.Label(laukai, text=pav).grid(row=i // 2, column=(i % 2) * 2, sticky="w", pady=2, padx=(0, 4))
             sv = tk.StringVar(value=v)
-            ent = ttk.Entry(f, textvariable=sv, width=30, font=("Consolas", 11))
-            ent.grid(row=r, column=1, sticky="w", pady=2)
+            ttk.Entry(laukai, textvariable=sv, width=22, font=("Consolas", 10)).grid(
+                row=i // 2, column=(i % 2) * 2 + 1, sticky="w", padx=(0, 14))
             self.lauk[k] = sv
-            if k == "pdi":
-                ent.focus_set()
-                ent.select_range(0, "end")
         if p is None:
             ttk.Label(f, foreground="#b00", text="Technikos pasas nerastas – numerį ir B datą įrašykite patys.").grid(
-                row=8, column=0, columnspan=2, sticky="w")
-        m = ttk.Frame(f)
-        m.grid(row=9, column=0, columnspan=2, sticky="e", pady=(10, 0))
-        ttk.Button(m, text="Gerai", style="Didelis.TButton", command=self.issaugoti).pack(side="left")
-        ttk.Button(m, text="Atšaukti", command=self.destroy).pack(side="left", padx=6)
+                row=5, column=0, columnspan=2, sticky="w")
+        self.leisti = tk.BooleanVar(value=e.leisti_kartojima)
+        if e.kartojasi or e.dublikatas:
+            ttk.Label(f, foreground="#b00", wraplength=620, justify="left",
+                      text="\n".join([e.dublikatas] if e.dublikatas else e.kartojasi)).grid(
+                row=6, column=0, columnspan=2, sticky="w", pady=(6, 0))
+            if not e.dublikatas:
+                ttk.Checkbutton(f, variable=self.leisti, text="Patikrinau – tai ne dublikatas, įtraukti į Excel").grid(
+                    row=7, column=0, columnspan=2, sticky="w")
         self.bind("<Return>", lambda ev: self.issaugoti())
         self.bind("<Escape>", lambda ev: self.destroy())
+        self.update_idletasks()
+        y = max(0, min(tevas.winfo_rooty(), aukstis - self.winfo_reqheight() - 60))
+        self.geometry(f"+{max(0, tevas.winfo_rootx() + 40)}+{y}")
 
     def issaugoti(self):
         import dokumentai
@@ -1248,6 +1304,7 @@ class DokumentoLangas(tk.Toplevel):
         if e.pasas:
             e.pasas.numeris = numeris
             e.pasas.b_data = tech
+        e.leisti_kartojima = self.leisti.get()
         self.tevas._dok_rodyti()
         self.destroy()
 
