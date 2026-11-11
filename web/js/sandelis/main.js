@@ -2619,7 +2619,8 @@ async function copyLane() {
       const previous = item.page > 1 ? copies.find((copy) => copy.name === item.name && copy.batch === item.batch && copy.page === item.page - 1) : null;
       const previousVin = previous ? await previous.classified : "";
       const vin = cleanVin(banded.vin);
-      const front = !previous || !banded.ocr_used
+      // (Ir skaitmeniniame PDF su tekstu: galas be VIN, modelio ir tipo – tas pats CoC.)
+      const front = !previous
         ? true
         : vin ? vin !== previousVin : Boolean(banded.commercial_name || (banded.make && banded.type));
       // Priekio VIN juostose nerastas – kitas lapas palauks, kol jį perskaitys visą.
@@ -2627,6 +2628,10 @@ async function copyLane() {
       if (!front) {
         item.role = "back";
         item.ocr = "baigta";
+        // Spalva kai kurių gamintojų (Hyundai) CoC – galinėje pusėje: jei ten perskaityta, ji
+        // atitenka priekiui (tekstiniame PDF tai nieko nekainuoja).
+        if (banded.colour) { item.colour = banded.colour; item.colour_raw = banded.colour_raw; }
+        applyBackColour(item);
         renderCopies();
         continue;
       }
@@ -2645,6 +2650,7 @@ async function copyLane() {
       if (fromVin && !values.make) values.make = fromVin.make;
       for (const [key, value] of Object.entries(values)) if (!item.typed[key]) item[key] = value || "";
       item.ocr = "baigta";
+      applyBackColour(item);
     } catch (error) {
       item.ocr = "klaida";
       item.error = error.message || String(error);
@@ -2655,6 +2661,19 @@ async function copyLane() {
     renderCopyRow(item);
     renderCopiesProgress();
   }
+}
+
+/** Jei priekyje spalvos nėra, o galiniame lape ji perskaityta – įrašoma priekiui. */
+function applyBackColour(item) {
+  const group = copyGroups().find((entry) => entry.front === item || entry.backs.includes(item));
+  if (!group || group.front.ocr !== "baigta" || group.front.typed.colour) return;
+  const front = group.front;
+  if ((front.coc || {}).colour) return;
+  const back = group.backs.find((page) => page.colour);
+  if (!back) return;
+  front.coc = { ...front.coc, colour: back.colour, colour_raw: back.colour_raw };
+  front.ask = missingKeys(front);
+  renderCopyRow(front);
 }
 
 /** CoC: priekinis lapas ir po jo einantys galiniai (to paties failo). */
