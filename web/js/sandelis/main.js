@@ -2751,8 +2751,12 @@ async function pageJpeg(bytes) {
   const pdf = await openPdfDocument(bytes.slice());
   try {
     const page = await pdf.getPage(1);
-    const base = page.getViewport({ scale: 1 });
-    const viewport = page.getViewport({ scale: 150 / 72 });
+    // Gulsčias CoC lapas (pvz. skaitmeninis Hyundai) pasukamas 90° prieš laikrodžio rodyklę,
+    // kad užimtų visą stačią A4 lapą. Priekis ir galas sukami vienodai – dvipusiai sutampa.
+    const flat = page.getViewport({ scale: 1 });
+    const rotation = flat.width > flat.height ? (page.rotate + 270) % 360 : page.rotate;
+    const base = page.getViewport({ scale: 1, rotation });
+    const viewport = page.getViewport({ scale: 150 / 72, rotation });
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(viewport.width);
     canvas.height = Math.round(viewport.height);
