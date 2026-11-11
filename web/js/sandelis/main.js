@@ -3663,13 +3663,31 @@ async function checkVersion() {
   }
 }
 
-$("update-now").addEventListener("click", async () => {
+/**
+ * Atnaujinimas. Naršyklė pati dar kurį laiką laiko senus programos failus (GitHub Pages
+ * leidžia juos laikyti iki 10 min.), todėl vien perkrovus vėl įsikraudavo sena versija ir
+ * pranešimas nedingdavo. Todėl prieš perkraunant naujausi programos failai parsiunčiami
+ * tiesiai iš svetainės (aplenkiant naršyklės atmintį), o sena kopija ištrinama.
+ */
+async function updateNow(button, root) {
+  button.disabled = true;
+  button.textContent = "Atnaujinama…";
+  try {
+    const list = await (await fetch(new URL("sw.js", root), { cache: "no-store" })).text();
+    const files = [...list.matchAll(/"(\.\/(?:[^"]*\/)?(?:[^"/]*\.(?:js|mjs|css|html|webmanifest))?)"/g)]
+      .map((match) => match[1]).filter((path) => path.endsWith("/") || /\.(m?js|css|html|webmanifest)$/.test(path));
+    await Promise.all(files.map((path) => fetch(new URL(path, root), { cache: "reload" }).catch(() => null)));
+  } catch {
+    // neprisijungus – bent jau išvaloma sena kopija
+  }
   const registrations = await navigator.serviceWorker.getRegistrations();
   await Promise.all(registrations.map((registration) => registration.unregister()));
   const keys = await caches.keys();
   await Promise.all(keys.map((key) => caches.delete(key)));
   window.location.reload();
-});
+}
+
+$("update-now").addEventListener("click", () => updateNow($("update-now"), new URL("../../", import.meta.url)));
 
 checkVersion();
 

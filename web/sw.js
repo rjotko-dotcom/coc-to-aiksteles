@@ -3,7 +3,7 @@
 // Kad programa veiktų be interneto, visi failai (įskaitant atpažinimo variklį
 // ir kalbos duomenis) įrašomi į naršyklės talpyklą iškart po pirmo atidarymo.
 
-const VERSION = "aikstele-c34556b2b49b";
+const VERSION = "aikstele-14365fc4e87d";
 const ASSETS = [
   "./",
   "./version.js",
@@ -108,7 +108,8 @@ const ASSETS = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(VERSION)
-      .then((cache) => cache.addAll(ASSETS))
+      // Tiesiai iš svetainės (ne iš naršyklės atminties) – kitaip į naują kopiją galėtų patekti seni failai.
+      .then((cache) => cache.addAll(ASSETS.map((asset) => new Request(asset, { cache: "reload" }))))
       .then(() => self.skipWaiting()),
   );
 });
