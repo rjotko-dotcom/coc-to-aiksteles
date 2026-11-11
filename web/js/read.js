@@ -22,7 +22,7 @@ const RETRY_DPI = 300;
 async function textLayerLines(page) {
   const viewport = page.getViewport({ scale: 1 });
   const content = await page.getTextContent();
-  const items = content.items
+  const items = mergeGlyphs(content.items
     .filter((item) => item.str && item.str.trim())
     .map((item) => {
       const x0 = item.transform[4];
@@ -34,8 +34,32 @@ async function textLayerLines(page) {
         h: height,
         text: item.str,
       };
-    });
+    }));
   return linesFromBoxes(items);
+}
+
+/**
+ * Kai kurie PDF (pvz. skaitmeniniai Hyundai CoC) tekstą saugo po vieną raidę.
+ * Gretimos raidės toje pačioje eilutėje sujungiamos į žodžius; didesnis tarpas –
+ * naujas žodis, labai didelis (kitas stulpelis ar reikšmė) – atskiras fragmentas.
+ */
+function mergeGlyphs(items) {
+  const single = items.filter((item) => item.text.length <= 1).length;
+  if (items.length < 50 || single < items.length * 0.6) return items;
+  const sorted = [...items].sort((a, b) => (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.4 ? a.y - b.y : a.x0 - b.x0));
+  const out = [];
+  for (const item of sorted) {
+    const last = out[out.length - 1];
+    const sameLine = last && Math.abs(last.y - item.y) <= Math.min(last.h, item.h) * 0.4;
+    const gap = sameLine ? item.x0 - last.x1 : Infinity;
+    if (sameLine && gap > -item.h * 0.5 && gap < item.h * 1.2) {
+      last.text += gap > item.h * 0.25 ? ` ${item.text}` : item.text;
+      last.x1 = Math.max(last.x1, item.x1);
+    } else {
+      out.push({ ...item });
+    }
+  }
+  return out;
 }
 
 /** Iškerpa vietą puslapyje į atskirą drobę. */
