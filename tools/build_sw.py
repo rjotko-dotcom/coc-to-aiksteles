@@ -25,7 +25,8 @@ const ASSETS = [
 self.addEventListener("install", (event) => {{
   event.waitUntil(
     caches.open(VERSION)
-      .then((cache) => cache.addAll(ASSETS))
+      // Tiesiai iš svetainės (ne iš naršyklės atminties) – kitaip į naują kopiją galėtų patekti seni failai.
+      .then((cache) => cache.addAll(ASSETS.map((asset) => new Request(asset, {{ cache: "reload" }}))))
       .then(() => self.skipWaiting()),
   );
 }});
