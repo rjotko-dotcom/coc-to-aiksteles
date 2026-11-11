@@ -300,3 +300,11 @@ test("Hyundai CoC: „- Variant“, sulipę pavadinimo žodžiai be dvitaškio",
   assert.equal(data.approval_number, "e4*2018/858*00168*04");
   assert.equal(data.approval_date, "31.03.2026");
 });
+
+test("„0.1l.“ (OCR vietoj 0.11) – ne markė; data niekada nėra markė", async () => {
+  const { parseCocText } = await import("../js/coc.js");
+  const data = parseCocText("0.1l.Dateofmanufactureofthevehicle ：01/10/2026\n0.1. Make (Trade name of the manufacturer) :CITROEN", { ocrUsed: true });
+  assert.equal(data.make, "CITROEN");
+  assert.equal(data.manufacture_date, "01.10.2026");
+  assert.equal(parseCocText("0.1. Make : 01/10/2026", { ocrUsed: true }).make, "");
+});

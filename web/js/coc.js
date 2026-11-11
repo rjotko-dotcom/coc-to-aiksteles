@@ -386,7 +386,12 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
   const rawLines = typeof input === "string"
     ? input.split("\n").map((text) => ({ text }))
     : input;
-  const lines = rawLines.map((line) => ({ ...line, text: normaliseOcrText(line.text) }));
+  // Skirsnio numeryje OCR „1“ kartais perskaito kaip „l“ ar „I“ („0.1l.Date“ – tai 0.11,
+  // ne 0.1 markė): raidė iškart po numerio skaitmenų laikoma vienetu.
+  const lines = rawLines.map((line) => ({
+    ...line,
+    text: normaliseOcrText(line.text).replace(/^(\s*\d+(?:\.\d+)*)[lI](?=[.\s])/, (match, code) => `${code}1`),
+  }));
   const text = lines.map((line) => line.text).join("\n");
   const flat = text.replace(/\s+/g, " ");
   const data = {
@@ -436,6 +441,10 @@ export function parseCocText(input, { sourceFile = "", ocrUsed = false } = {}) {
           `VIN pataisytas po atpažinimo (${compact.match(VIN_LOOSE_RE)[0]} → ${repaired}) – sutampa kontrolinis skaitmuo, bet vis tiek sulyginkite.`,
         );
       }
+    } else if ((key === "make" || key === "commercial_name") && (DATE_RE.test(value) || !/[A-Za-z]{2}/.test(value))) {
+      // Markė ar modelis negali būti data ar vien skaičiai – tai kitos eilutės reikšmė.
+      delete data.sources[key];
+      continue;
     } else if (key === "manufacture_date") {
       data.manufacture_date = normaliseDate(value);
     } else if (key === "colour") {

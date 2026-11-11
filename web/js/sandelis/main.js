@@ -706,6 +706,7 @@ async function readLane() {
         for (const [key, value] of Object.entries(changes.coc)) if (!String(coc[key] || "").trim() && value) coc[key] = value;
         const filled = { coc, ocr: "baigta", refresh: false };
         for (const [key, value] of Object.entries(readValues)) if (!String(record[key] || "").trim() && value) filled[key] = value;
+        if (!validMake(record.make) && validMake(readValues.make) && !typedByHand(record, "make")) filled.make = readValues.make;
         // Nepilnas tipas/variantas/versija pakeičiamas pilnu (jei jo neįrašė žmogus).
         if (!tvvComplete(record.tvv) && tvvComplete(readValues.tvv) && !typedByHand(record, "tvv")) filled.tvv = readValues.tvv;
         await update(record, filled);
@@ -1637,10 +1638,16 @@ function animateRowMoves(before) {
 
 const PAZYMA_NEEDS = [
   // Tipas/Variantas/Versija laikomas esančiu tik pilnas – su visomis trimis dalimis.
-  ["make", "markės", (r) => r.make], ["tvv", "tipo/varianto/versijos", (r) => (tvvComplete(r.tvv) ? r.tvv : "")], ["model", "modelio", (r) => r.model],
+  ["make", "markės", (r) => (validMake(r.make) ? r.make : "")], ["tvv", "tipo/varianto/versijos", (r) => (tvvComplete(r.tvv) ? r.tvv : "")], ["model", "modelio", (r) => r.model],
   ["vin", "VIN", (r) => r.vin], ["approval_number", "patvirtinimo Nr.", (r) => (r.coc || {}).approval_number],
   ["approval_date", "patvirtinimo datos", (r) => (r.coc || {}).approval_date], ["colour", "spalvos", (r) => (r.coc || {}).colour],
 ];
+
+/** Markė – ne data ir ne vien skaičiai (anksčiau OCR „0.1l.“ įrašydavo pagaminimo datą). */
+function validMake(make) {
+  const text = String(make || "").trim();
+  return /[A-Za-zĄČĘĖĮŠŲŪŽąčęėįšųūž]{2}/.test(text) && !/\d{1,2}[./-]\d{1,2}[./-]\d{4}/.test(text);
+}
 
 const PAZYMA_LABELS = {
   make: ["Markė", ""], tvv: ["Tipas / Variantas / Versija", "pvz. T33/B/B20"], model: ["Modelis", ""], vin: ["VIN", ""],
