@@ -16,9 +16,16 @@ if not defined PY goto nera_python
 if not exist .venv\Scripts\python.exe (
     echo Pirmas paleidimas: diegiamos bibliotekos, palaukite apie minute...
     %PY% -m venv .venv || goto klaida
-    .venv\Scripts\python -m pip install --disable-pip-version-check -r requirements.txt || goto klaida
+)
+REM Bibliotekos diegiamos, kai requirements.txt pasikeite nuo paskutinio sekmingo diegimo.
+fc /b requirements.txt .venv\idiegta.txt >nul 2>nul
+if errorlevel 1 (
+    echo Diegiamos / atnaujinamos bibliotekos, palaukite 1-3 min...
+    .venv\Scripts\python -m pip install --disable-pip-version-check -r requirements.txt || goto klaida_bibl
+    copy /y requirements.txt .venv\idiegta.txt >nul
 )
 
+:paleisti
 if "%~1"=="" (
     REM Valdymo langas; juodas langas sumazinamas ir lieka tik jei ivyktu klaida.
     start "eNEWS robotas" /min cmd /c ".venv\Scripts\python langas.py || pause"
@@ -61,6 +68,13 @@ echo  Diegiant pazymekite "Add python.exe to PATH". Arba: Microsoft Store - "Pyt
 echo.
 pause
 exit /b 1
+
+:klaida_bibl
+echo.
+echo  Nepavyko idiegti kai kuriu biblioteku ^(gal imones tinklas blokuoja pypi.org^).
+echo  Robotas vis tiek paleidziamas; kitu kartu bus bandoma dar karta.
+pause
+goto paleisti
 
 :klaida
 echo.

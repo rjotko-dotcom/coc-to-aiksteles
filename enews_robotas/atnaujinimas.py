@@ -42,8 +42,13 @@ def atnaujinti() -> list[str]:
     if "requirements.txt" in pakeisti:  # naujos bibliotekos (pvz. spausdinimui)
         import subprocess
         import sys
-        subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-                        "-r", str(ARCH / "requirements.txt")], check=False, capture_output=True)
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+                            "-r", str(ARCH / "requirements.txt")], check=False, capture_output=True,
+                           text=True, errors="replace",
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode != 0:
+            pakeisti.append("(bibliotekų įdiegti nepavyko – paleidus iš naujo bus bandoma dar kartą: "
+                            + (r.stdout + r.stderr).strip().splitlines()[-1][:200] + ")")
     return pakeisti
 
 

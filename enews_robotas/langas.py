@@ -592,6 +592,8 @@ class Langas(_Baze):
                     messagebox.showinfo(PAVADINIMAS, duom)
                 elif rusis == "dok_progresas":
                     self.dok_info.set(duom)
+                elif rusis == "dok_idiegta":
+                    self._dok_idiegta(*duom)
                 elif rusis == "dok_baigta":
                     self._dok_baigta(*duom)
                 elif rusis == "baigta":
@@ -847,14 +849,17 @@ class Langas(_Baze):
         self.dok_sarasas = tk.Listbox(f, height=5)
         self.dok_sarasas.pack(fill="x")
         if DND_FILES:
-            self.dok_sarasas.drop_target_register(DND_FILES)
-            self.dok_sarasas.dnd_bind("<<Drop>>", lambda e: self.dok_prideti_kelius(self.tk.splitlist(e.data)))
             self.dok_sarasas.insert("end", "  ⇩ Nutempkite PDF failus čia (arba „Pridėti PDF…“)")
+        else:
+            self.dok_sarasas.insert("end", "  Failų tempimas pele dar neįdiegtas – spauskite „Pridėti PDF…“ "
+                                           "arba „① Skaityti dokumentus“ (pasiūlys įdiegti).")
+        self.dok_tempimo_vieta = f
         self.dok_info = tk.StringVar(value="Failų: 0")
         ttk.Label(f, textvariable=self.dok_info).pack(fill="x", pady=4)
 
         lent = ttk.Frame(f)
         lent.pack(fill="both", expand=True)
+        self.dok_lent = lent
         self.dok_medis = ttk.Treeview(lent, columns=[c for c, _, _ in self.DOK_STULPELIAI], show="headings")
         for c, pav, w in self.DOK_STULPELIAI:
             self.dok_medis.heading(c, text=pav)
@@ -866,6 +871,13 @@ class Langas(_Baze):
         self.dok_medis.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
         self.dok_medis.bind("<Double-1>", lambda e: self.dok_taisyti())
+        if DND_FILES:
+            for w in (f, self.dok_sarasas, self.dok_medis):
+                try:
+                    w.drop_target_register(DND_FILES)
+                    w.dnd_bind("<<Drop>>", lambda e: self.dok_prideti_kelius(self.tk.splitlist(e.data)))
+                except Exception as e:  # noqa: BLE001
+                    logging.getLogger("robotas").warning("Tempimas neveikia: %s", e)
 
     def dok_prideti_kelius(self, keliai):
         if not self.dok_failai:
@@ -903,11 +915,17 @@ class Langas(_Baze):
             return
         try:
             import dokumentai  # noqa: F401
+            import fitz  # noqa: F401
             import rapidocr_onnxruntime  # noqa: F401
-        except ImportError:
-            messagebox.showerror(PAVADINIMAS, "Trūksta teksto atpažinimo dalies. Skirtuke „Mašinos“ spauskite "
-                                              "„⟳ Atnaujinti robotą“ (jei reikia – du kartus), tada uždarykite "
-                                              "ir vėl paleiskite robotą.")
+        except Exception as e:  # noqa: BLE001 – ir DLL klaidos (ImportError / OSError)
+            if not Path(__file__).with_name("dokumentai.py").exists():
+                messagebox.showerror(PAVADINIMAS, "Trūksta failo dokumentai.py – skirtuke „Mašinos“ spauskite "
+                                                  "„⟳ Atnaujinti robotą“ dar kartą.")
+                return
+            if messagebox.askyesno(PAVADINIMAS, "Teksto atpažinimo programa dar neįdiegta "
+                                                f"({type(e).__name__}: {e}).\n\nĮdiegti dabar? Reikia interneto, "
+                                                "užtruks 1–3 min. (~150 MB)."):
+                self.idiegti_bibliotekas()
             return
         self.b_dok_skaityti.configure(state="disabled")
         self.b_dok_excel.configure(state="disabled")
@@ -924,6 +942,50 @@ class Langas(_Baze):
 
         self.dok_info.set("Skaitoma… (vienas puslapis ~2–3 s)")
         threading.Thread(target=darbas, daemon=True).start()
+
+    def idiegti_bibliotekas(self):
+        """pip install -r requirements.txt – eiga rodoma žurnale (skirtukas „Mašinos“)."""
+        import subprocess
+        self.b_dok_skaityti.configure(state="disabled")
+        self.dok_info.set("Diegiama… (eiga – skirtuko „Mašinos“ žurnale apačioje)")
+        self.log("Diegiamos bibliotekos (pip install -r requirements.txt)…")
+
+        def darbas():
+            kom = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+                   "-r", str(Path(__file__).with_name("requirements.txt"))]
+            try:
+                p = subprocess.Popen(kom, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                     encoding="utf-8", errors="replace",
+                                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                paskutines = []
+                for eil in p.stdout:
+                    eil = eil.rstrip()
+                    if eil:
+                        paskutines = (paskutines + [eil])[-15:]
+                        if eil.startswith(("Collecting", "Successfully", "ERROR", "error")):
+                            self.eile.put(("log", "   " + eil))
+                kodas = p.wait()
+            except Exception as e:  # noqa: BLE001
+                kodas, paskutines = -1, [str(e)]
+            self.eile.put(("dok_idiegta", (kodas, "\n".join(paskutines))))
+
+        threading.Thread(target=darbas, daemon=True).start()
+
+    def _dok_idiegta(self, kodas: int, isvestis: str):
+        self.b_dok_skaityti.configure(state="normal")
+        if kodas != 0:
+            self.dok_info.set("✖ Nepavyko įdiegti – žr. žurnalą.")
+            self.log("✖ Diegimas nepavyko:\n" + isvestis)
+            messagebox.showerror(PAVADINIMAS, "Nepavyko įdiegti bibliotekų (gal įmonės tinklas blokuoja "
+                                              "pypi.org?). Paskutinės eilutės:\n\n" + isvestis[-1200:])
+            return
+        self.log("✔ Bibliotekos įdiegtos.")
+        self.dok_info.set("✔ Įdiegta. Uždarykite ir vėl paleiskite robotą (kad veiktų ir tempimas pele).")
+        if messagebox.askyesno(PAVADINIMAS, "Įdiegta. Paleisti robotą iš naujo dabar?\n"
+                                            "(Kad veiktų failų tempimas pele.)"):
+            import subprocess
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve())], cwd=str(Path(__file__).parent))
+            self.destroy()
 
     def _dok_baigta(self, qa, pasai, klaida):
         import dokumentai
