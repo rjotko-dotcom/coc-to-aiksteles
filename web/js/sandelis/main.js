@@ -977,7 +977,7 @@ async function confirmRecord(id, quiet = false) {
   batchConfirmed.add(id);
   applyBinders();
   if (!quiet && !record.binder) toast("Patvirtinta. Kur dėti – parodyta virš sąrašo.");
-  if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record))}.`);
+  if (!quiet && record.binder) toast(`Dėkite į aplanką ${record.binder} (${folderOf(record)}) – jame ${binderFill(binderCount(record.binder), inSpecialFolder(record), record.binder)}.`);
   animateOut(id);
   if (!quiet) {
     render();
@@ -1038,13 +1038,13 @@ function renderPlaced() {
     const rows = items.map((record) => {
       const options = binders.filter((item) => binderAccepts(item, [record]))
         .sort((a, b) => a.code.localeCompare(b.code, "lt", { numeric: true }))
-        .map((item) => `<option value="${esc(item.code)}" ${item.code === record.binder ? "selected" : ""}>${esc(item.code)} · ${esc(displayGroup(item.group))} (${binderFill(binderCount(item.code), specials.has(item.group))})</option>`).join("");
+        .map((item) => `<option value="${esc(item.code)}" ${item.code === record.binder ? "selected" : ""}>${esc(item.code)} · ${esc(displayGroup(item.group))} (${binderFill(binderCount(item.code), specials.has(item.group), item.code)})</option>`).join("");
       const vin = record.vin || "";
       return `<li><span class="pvin">${esc(vin.slice(0, -6))}<b>${esc(vin.slice(-6))}</b></span><span class="pmodel">${esc(displayModel(record))}</span>
         <select data-placed-id="${esc(record.id)}" aria-label="Aplankas">${record.binder ? "" : `<option value="" selected>— pasirinkite —</option>`}${options}</select></li>`;
     }).join("");
     return `<section class="pgroup"><header><b class="code">${esc(code || "—")}</b><span>${esc(title)}</span>
-        ${binder ? `<small>${binderFill(binderCount(code), special)}</small>` : ""}${placedNew.includes(code) ? `<i>naujas aplankas</i>` : ""}
+        ${binder ? `<small>${binderFill(binderCount(code), special, code)}</small>` : ""}${placedNew.includes(code) ? `<i>naujas aplankas</i>` : ""}
         <em>${items.length} CoC</em></header><ul>${rows}</ul></section>`;
   }).join("");
 }
@@ -1423,7 +1423,9 @@ const codeOf = (name) => binders.find((binder) => binder.group === name)?.code |
 const binderOfRecord = (record) => record.binder || "";
 const binderCount = (code) => records.filter((record) => record.status === STATUS.IN && record.binder === code).length;
 /** „12/20“ modelio aplankui, „12 CoC“ – specialiam (jis neribojamas). */
-const binderFill = (count, special) => (special ? `${count} CoC` : `${count}/${BINDER_SIZE}`);
+/** Užpildymas: „8/20“, o specialiam ar aplankui „be limito“ – tiesiog „48 CoC“. */
+const binderFill = (count, special, code = "") => (special || unlimitedBinder(code) ? `${count} CoC` : `${count}/${BINDER_SIZE}`);
+const unlimitedBinder = (code) => Boolean(code && binders.some((binder) => binder.code === code && binder.unlimited));
 
 /** Aplanko žymė: kodas + pavadinimas. */
 function folderChip(record) {
@@ -1790,7 +1792,7 @@ function renderStage(animate = false) {
     ${record.status === STATUS.OUT
       ? `<div title="${esc(record.given_to || "")}">${icon("send")}<dt>Kam atiduota</dt><dd>${esc(record.given_to || "—")}</dd></div>`
       : `<div title="${esc(name)}">${icon("folder")}<dt>Aplankas</dt><dd>${binderOfRecord(record) ? esc(binderOfRecord(record)) : `<span class="muted-inline">be aplanko</span>`}${
-        binderOfRecord(record) ? ` <small class="muted-inline">${binderFill(binderCount(record.binder), inSpecialFolder(record))}</small>` : ""}</dd></div>`}
+        binderOfRecord(record) ? ` <small class="muted-inline">${binderFill(binderCount(record.binder), inSpecialFolder(record), record.binder)}</small>` : ""}</dd></div>`}
     <div>${icon("calendar")}<dt>${record.status === STATUS.OUT ? "Atiduota" : "Įkelta"}</dt><dd>${esc(shortDate(record.status === STATUS.OUT ? record.given_date : record.added))}</dd></div>`;
   const missing = pazymaMissing(record);
   const busy = ["laukia", "skaitoma"].includes(record.ocr);
@@ -1965,6 +1967,7 @@ function rowAction(action, id) {
 // ---------------------------------------------------------------------------
 
 let binderIds = [];
+let pendingUnlimited = false;
 
 const nextBinderCode = () => {
   const numbers = [...binders.map((binder) => binder.code), ...Object.values(folderCodes)]
@@ -2004,13 +2007,15 @@ function openBinderDialog(ids) {
     const ok = binderAccepts(binder, list);
     const moving = binderIds.filter((id) => byId(id).binder !== binder.code).length;
     const after = binder.records.length + moving;
-    const over = ok && !special && after > BINDER_SIZE;
+    const over = ok && !special && !binder.unlimited && after > BINDER_SIZE;
     return `<label class="choice ${over ? "over" : ""} ${ok ? "" : "disabled"} ${special ? "special" : ""}" ${ok ? "" : `title="Kitas modelis – ${esc(binder.group)}"`}>
       <input type="radio" name="binder" value="${esc(binder.code)}" ${ok ? "" : "disabled"} ${current.size === 1 && current.has(binder.code) ? "checked" : ""}>
-      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}<small>${binderFill(binder.records.length, special)}${ok && moving && binder.records.length !== after ? ` → ${binderFill(after, special)}` : ""}${over ? " – netilps" : ""}${ok ? "" : " · kitas modelis"}</small></label>`;
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}<small>${binderFill(binder.records.length, special, binder.code)}${ok && moving && binder.records.length !== after ? ` → ${binderFill(after, special, binder.code)}` : ""}${over ? " – netilps" : ""}${ok ? "" : " · kitas modelis"}</small></label>`;
   }).join("") || `<p class="muted">Aplankų dar nėra – įrašykite naujo kodą.</p>`;
   $("binder-new").value = "";
   $("binder-new").placeholder = `pvz. ${nextBinderCode()}`;
+  const chosen = binders.find((binder) => current.size === 1 && current.has(binder.code));
+  $("binder-unlimited").checked = Boolean(chosen?.unlimited);
   $("sidebar").classList.remove("open");
   $("binder-dialog").showModal();
 }
@@ -2030,7 +2035,7 @@ async function moveToBinder(code) {
     // Naujas aplankas – modelio (visi pasirinkti turi būti to paties modelio).
     const models = [...new Set(list.map(modelOfRecord))];
     if (models.length > 1) { toast(`Pažymėti skirtingi modeliai (${models.join(", ")}) – naujame aplanke modelių nemaišome.`, "warn"); return false; }
-    binder = { code, group: models[0] };
+    binder = { code, group: models[0], ...(pendingUnlimited ? { unlimited: true } : {}) };
     binders.push(binder);
   }
   await setMeta("binders", binders);
@@ -2104,7 +2109,7 @@ function renderFolders() {
     `<option value="${MODEL_FOLDERS}">Tik modelių aplankai</option>`,
     models.length ? `<optgroup label="Modeliai">${models.map(groupOption).join("")}</optgroup>` : "",
     special.length ? `<optgroup label="Specialūs aplankai">${special.map((folder) => groupOption(folder.name)).join("")}</optgroup>` : "",
-    view.length ? `<optgroup label="Aplankai po ${BINDER_SIZE}">${view.map((binder) => `<option value="${BINDER_PREFIX}${esc(binder.code)}">${esc(binder.code)} · ${esc(binder.group)}${binder.of > 1 ? ` ${binder.index}/${binder.of}` : ""} (${binderFill(binder.records.length, binder.special)})</option>`).join("")}</optgroup>` : "",
+    view.length ? `<optgroup label="Aplankai po ${BINDER_SIZE}">${view.map((binder) => `<option value="${BINDER_PREFIX}${esc(binder.code)}">${esc(binder.code)} · ${esc(binder.group)}${binder.of > 1 ? ` ${binder.index}/${binder.of}` : ""} (${binderFill(binder.records.length, binder.special, binder.code)})</option>`).join("")}</optgroup>` : "",
   ].join("");
   $("folder-filter").value = folderFilter;
   renderPrintButton();
@@ -2149,7 +2154,8 @@ function openCodes() {
   const view = binderContents(records, binders);
   $("codes-list").innerHTML = view.map((binder) => `
     <div class="code-row"><input type="text" class="mono" maxlength="8" data-code-for="${esc(binder.code)}" value="${esc(binder.code)}" aria-label="Kodas">
-      <span>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span><small>${binderFill(binder.records.length, binder.special)}${binder.special ? "" : " CoC"}</small>
+      <span>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}</span><small>${binderFill(binder.records.length, binder.special, binder.code)}${binder.special || binder.unlimited ? "" : " CoC"}</small>
+      ${binder.special ? "" : `<label class="unlimited-toggle" title="Šiame aplanke galima laikyti daugiau nei ${BINDER_SIZE} CoC"><input type="checkbox" data-unlimited-for="${esc(binder.code)}" ${binder.unlimited ? "checked" : ""}>be limito</label>`}
       <span class="order"><button type="button" class="icon-btn sm" data-move="-1" aria-label="Aukščiau">↑</button><button type="button" class="icon-btn sm" data-move="1" aria-label="Žemiau">↓</button></span></div>`).join("")
     || `<p class="muted">Aplankų dar nėra.</p>`;
   $("sidebar").classList.remove("open");
@@ -2167,7 +2173,12 @@ async function saveCodes() {
     if (seen.has(code)) { toast(`Kodas ${code} kartojasi – kiekvienas aplankas turi turėti savo.`, "err"); return false; }
     seen.add(code);
   }
-  binders = binders.map((binder) => ({ ...binder, code: renames.get(binder.code) || binder.code }));
+  const open = new Set([...$("codes-list").querySelectorAll("[data-unlimited-for]:checked")].map((input) => input.dataset.unlimitedFor));
+  binders = binders.map((binder) => {
+    const next = { ...binder, code: renames.get(binder.code) || binder.code };
+    if (open.has(binder.code)) next.unlimited = true; else delete next.unlimited;
+    return next;
+  });
   await setMeta("binders", binders);
   for (const record of records) {
     const to = record.binder && renames.get(record.binder);
@@ -2215,7 +2226,7 @@ function openStickers() {
   if (!view.length) { toast("Aplankų dar nėra.", "warn"); return; }
   $("stickers-list").innerHTML = view.map((binder) => `
     <label class="choice"><input type="checkbox" value="${esc(binder.code)}" checked>
-      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}<small>${binderFill(binder.records.length, binder.special)}</small></label>`).join("");
+      <b class="code">${esc(binder.code)}</b>${esc(binder.group)}${binder.of > 1 ? ` <small>${binder.index}/${binder.of}</small>` : ""}<small>${binderFill(binder.records.length, binder.special, binder.code)}</small></label>`).join("");
   $("stickers").showModal();
 }
 
@@ -3572,7 +3583,24 @@ $("binder-form").addEventListener("submit", async (event) => {
   const picked = $("binder-choices").querySelector("input:checked")?.value;
   const code = typed || picked;
   if (!code) { toast("Pasirinkite aplanką arba įrašykite naujo kodą.", "warn"); return; }
+  // „Be 20 limito“ – pažymima prieš perkeliant, kad CoC neiškeltų į kitą aplanką.
+  const open = $("binder-unlimited").checked;
+  if (binders.some((binder) => binder.code === code)) {
+    binders = binders.map((binder) => {
+      if (binder.code !== code) return binder;
+      const next = { ...binder };
+      if (open) next.unlimited = true; else delete next.unlimited;
+      return next;
+    });
+  } else {
+    pendingUnlimited = open;
+  }
   if (await moveToBinder(code)) $("binder-dialog").close();
+  pendingUnlimited = false;
+});
+$("binder-choices").addEventListener("change", (event) => {
+  const code = event.target.closest("input[name=binder]")?.value;
+  if (code) $("binder-unlimited").checked = unlimitedBinder(code);
 });
 $("binder-new").addEventListener("input", () => {
   if ($("binder-new").value) $("binder-choices").querySelectorAll("input").forEach((input) => { input.checked = false; });

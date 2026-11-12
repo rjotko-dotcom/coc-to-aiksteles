@@ -451,7 +451,7 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
     groups.get(group).push(record);
   }
 
-  for (const [group, members] of groups) {
+  for (let [group, members] of groups) {
     const own = () => list.filter((binder) => binder.group === group).sort(byCode);
     if (members.some(inSpecialFolder)) {
       // Specialus aplankas – visada vienas (jei anksčiau buvo padalintas – sujungiamas).
@@ -467,6 +467,15 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
       assign[record.id] = binder.code;
       filled.set(binder.code, (filled.get(binder.code) || 0) + 1);
     };
+    // Aplankas „be limito“ (pvz. klientui) laiko kiek nori: kas jame guli – ten ir lieka,
+    // net perrūšiuojant; automatiškai į jį nauji CoC nededami.
+    const unlimited = new Set(own().filter((binder) => binder.unlimited).map((binder) => binder.code));
+    const rest = [];
+    for (const record of members) {
+      if (unlimited.has(record.binder)) put(record, { code: record.binder });
+      else rest.push(record);
+    }
+    members = rest;
     const waiting = [];
     if (reorganize) {
       waiting.push(...[...members].sort(inBinderOrder));
@@ -482,7 +491,7 @@ export function planBinders(records, binders = [], { size = BINDER_SIZE, reorgan
     }
     for (const record of waiting) {
       if (!auto && !reorganize) { assign[record.id] = ""; continue; }
-      let binder = own().find((item) => (filled.get(item.code) || 0) < limit);
+      let binder = own().find((item) => !item.unlimited && (filled.get(item.code) || 0) < limit);
       if (!binder) binder = create(group);
       put(record, binder);
     }
