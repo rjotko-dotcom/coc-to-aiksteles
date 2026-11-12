@@ -1172,13 +1172,17 @@ function renderCounts() {
 // ---------------------------------------------------------------------------
 
 /** Vienos eilutės aprašas: VIN (su paryškinta rasta dalimi) ir modelis. */
-function vinLabel(record, part) {
+/** Visas VIN su paryškinta ieškota dalimi (niekada nenukerpamas – kitaip panašūs VIN atrodo vienodi). */
+function vinMarked(record, part) {
   const vin = record.vin || "";
   const at = part ? vin.lastIndexOf(part) : -1;
-  const shown = at >= 0
+  return at >= 0
     ? `${esc(vin.slice(0, at))}<mark>${esc(vin.slice(at, at + part.length))}</mark>${esc(vin.slice(at + part.length))}`
     : esc(vin);
-  return `<b class="mono-vin">${shown}</b> ${esc([record.make, record.model].filter(Boolean).join(" "))}`;
+}
+
+function vinLabel(record, part) {
+  return `<b class="mono-vin">${vinMarked(record, part)}</b> ${esc([record.make, record.model].filter(Boolean).join(" "))}`;
 }
 
 function statusLine(record) {
@@ -1293,8 +1297,10 @@ function renderAnswer(query) {
       <div class="options">
         <b>Rasta ${hits.length} CoC su „${esc(part)}“${have ? ` (turime ${have})` : ""} – kurio ieškote?</b>
         <ul>${shown.map((record) => `
-          <li><span class="opt-main">${vinLabel(record, part)}</span>
-            <span class="opt-where">${record.status === STATUS.OUT ? "" : folderChip(record)}</span>
+          <li><span class="opt-main"><b class="mono-vin">${vinMarked(record, part)}</b>
+              <small>${esc(displayModel(record))}${record.coc?.colour ? ` · ${esc(record.coc.colour)}` : ""}</small></span>
+            <span class="opt-where" title="Aplankas: ${esc(folderOf(record))}">${record.status === STATUS.OUT ? "" : binderOfRecord(record)
+              ? `<span class="folder"><b class="code">${esc(binderOfRecord(record))}</b></span>` : folderChip(record)}</span>
             <span class="opt-status">${statusLine(record)}</span>
             <span class="opt-actions">${answerButtons(record)}</span></li>`).join("")}</ul>
         ${hits.length > shown.length ? `<span class="where">Ir dar ${hits.length - shown.length} – įveskite daugiau VIN ženklų.</span>` : ""}
