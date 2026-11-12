@@ -256,7 +256,7 @@
     <button type="button" class="nav" data-action="binder-auto" id="auto-nav"><svg><use href="#i-sparkle"/></svg><span class="nav-two">Automatinis skirstymas<small id="auto-state"></small></span></button>
     <button type="button" class="nav" data-action="reorganize"><svg><use href="#i-undo"/></svg>Perrūšiuoti aplankus po 20</button>
     <button type="button" class="nav" data-action="clear-model-binders"><svg><use href="#i-x"/></svg>Išimti viską iš modelių aplankų</button>
-    <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg>Aplankų kodai</button>
+    <button type="button" class="nav" data-action="codes"><svg><use href="#i-folder"/></svg><span class="nav-two">Aplankų kodai ir limitai<small>kodas, eilė, „be limito“</small></span></button>
     <button type="button" class="nav" data-action="reread-missing" id="reread-nav"><svg><use href="#i-doc"/></svg><span class="nav-two">Trūkstami pažymos duomenys<small id="reread-count"></small></span></button>
     <button type="button" class="nav" data-action="print-folders"><svg><use href="#i-printer"/></svg>Spausdinti aplankų sąrašus</button>
     <button type="button" class="nav" data-action="excel"><svg><use href="#i-sheet"/></svg>Eksportuoti į Excel</button>
@@ -540,11 +540,11 @@
 <dialog id="codes" class="small-dialog">
   <form method="dialog" id="codes-form">
     <header class="dialog-head">
-      <div><span class="pill">Lentyna</span><h2>Aplankų kodai</h2></div>
+      <div><span class="pill">Lentyna</span><h2>Aplankų kodai ir limitai</h2></div>
       <button type="button" class="icon-btn" data-action="codes-cancel" aria-label="Uždaryti"><svg><use href="#i-x"/></svg></button>
     </header>
     <p class="muted">Sudėliokite aplankus ↑ ↓ taip, kaip jie stovi lentynoje, ir spauskite „Numeruoti iš eilės“ – arba įrašykite kodą ranka.
-      Naujiems aplankams kodas suteikiamas automatiškai.</p>
+      Naujiems aplankams kodas suteikiamas automatiškai. Varnelė <b>„be limito“</b> – aplankas laikys daugiau nei 20 CoC; nuėmus vėl galios 20.</p>
     <div class="codes-tools">
       <label>Pradėti nuo <input type="number" id="codes-start" min="1" value="1"></label>
       <button type="button" class="btn sm" id="codes-number"><svg><use href="#i-list"/></svg>Numeruoti iš eilės</button>
