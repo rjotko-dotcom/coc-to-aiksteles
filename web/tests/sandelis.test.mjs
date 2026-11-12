@@ -320,3 +320,15 @@ test("Qashqai nuotraukos pagal CoC spalvą", async () => {
   assert.equal(shotFor("qashqai", "BALTA", "Pearl White"), "qashqai-balta");
   assert.equal(shotFor("qashqai", "ŽALIA"), "qashqai-pilka", "neturimos spalvos – pilkas Qashqai");
 });
+
+test("aplankas „be limito“: laiko daugiau nei 20, neskaidomas, auto į jį nededa", async () => {
+  const { planBinders } = await import("../js/sandelis/logic.js");
+  const rec = (i, binder = "") => ({ id: `r${i}`, status: "turimas", model: "QASHQAI", vin: `SJNJ12TA0U2${String(100000 + i)}`, added: `2026-01-${String(1 + (i % 28)).padStart(2, "0")}`, binder });
+  const records = [...Array.from({ length: 30 }, (_, i) => rec(i, "CITYBEE")), rec(100), rec(101)];
+  const { assign } = planBinders(records, [{ code: "CITYBEE", group: "QASHQAI", unlimited: true }, { code: "A-10", group: "QASHQAI" }]);
+  assert.equal(records.slice(0, 30).every((record) => assign[record.id] === "CITYBEE"), true);
+  assert.equal(assign.r100, "A-10");
+  assert.equal(assign.r101, "A-10");
+  const again = planBinders(records, [{ code: "CITYBEE", group: "QASHQAI", unlimited: true }, { code: "A-10", group: "QASHQAI" }], { reorganize: true });
+  assert.equal(records.slice(0, 30).every((record) => again.assign[record.id] === "CITYBEE"), true);
+});
