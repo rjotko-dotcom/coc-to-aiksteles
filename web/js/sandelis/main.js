@@ -2914,14 +2914,16 @@ async function makePazymos(ids) {
   )) return;
   const template = await templateBytes();
   if (!template) return;
-  const documents = list.map((record) => {
-    const values = pazymaValues(record);
-    return [suggestedFilename(values), fillTemplate(template, values).bytes];
-  });
   const type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (documents.length === 1) download(documents[0][1], documents[0][0], type);
-  else download(zipDocuments(documents), "aiksteles.zip", "application/zip");
-  toast(documents.length === 1 ? "Pažyma sugeneruota." : `Sugeneruota pažymų: ${documents.length}.`);
+  if (list.length === 1) {
+    const values = pazymaValues(list[0]);
+    download(fillTemplate(template, values).bytes, suggestedFilename(values), type);
+    toast("Pažyma sugeneruota.");
+    return;
+  }
+  // Kelios – viename Word faile, kiekviena nuo naujo lapo: atidarote ir spausdinate visas iš karto.
+  download(buildPrintBundle(template, list.map((record) => ({ values: pazymaValues(record) }))), `aiksteles_${todayIso()}_${list.length}.docx`, type);
+  toast(`Sugeneruota ${list.length} pažym. viename faile – atidarykite ir spausdinkite visas iš karto.`);
 }
 
 function exportExcel(subset = null) {
