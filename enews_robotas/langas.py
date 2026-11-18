@@ -71,8 +71,9 @@ class Langas(_Baze):
     def __init__(self):
         super().__init__()
         self.title(PAVADINIMAS)
-        self.geometry("1250x780")
-        self.minsize(900, 600)
+        aukstis = min(780, self.winfo_screenheight() - 90)   # kad tilptų virš užduočių juostos
+        self.geometry(f"{min(1250, self.winfo_screenwidth() - 20)}x{aukstis}+5+5")
+        self.minsize(800, 480)
         self.eile: queue.Queue = queue.Queue()
         self.valdymas = LangoValdymas(self.eile)
         robotas.V = self.valdymas
@@ -606,10 +607,51 @@ class Langas(_Baze):
 
     # --- Nustatymai ------------------------------------------------------------------------
 
+    def _slenkamas(self, tevas) -> ttk.Frame:
+        """Rėmelis su slinkties juosta (ir pelės ratuku) – kad tilptų mažame ekrane."""
+        drobe = tk.Canvas(tevas, highlightthickness=0, borderwidth=0)
+        juosta = ttk.Scrollbar(tevas, orient="vertical", command=drobe.yview)
+        vidus = ttk.Frame(drobe, padding=10)
+        langas_id = drobe.create_window((0, 0), window=vidus, anchor="nw")
+        drobe.configure(yscrollcommand=juosta.set)
+        vidus.bind("<Configure>", lambda e: drobe.configure(scrollregion=drobe.bbox("all")))
+        drobe.bind("<Configure>", lambda e: drobe.itemconfigure(langas_id, width=e.width))
+        juosta.pack(side="right", fill="y")
+        drobe.pack(side="left", fill="both", expand=True)
+
+        def ratukas(e):
+            if e.num == 4 or e.delta > 0:
+                drobe.yview_scroll(-1, "units")
+            elif e.num == 5 or e.delta < 0:
+                drobe.yview_scroll(1, "units")
+
+        def ijungti(_e):
+            drobe.bind_all("<MouseWheel>", ratukas)
+            drobe.bind_all("<Button-4>", ratukas)
+            drobe.bind_all("<Button-5>", ratukas)
+
+        def isjungti(_e):
+            drobe.unbind_all("<MouseWheel>")
+            drobe.unbind_all("<Button-4>")
+            drobe.unbind_all("<Button-5>")
+
+        drobe.bind("<Enter>", ijungti)
+        drobe.bind("<Leave>", isjungti)
+        return vidus
+
     def _nustatymu_skirtukas(self, knyga):
-        f = ttk.Frame(knyga, padding=10)
-        knyga.add(f, text="  Nustatymai  ")
+        isorinis = ttk.Frame(knyga)
+        knyga.add(isorinis, text="  Nustatymai  ")
         self.nust_kint: dict[str, tk.Variable] = {}
+        # Mygtukai visada matomi apačioje, o nustatymai – slenkami
+        m = ttk.Frame(isorinis, padding=(10, 6))
+        m.pack(side="bottom", fill="x")
+        ttk.Separator(isorinis).pack(side="bottom", fill="x")
+        ttk.Button(m, text="Išsaugoti nustatymus", style="Didelis.TButton",
+                   command=self.issaugoti_nustatymus).pack(side="left")
+        ttk.Button(m, text="Patikrinti", command=lambda: (self.issaugoti_nustatymus(), self.tikrinti(),
+                                                         self.knyga.select(0))).pack(side="left", padx=6)
+        f = self._slenkamas(isorinis)
 
         def eilute(tevas, r, raktas, pav, plotis=50, rinktis=None, reiksmes=None, pastaba=""):
             ttk.Label(tevas, text=pav).grid(row=r, column=0, sticky="w", pady=2)
@@ -683,12 +725,6 @@ class Langas(_Baze):
         ttk.Button(bandym, text="Lipnus", command=lambda: self.bandomasis_spausdinimas("lipnus")).pack(
             side="left", padx=4)
 
-        m = ttk.Frame(f)
-        m.pack(fill="x", pady=8)
-        ttk.Button(m, text="Išsaugoti nustatymus", style="Didelis.TButton",
-                   command=self.issaugoti_nustatymus).pack(side="left")
-        ttk.Button(m, text="Patikrinti", command=lambda: (self.issaugoti_nustatymus(), self.tikrinti(),
-                                                         self.knyga.select(0))).pack(side="left", padx=6)
 
     @staticmethod
     def _spausdinimo_busena(rusis: str) -> str:
@@ -1158,8 +1194,14 @@ class Langas(_Baze):
         self.gija.start()
 
     def _tekstu_skirtukas(self, knyga):
-        f = ttk.Frame(knyga, padding=10)
-        knyga.add(f, text="  eNEWS užrašai  ")
+        isorinis = ttk.Frame(knyga)
+        knyga.add(isorinis, text="  eNEWS užrašai  ")
+        m = ttk.Frame(isorinis, padding=(10, 6))
+        m.pack(side="bottom", fill="x")
+        ttk.Separator(isorinis).pack(side="bottom", fill="x")
+        ttk.Button(m, text="Išsaugoti", style="Didelis.TButton", command=self.issaugoti_nustatymus).pack(side="left")
+        ttk.Button(m, text="Atstatyti numatytuosius", command=self.atstatyti_tekstus).pack(side="left", padx=6)
+        f = self._slenkamas(isorinis)
         ttk.Label(f, wraplength=1000, justify="left", text=(
             "Pagal šiuos užrašus robotas eNEWS randa mygtukus ir laukelius. Jei Nissan pakeis pavadinimą "
             "(pvz. „Validate“ → „Patvirtinti“), pakeiskite jį čia. Kelias galimybes atskirkite „ | “.")
@@ -1173,10 +1215,6 @@ class Langas(_Baze):
             self.tekstu_kint[k] = v
             ttk.Entry(tinklas, textvariable=v, width=38).grid(row=r // 2, column=(r % 2) * 2 + 1,
                                                               sticky="w", padx=(0, 20))
-        m = ttk.Frame(f)
-        m.pack(fill="x", pady=10)
-        ttk.Button(m, text="Išsaugoti", style="Didelis.TButton", command=self.issaugoti_nustatymus).pack(side="left")
-        ttk.Button(m, text="Atstatyti numatytuosius", command=self.atstatyti_tekstus).pack(side="left", padx=6)
 
     def atstatyti_tekstus(self):
         for k, v in self.tekstu_kint.items():
