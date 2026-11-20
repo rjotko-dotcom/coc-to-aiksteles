@@ -571,6 +571,14 @@ def gauti_faila(page: Page, kelias: Path, mygtukas: str = "drukat") -> Path:
         p.on("download", atsiuntimas)
 
     def marsrutas(route):
+        """Apvalkalas: maršruto klaidos (pvz. „Route is already handled“, kai užklausa jau
+        atšaukta ar maršrutas nuimtas, kol laukėme atsakymo) neturi išlįsti kitame veiksme."""
+        try:
+            _marsrutas(route)
+        except Exception as e:  # noqa: BLE001
+            log.debug("maršruto klaida (nekenksminga): %s", e)
+
+    def _marsrutas(route):
         """PDF pagaunamas iš eNEWS atsakymo dar prieš Chrome: Chrome gauna „204 – nieko“,
         todėl nei siunčia, nei atidaro failo (eNEWS puslapis lieka vietoje). Taip
         apeinamas Chrome atsisiuntimas/peržiūra, kuri kai kur uždaro naršyklę."""
@@ -654,7 +662,10 @@ def gauti_faila(page: Page, kelias: Path, mygtukas: str = "drukat") -> Path:
     if page.url != url_pries and not page.is_closed():
         page.go_back()
         laukti_ramybes(page)
-    page.bring_to_front()
+    try:
+        page.bring_to_front()
+    except Exception as e:  # noqa: BLE001 – failas jau išsaugotas, to užtenka
+        log.debug("bring_to_front: %s", e)
     if not kelias.read_bytes()[:5].startswith(b"%PDF"):
         raise Klaida(f"{kelias.name} nėra PDF")
     log.info("     išsaugota %s", kelias.name)
