@@ -760,6 +760,15 @@ class Langas(_Baze):
         self.issaugoti_nustatymus()
         import spausdinimas
         try:
+            vardas = spausdinimas.spausdintuvo_vardas(rusis)
+        except Exception as e:  # noqa: BLE001
+            messagebox.showerror(PAVADINIMAS, str(e))
+            return
+        if spausdinimas.netikras(vardas) and not messagebox.askyesno(
+                PAVADINIMAS, f"Pasirinktas „{vardas}“ – tai ne tikras spausdintuvas. Vis tiek atidaryti?"):
+            return
+        self.log(f"Atidaromos spausdintuvo „{vardas}“ nuostatos ({rusis})…")
+        try:
             langas = int(self.wm_frame(), 16)
         except Exception:  # noqa: BLE001
             langas = 0

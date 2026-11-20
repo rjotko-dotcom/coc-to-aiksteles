@@ -180,9 +180,24 @@ def nustatyti_langu(rusis: str, langas: int = 0, is_naujo: bool = False) -> bool
     return True
 
 
+NETIKRI = ("onenote", "pdf", "xps", "fax")   # „spausdintuvai“, kurie nespausdina ant popieriaus
+
+
+def netikras(vardas: str) -> bool:
+    return any(z in vardas.lower() for z in NETIKRI)
+
+
 def _spausdintuvas(rusis: str) -> str:
-    vardas = N.SPAUSDINTUVAS_LIPNUS if rusis == "lipnus" else N.SPAUSDINTUVAS_PAPRASTAS
+    vardas = (N.SPAUSDINTUVAS_LIPNUS if rusis == "lipnus" else N.SPAUSDINTUVAS_PAPRASTAS).strip()
+    if rusis == "lipnus" and (not vardas or netikras(vardas)):
+        # lipniam – tik aiškiai pasirinktas tikras spausdintuvas, ne Windows numatytasis (pvz. OneNote)
+        raise RuntimeError(f"lipnaus popieriaus spausdintuvas {'nepasirinktas' if not vardas else f'„{vardas}“ netinka'}"
+                           " – Nustatymuose „Lipnaus popieriaus spausdintuvas“ pasirinkite SHARP ir išsaugokite")
     return vardas or numatytasis_spausdintuvas()
+
+
+def spausdintuvo_vardas(rusis: str) -> str:
+    return _spausdintuvas(rusis)
 
 
 def _nuostatos_spausdinimui(rusis: str, spausdintuvas: str) -> bytes:
