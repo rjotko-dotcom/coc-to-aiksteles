@@ -698,7 +698,8 @@ class Langas(_Baze):
                pastaba="tuščias – numatytasis")
         eilute(sp, 1, "SPAUSDINTUVAS_LIPNUS", "Lipnaus popieriaus spausdintuvas", 40, reiksmes=spausd)
         eilute(sp, 3, "SPAUSDINIMO_PLANAS", "Ką kaip spausdinti", 40,
-               pastaba="1 – sertifikatas, 2 – TP planas; pvz. 1:paprastas, 1:lipnus, 2:lipnus")
+               reiksmes=["1:lipnus, 2:lipnus", "1:paprastas, 1:lipnus, 2:lipnus"],
+               pastaba="1 – sertifikatas, 2 – TP planas; „1:lipnus, 2:lipnus“ – tik lipnūs")
         self.spalvotai = tk.BooleanVar(value=bool(N.PAPRASTAS_SPALVOTAI))
         ttk.Checkbutton(sp, text="Paprastą spausdinti spalvotai", variable=self.spalvotai).grid(
             row=4, column=0, columnspan=2, sticky="w", pady=2)
@@ -713,7 +714,13 @@ class Langas(_Baze):
                 row=r, column=0, sticky="w", pady=2)
             v = tk.StringVar(value=self._spausdinimo_busena(rusis))
             self.nuostatu_busena[rusis] = v
-            ttk.Label(sp, textvariable=v).grid(row=r, column=1, columnspan=3, sticky="w", padx=6)
+            eil = ttk.Frame(sp)
+            eil.grid(row=r, column=1, columnspan=3, sticky="w", padx=6)
+            ttk.Button(eil, text="↶ Grąžinti ankstesnes",
+                       command=lambda r_=rusis: self.grazinti_spausdinima(r_)).pack(side="left")
+            ttk.Button(eil, text="Iš naujo (nuo numatytųjų)…",
+                       command=lambda r_=rusis: self.nustatyti_spausdinima(r_, is_naujo=True)).pack(side="left", padx=4)
+            ttk.Label(eil, textvariable=v).pack(side="left", padx=6)
         ttk.Label(sp, foreground="#666", text="Atsidarys spausdintuvo Preferences langas – lipniam pasirinkite "
                   "2-Sided Printing: None ir Paper Source: Labels, tada OK. Robotas įsimins.").grid(
             row=8, column=0, columnspan=4, sticky="w")
@@ -737,7 +744,19 @@ class Langas(_Baze):
             return "✖ dar nenustatyta" if rusis == "lipnus" else "spausdintuvo numatytosios + spalvotai"
         return b
 
-    def nustatyti_spausdinima(self, rusis: str):
+    def grazinti_spausdinima(self, rusis: str):
+        import spausdinimas
+        if not spausdinimas.yra_ankstesnes(rusis):
+            messagebox.showinfo(PAVADINIMAS, "Ankstesnių nuostatų nėra – jos pradedamos saugoti nuo šios versijos.\n\n"
+                                             "Spauskite „Iš naujo (nuo numatytųjų)…“ ir nustatykite: "
+                                             "2-Sided Printing → None, Paper Source → Labels, OK.")
+            return
+        if messagebox.askyesno(PAVADINIMAS, f"Grąžinti {rusis} spausdinimo nuostatas, buvusias prieš paskutinį pakeitimą?"):
+            spausdinimas.grazinti_ankstesnes(rusis)
+            self.log(f"↶ {rusis} spausdinimo nuostatos grąžintos.")
+            self.nuostatu_busena[rusis].set(self._spausdinimo_busena(rusis))
+
+    def nustatyti_spausdinima(self, rusis: str, is_naujo: bool = False):
         self.issaugoti_nustatymus()
         import spausdinimas
         try:
@@ -745,7 +764,7 @@ class Langas(_Baze):
         except Exception:  # noqa: BLE001
             langas = 0
         try:
-            if spausdinimas.nustatyti_langu(rusis, langas):
+            if spausdinimas.nustatyti_langu(rusis, langas, is_naujo=is_naujo):
                 self.log(f"✔ {rusis} spausdinimo nuostatos įsimintos.")
         except Exception as e:  # noqa: BLE001
             messagebox.showerror(PAVADINIMAS, f"Nepavyko atidaryti spausdintuvo nuostatų:\n{e}")

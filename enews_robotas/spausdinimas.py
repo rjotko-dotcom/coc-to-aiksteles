@@ -136,15 +136,44 @@ def busena(rusis: str) -> str:
     return f"✔ nustatyta {m.get('kada', '')} ({m.get('spausdintuvas', '')})"
 
 
-def nustatyti_langu(rusis: str, langas: int = 0) -> bool:
-    """Atidaro spausdintuvo Preferences langą; paspaudus OK – nuostatos įsimenamos.
-    Grąžina False, jei paspausta Cancel."""
+def _atsargine(rusis: str) -> tuple[Path, Path]:
+    return NUOSTATOS / f"{rusis}.ankstesnis.devmode", NUOSTATOS / f"{rusis}.ankstesnis.json"
+
+
+def yra_ankstesnes(rusis: str) -> bool:
+    return all(f.is_file() for f in _atsargine(rusis))
+
+
+def grazinti_ankstesnes(rusis: str) -> bool:
+    """Atkuria nuostatas, buvusias prieš paskutinį „Nustatyti…“ (dabartinės tampa „ankstesnėmis“)."""
+    dm, meta = _atsargine(rusis)
+    if not yra_ankstesnes(rusis):
+        return False
+    dabar_dm, dabar_meta = _failas(rusis), NUOSTATOS / f"{rusis}.json"
+    seni = dm.read_bytes(), meta.read_bytes()
+    if dabar_dm.is_file() and dabar_meta.is_file():
+        dm.write_bytes(dabar_dm.read_bytes())
+        meta.write_bytes(dabar_meta.read_bytes())
+    dabar_dm.write_bytes(seni[0])
+    dabar_meta.write_bytes(seni[1])
+    return True
+
+
+def nustatyti_langu(rusis: str, langas: int = 0, is_naujo: bool = False) -> bool:
+    """Atidaro spausdintuvo Preferences langą; paspaudus OK – nuostatos įsimenamos
+    (ankstesnės išsaugomos – jas galima grąžinti). is_naujo – langas atidaromas nuo spausdintuvo
+    numatytųjų nuostatų, ne nuo įsimintų. Grąžina False, jei paspausta Cancel."""
     spausdintuvas = _spausdintuvas(rusis)
-    esamos = _failas(rusis).read_bytes() if _failas(rusis).is_file() else None
+    esamos = _failas(rusis).read_bytes() if _failas(rusis).is_file() and not is_naujo else None
     nauja = _devmode(spausdintuvas, esamos, langas, rodyti_langa=True)
     if nauja is None:
         return False
     NUOSTATOS.mkdir(exist_ok=True)
+    meta = NUOSTATOS / f"{rusis}.json"
+    if _failas(rusis).is_file() and meta.is_file():
+        dm_a, meta_a = _atsargine(rusis)
+        dm_a.write_bytes(_failas(rusis).read_bytes())
+        meta_a.write_bytes(meta.read_bytes())
     _failas(rusis).write_bytes(nauja)
     (NUOSTATOS / f"{rusis}.json").write_text(json.dumps(
         {"spausdintuvas": spausdintuvas, "kada": f"{dt.datetime.now():%Y-%m-%d %H:%M}"}), encoding="utf-8")

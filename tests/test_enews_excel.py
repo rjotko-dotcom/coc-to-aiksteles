@@ -141,7 +141,7 @@ def test_sablono_pavyzdys_perskaitomas(tmp_path, monkeypatch):
 
 def test_spausdinimo_planas_ir_isdestymas():
     import spausdinimas
-    assert spausdinimas.planas() == [(1, "paprastas"), (1, "lipnus"), (2, "lipnus")]
+    assert spausdinimas.planas() == [(1, "lipnus"), (2, "lipnus")]          # numatyta – tik lipnūs
     # A4 600 dpi, 100 taškų neprintinamas kraštas: puslapis sumažinamas iki spausdinamo ploto, centruotas
     x0, y0, x1, y1 = spausdinimas.isdestymas((4960, 7016), (4760, 6816), (100, 100), (595, 842), (600, 600))
     assert (x1 - x0) <= 4760 and (y1 - y0) <= 6816 and x0 >= 0 and y0 >= 0
@@ -181,3 +181,16 @@ def test_numerio_formos():
         assert tikrinimas.NUMERIS_RE.match(gerai), gerai
     for blogai in ("AA1234", "EG365", "AAA12", "E13655", "AAA 123"):
         assert not tikrinimas.NUMERIS_RE.match(blogai), blogai
+
+
+def test_spausdinimo_nuostatu_grazinimas(tmp_path, monkeypatch):
+    import spausdinimas
+    monkeypatch.setattr(spausdinimas, "NUOSTATOS", tmp_path)
+    assert not spausdinimas.yra_ankstesnes("lipnus")
+    (tmp_path / "lipnus.devmode").write_bytes(b"NAUJOS")
+    (tmp_path / "lipnus.json").write_text('{"kada": "nauja"}', encoding="utf-8")
+    (tmp_path / "lipnus.ankstesnis.devmode").write_bytes(b"SENOS")
+    (tmp_path / "lipnus.ankstesnis.json").write_text('{"kada": "sena"}', encoding="utf-8")
+    assert spausdinimas.grazinti_ankstesnes("lipnus")
+    assert (tmp_path / "lipnus.devmode").read_bytes() == b"SENOS"
+    assert (tmp_path / "lipnus.ankstesnis.devmode").read_bytes() == b"NAUJOS"   # galima grąžinti atgal

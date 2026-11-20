@@ -44,8 +44,10 @@ Metai imami einamieji. Jei stulpeliai kada nors pasikeis, juos galite pakeisti
 2. **Spausdinimas** veikia be papildomų programų: robotas pats siunčia PDF į
    spausdintuvą. Skirtuke **Nustatymai → Spausdinimas** pasirinkite spausdintuvą
    (pvz. SHARP MX-3051 PCL6) ir lipnaus popieriaus tipą (**Labels**). Lipniam
-   spausdinama vienpusiai, paprastam – spalvotai; numatytasis planas
-   `1:paprastas, 1:lipnus, 2:lipnus` (1 – garantijos sertifikatas, 2 – TP planas).
+   spausdinama vienpusiai, paprastam – spalvotai; numatytasis planas – tik lipnūs
+   `1:lipnus, 2:lipnus` (1 – garantijos sertifikatas, 2 – TP planas); su paprastu –
+   `1:paprastas, 1:lipnus, 2:lipnus`. Pakeitus spausdintuvo nuostatas per klaidą –
+   **↶ Grąžinti ankstesnes** arba **Iš naujo (nuo numatytųjų)…**.
    Jūsų įprastos spausdintuvo nuostatos nekeičiamos. Mygtukai **Bandomasis lapas**
    leidžia patikrinti be eNEWS.
 3. Paleiskite `paleisti.bat`, viršuje **Pasirinkti…** savo Excel failą, skirtuke
